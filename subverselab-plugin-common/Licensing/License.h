@@ -173,8 +173,14 @@ public:
 
     static juce::File folder()
     {
+       #if JUCE_WINDOWS
+        // userApplicationDataDirectory already resolves to %APPDATA% (Roaming) on Windows.
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("SubverseLab").getChildFile ("Licenses");
+       #else
         return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                    .getChildFile ("Application Support").getChildFile ("SubverseLab").getChildFile ("Licenses");
+       #endif
     }
 
 private:

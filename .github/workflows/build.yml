@@ -1,0 +1,88 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: windows-vst3 (${{ matrix.name }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Kubbe
+            dir: subverselab-reverb
+            artifact: KUBBE-windows-vst3
+            vst3_name: "SubverseLab Kubbe.vst3"
+          - name: Kaset
+            dir: subverselab-kaset
+            artifact: KASET-windows-vst3
+            vst3_name: "SubverseLab Kaset.vst3"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.dir }}/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-${{ matrix.dir }}
+
+      - name: Configure (Release, x64)
+        working-directory: ${{ matrix.dir }}
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + render + ui_snapshot
+        working-directory: ${{ matrix.dir }}
+        run: cmake --build build --config Release --target ${{ matrix.name }}_VST3 render ui_snapshot --parallel
+
+      - name: Run render --selftest
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: ./build/render_artefacts/Release/render.exe --selftest
+
+      - name: Zip VST3 bundle
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: |
+          cd "build/${{ matrix.name }}_artefacts/Release/VST3"
+          7z a -r "${{ github.workspace }}/${{ matrix.artifact }}.zip" "${{ matrix.vst3_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+
+  macos-cross-check:
+    name: macos-arm64 (${{ matrix.name }})
+    runs-on: macos-14
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Kubbe
+            dir: subverselab-reverb
+          - name: Kaset
+            dir: subverselab-kaset
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.dir }}/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-${{ matrix.dir }}
+
+      - name: Configure (Release, arm64)
+        working-directory: ${{ matrix.dir }}
+        run: cmake -B build -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build render + ui_snapshot + VST3
+        working-directory: ${{ matrix.dir }}
+        run: cmake --build build --config Release --target ${{ matrix.name }}_VST3 render ui_snapshot --parallel
+
+      - name: Run render --selftest
+        working-directory: ${{ matrix.dir }}
+        run: ./build/render_artefacts/Release/render --selftest

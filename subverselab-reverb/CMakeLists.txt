@@ -15,6 +15,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# AU is macOS-only; Windows builds VST3 + Standalone. COPY_PLUGIN_AFTER_BUILD
+# is also macOS-only so CI on Windows doesn't try to copy into system plugin
+# folders it doesn't have permission for.
+if(APPLE)
+    set(SVL_KUBBE_FORMATS Standalone VST3 AU)
+    set(SVL_KUBBE_COPY_AFTER_BUILD TRUE)
+else()
+    set(SVL_KUBBE_FORMATS Standalone VST3)
+    set(SVL_KUBBE_COPY_AFTER_BUILD FALSE)
+endif()
+
 juce_add_plugin(Kubbe
     COMPANY_NAME "SubverseLab"
     PLUGIN_MANUFACTURER_CODE Svlb
@@ -23,12 +34,12 @@ juce_add_plugin(Kubbe
     PRODUCT_NAME "SubverseLab Kubbe"
     BUNDLE_ID com.subverselab.kubbe
     VERSION "0.1.0"
-    FORMATS Standalone VST3 AU
+    FORMATS ${SVL_KUBBE_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${SVL_KUBBE_COPY_AFTER_BUILD}
     VST3_CATEGORIES Fx Reverb
     AU_MAIN_TYPE kAudioUnitType_Effect
 )
