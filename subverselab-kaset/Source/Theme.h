@@ -1,0 +1,40 @@
+#pragma once
+
+#include <JuceHeader.h>
+
+// SubverseLab palette, and the 1979 hardware built from it: a dark green
+// anodized panel, cream silkscreen, gold for lamps and pointers, a
+// blue-green VFD and a phosphor CRT.
+namespace Theme
+{
+    const juce::Colour background    { 0xff032825 };
+    const juce::Colour surface       { 0xff063730 };
+    const juce::Colour surfaceRaised { 0xff0a4740 };
+    const juce::Colour line          { 0xff1a5b52 };
+
+    const juce::Colour gold          { 0xffC5A059 };
+    const juce::Colour goldLight     { 0xffDFBF7A };
+    const juce::Colour goldDark      { 0xff8C6F35 };
+    const juce::Colour teal          { 0xff2A9D8F };
+
+    const juce::Colour text          { 0xffF2EFE7 };
+    const juce::Colour textMuted     { 0xff8faaa5 };
+    const juce::Colour danger        { 0xffe8917f };
+
+    // Hardware
+    const juce::Colour panel         { 0xff033733 };   // the emblem's ink, as anodized aluminium
+    const juce::Colour panelDeep     { 0xff022523 };
+    const juce::Colour ink           { 0xffF2EFE7 };   // silkscreen: the emblem's cream
+    const juce::Colour capCream      { 0xffE6DFCC };
+    const juce::Colour lamp          { 0xffF6D58E };
+    const juce::Colour vfd           { 0xff63F2D8 };
+    const juce::Colour vfdOff        { 0xff0E2A27 };
+    const juce::Colour phosphor      { 0xff9DF7DD };
+    const juce::Colour screen        { 0xff021512 };
+
+    // Panel legends set the way late-70s studio units were silkscreened:
+    // Helvetica caps, bold for names, medium for scales and fine print.
+    inline juce::Font legend (float size) { return juce::FontOptions ("Helvetica Neue", size, juce::Font::bold); }
+    inline juce::Font fine (float size)   { return juce::FontOptions ("Helvetica Neue", "Medium", size); }
+    inline juce::Font mono (float size)  { return juce::FontOptions ("Menlo", size, juce::Font::bold); }
+}

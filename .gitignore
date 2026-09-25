@@ -1,0 +1,8 @@
+build/
+*.wav
+*.mp4
+*.log
+__pycache__/
+.DS_Store
+Icon?
+*.pyc
