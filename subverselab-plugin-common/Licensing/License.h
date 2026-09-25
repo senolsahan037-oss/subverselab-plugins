@@ -11,7 +11,8 @@
       deactivate POST /v1/licenses/deactivate license_key, instance_id
       No API secret is involved; the key itself is the credential.
     - The activation is stored per product in
-      ~/Library/Application Support/SubverseLab/Licenses/<product>.json and
+      ~/Library/Application Support/SubverseLab/Licenses/<product>.json (macOS) or
+      %APPDATA%\SubverseLab\Licenses\<product>.json (Windows) and
       trusted offline. It is re-validated in the background once a week; only a
       clear "disabled / expired / instance gone" answer revokes it, never a
       network failure.

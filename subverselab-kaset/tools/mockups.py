@@ -1247,11 +1247,11 @@ def run_all(out_dir):
 
     save(render_spec_card("KUBBE", "KB-79", "A reverb built from three real places.", [
         ("Spaces", "Hammam · Cistern · Valley"),
-        ("T60 range", "0.4s – 7.2s"),
-        ("Formats", "VST3 / AU / macOS"),
+        ("Measured T60", "Hammam 2.4 s · Cistern 6.6 s"),
+        ("Formats", "macOS: VST3 / AU  ·  Windows: VST3"),
         ("Freeze", "Infinite hold, any space"),
-        ("Echo Sync", "Valley — tempo-locked slaps"),
-        ("Ducking", "Sidechains the tail to your mix"),
+        ("Echo Sync", "Valley echoes lock to tempo"),
+        ("Ducking", "The tail steps back while the source plays"),
     ]), out_dir, "kubbe_spec.png", registry)
 
     # ---------------- KASET ----------------
@@ -1293,10 +1293,10 @@ def run_all(out_dir):
     save(render_spec_card("KASET", "KS-83", "Mixtape color for your mix bus.", [
         ("Generations", "Master · 1st · 2nd · 3rd · 4th Dub"),
         ("Tape types", "Normal · Chrome · Metal"),
-        ("Formats", "VST3 / AU / macOS"),
-        ("Wow & flutter", "Varies per generation"),
+        ("Formats", "macOS: VST3 / AU  ·  Windows: VST3"),
+        ("Top end", "10 kHz master · 4.4 kHz 4th dub"),
         ("Auto gain", "Keeps level honest through the dubs"),
-        ("Character", "Hiss, wear and saturation compound with age"),
+        ("Character", "Hiss, wow and saturation build with every copy"),
     ]), out_dir, "kaset_spec.png", registry)
 
     # ---------------- shared feed pieces ----------------
