@@ -240,6 +240,50 @@ int selftest()
         check (v1.definitelyRevoked && ! v2.definitelyRevoked, "Licence: a disabled key is revoked on re-check, an offline re-check keeps the licence");
     }
 
+    // Launch keys: SVL- keys go to our own server and must be for KUBBE or the bundle; other keys stay on Lemon Squeezy.
+    {
+        using B = svl::License::Backend;
+        const auto cfg = kubbeLicenseConfig();
+        check (svl::License::apiBaseFor ("SVL-AB12-CD34-EF56-GH78", cfg) == "https://subverselab.com/api/license/"
+                   && svl::License::apiBaseFor ("  svl-ab12-cd34-ef56-gh78 ", cfg) == "https://subverselab.com/api/license/"
+                   && svl::License::apiBaseFor ("38b1460a-5104-4067-a91d-77b872934d51", cfg) == "https://api.lemonsqueezy.com/v1/licenses/",
+               "Licence: SVL- keys (any case) go to subverselab.com, other keys to Lemon Squeezy");
+        auto svlAnswer = [] (int store, int product)
+        {
+            return R"({"activated":true,"error":null,"license_key":{"status":"active"},"instance":{"id":"svl-inst"},"meta":{"store_id":)"
+                   + juce::String (store) + R"(,"product_id":)" + juce::String (product) + "}}";
+        };
+        const auto bundle = svl::License::parseActivate (svlAnswer (1, 9003), cfg, B::svl);
+        const auto own = svl::License::parseActivate (svlAnswer (1, 9001), cfg, B::svl);
+        const auto sibling = svl::License::parseActivate (svlAnswer (1, 9002), cfg, B::svl);
+        const auto foreign = svl::License::parseActivate (svlAnswer (2, 9003), cfg, B::svl);
+        check (bundle.ok && bundle.instanceId == "svl-inst" && own.ok, "Licence: an SVL key for KUBBE or the launch bundle activates");
+        check (! sibling.ok && sibling.definitelyRevoked && sibling.message.contains ("different product"),
+               "Licence: an SVL key for KASET alone (9002) is refused by KUBBE");
+        check (! foreign.ok, "Licence: an SVL answer from another store is refused");
+        const auto used = svl::License::parseActivate (R"({"activated":false,"error":"This license key has reached the activation limit.","meta":{}})", cfg, B::svl);
+        const auto gone = svl::License::parseValidate (R"({"valid":false,"error":"license_key not found","meta":{}})", cfg, B::svl);
+        const auto fine = svl::License::parseValidate (R"({"valid":true,"error":null,"license_key":{"status":"active"},"meta":{"store_id":1,"product_id":9003}})", cfg, B::svl);
+        const auto offline = svl::License::parseValidate ("", cfg, B::svl);
+        check (! used.ok && used.message.contains ("activation limit") && gone.definitelyRevoked && fine.ok && ! offline.definitelyRevoked,
+               "Licence: our server's refusals, re-checks and silence are read like Lemon Squeezy's");
+        // A Lemon Squeezy key is never judged by the SVL rule, and our store id means nothing to it.
+        const auto lsDev = svl::License::parseActivate (svlAnswer (555, 12345), cfg, B::lemonSqueezy);
+        auto lsCfg = cfg;
+        lsCfg.storeId = 111;
+        lsCfg.productIds = { 222 };
+        const auto lsOurs = svl::License::parseActivate (svlAnswer (111, 222), lsCfg);
+        const auto lsSvlIds = svl::License::parseActivate (svlAnswer (1, 9003), lsCfg);
+        check (lsDev.ok && lsOurs.ok && ! lsSvlIds.ok, "Licence: Lemon Squeezy keys keep the store / product rule");
+        // The licence file remembers its server; files from before SVL keys are Lemon Squeezy.
+        const auto back = svl::License::decodeStored (svl::License::encodeStored ({ "SVL-AB12-CD34-EF56-GH78", "svl-inst", 1234, B::svl }));
+        const auto ls = svl::License::decodeStored (svl::License::encodeStored ({ "38b1460a", "ls-inst", 99, B::lemonSqueezy }));
+        const auto old = svl::License::decodeStored (R"({"key":"38b1460a","instance":"ls-inst","validated":99})");
+        check (back.backend == B::svl && back.key == "SVL-AB12-CD34-EF56-GH78" && back.instanceId == "svl-inst" && back.validated == 1234
+                   && ls.backend == B::lemonSqueezy && old.backend == B::lemonSqueezy && old.instanceId == "ls-inst",
+               "Licence: the stored server survives a save / load; an old file without it is Lemon Squeezy");
+    }
+
     // Without a licence the audio passes through untouched.
     {
         auto in = noise ((int) sr, 0.2f);

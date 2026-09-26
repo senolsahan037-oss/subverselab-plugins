@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
 
+# Release builds run natively on Apple Silicon and Intel Macs.
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
+endif()
+
 project(Kaset VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)

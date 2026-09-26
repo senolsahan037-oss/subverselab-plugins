@@ -1,4 +1,4 @@
-// kasetraw <in.f32> <out.f32> <sr> <generation> <wow> <flutter> <drive> <hiss> <wear>
+// kasetraw <in.f32> <out.f32> <sr> <generation> <wow> <flutter> <drive> <hiss> <wear> [tape 0-2]
 // Stereo interleaved float32 in and out.
 #include "../Source/KasetEngine.h"
 #include <cstdio>
@@ -20,6 +20,7 @@ int main (int argc, char** argv)
     kaset::Controls c;
     c.generation = std::atoi (argv[4]); c.wow = (float) std::atof (argv[5]); c.flutter = (float) std::atof (argv[6]);
     c.drive = (float) std::atof (argv[7]); c.hiss = (float) std::atof (argv[8]); c.wear = (float) std::atof (argv[9]);
+    if (argc > 10) c.tape = (kaset::TapeType) std::atoi (argv[10]);
     static kaset::KasetEngine eng;
     eng.prepare (std::atof (argv[3]));
     for (int p = 0; p < n; p += 512) eng.process (&l[p], &r[p], std::min (512, n - p), c);

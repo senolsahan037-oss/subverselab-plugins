@@ -991,9 +991,23 @@ def render_out_now_story(ui, size=(STORY_W, STORY_H)):
     draw_tracked_text(draw, (0, y), "KUBBE — KB-79", f_sub, GOLD, tracking=6, anchor_center_x=W / 2)
     y += 70
     f_tag = font(30, bold=False)
-    tag = "A reverb built from three real places."
+    tag = "A reverb with three rooms."
     tw = draw.textlength(tag, font=f_tag)
     draw.text((W / 2 - tw / 2, y), tag, font=f_tag, fill=(*CREAM, 230))
+    y += 90
+
+    pill_txt = 'DM "KUBBE"'
+    f_pill = font(44)
+    pw2 = tracked_text_width(draw, pill_txt.upper(), f_pill, tracking=6)
+    pad = 30
+    px0 = W / 2 - pw2 / 2 - pad
+    draw.rounded_rectangle([px0, y, px0 + pw2 + pad * 2, y + 88], radius=44, fill=GOLD)
+    draw_tracked_text(draw, (0, y + 20), pill_txt.upper(), f_pill, DARK_GREEN, tracking=6, anchor_center_x=W / 2)
+    y += 130
+    f_sub2 = font(26, bold=False)
+    sub2 = "We'll send your free code."
+    sw2 = draw.textlength(sub2, font=f_sub2)
+    draw.text((W / 2 - sw2 / 2, y), sub2, font=f_sub2, fill=(*CREAM, 200))
 
     return bg
 
@@ -1041,17 +1055,13 @@ def render_kaset_teaser_story(ui, size=(STORY_W, STORY_H)):
 
     box = (int(W * 0.10), int(H * 0.22), int(W * 0.90), int(H * 0.58))
     px, py, pw, ph = paste_contain(bg, ui, box)
-    # dim + blur a copy of the UI to keep it a "teaser", not a full reveal
-    reveal = bg.crop((px, py, px + pw, py + ph)).filter(ImageFilter.GaussianBlur(6))
-    dark = Image.new("RGBA", reveal.size, (0, 0, 0, 110))
-    reveal = Image.alpha_composite(reveal, dark)
-    bg.paste(reveal, (px, py))
+    # launch day: the panel is shown sharp, no longer a blurred teaser
     draw = ImageDraw.Draw(bg)
     draw.rounded_rectangle([px - 6, py - 6, px + pw + 6, py + ph + 6], radius=12, outline=(*GOLD, 200), width=2)
 
     f_head = font(72)
     y = py + ph + 90
-    draw_tracked_text(draw, (0, y), "SOMETHING'S COMING", f_head, CREAM, tracking=8, anchor_center_x=W / 2)
+    draw_tracked_text(draw, (0, y), "OUT NOW", f_head, CREAM, tracking=8, anchor_center_x=W / 2)
     y += 110
     f_name = font(60)
     draw_tracked_text(draw, (0, y), "KASET", f_name, GOLD, tracking=18, anchor_center_x=W / 2)
@@ -1061,7 +1071,11 @@ def render_kaset_teaser_story(ui, size=(STORY_W, STORY_H)):
     y = draw_centered_wrapped(draw, tag, f_tag, (*CREAM, 220), W / 2, y, W * 0.78, line_gap=1.25)
     y += 18
     f_date = font(36)
-    draw_tracked_text(draw, (0, y), "OUT OCTOBER 1", f_date, GOLD, tracking=8, anchor_center_x=W / 2)
+    draw_tracked_text(draw, (0, y), 'DM "KASET"', f_date, GOLD, tracking=8, anchor_center_x=W / 2)
+    y += 80
+    f_note = font(26, bold=False)
+    y = draw_centered_wrapped(draw, "SAME DAY AS KUBBE · FREE FOR THE FIRST 1,000", f_note, (*CREAM, 210),
+                               W / 2, y, W * 0.8, line_gap=1.25)
 
     return bg
 
@@ -1113,13 +1127,13 @@ def render_kaset_poll_story(size=(STORY_W, STORY_H)):
     mark = fit_logo(load_rgba(MARK_CREAM), 56)
     bg.paste(mark, (W // 2 - mark.width // 2, int(H * 0.10)), mark)
 
-    f_q = font(58)
+    f_q = font(52)
     y = int(H * 0.24)
-    y = draw_centered_wrapped(draw, "WHICH COPY DO YOU HEAR?", f_q, CREAM, W / 2, y, W * 0.82, line_gap=1.2)
+    y = draw_centered_wrapped(draw, "WHICH TAPE DO YOU REACH FOR FIRST?", f_q, CREAM, W / 2, y, W * 0.82, line_gap=1.2)
 
     y += 50
     f_opt = font(40)
-    for label in ["MASTER", "4TH DUB"]:
+    for label in ["NORMAL", "CHROME", "METAL"]:
         lw = tracked_text_width(draw, label, f_opt, tracking=6)
         pad = 30
         x0 = W / 2 - lw / 2 - pad
@@ -1220,12 +1234,12 @@ def run_all(out_dir):
     kaset_ui = load_rgba(KASET_UI)
 
     # ---------------- KUBBE ----------------
-    save(render_box(kubbe_ui, "KUBBE", "KB-79", "A reverb built from three real places.", -1),
-         out_dir, "kubbe_box_left.png", registry)
-    save(render_box(kubbe_ui, "KUBBE", "KB-79", "A reverb built from three real places.", 1),
-         out_dir, "kubbe_box_right.png", registry)
-    save(render_hero(kubbe_ui, "KUBBE", "A reverb built from three real places."),
-         out_dir, "kubbe_hero.png", registry)
+    save(render_box(kubbe_ui, "KUBBE", "KB-79", "A reverb with three rooms.", -1),
+         out_dir, "kubbe_box_left_v2.png", registry)
+    save(render_box(kubbe_ui, "KUBBE", "KB-79", "A reverb with three rooms.", 1),
+         out_dir, "kubbe_box_right_v2.png", registry)
+    save(render_hero(kubbe_ui, "KUBBE", "A reverb with three rooms."),
+         out_dir, "kubbe_hero_v2.png", registry)
 
     place_imgs = []
     for i, (label, desc) in enumerate(KUBBE_PLACES):
@@ -1245,14 +1259,14 @@ def run_all(out_dir):
                              "Mix, decay, distance, tone — every stage under your hand.", pad_frac=0.01),
          out_dir, "kubbe_detail_knobs.png", registry)
 
-    save(render_spec_card("KUBBE", "KB-79", "A reverb built from three real places.", [
+    save(render_spec_card("KUBBE", "KB-79", "A reverb with three rooms.", [
         ("Spaces", "Hammam · Cistern · Valley"),
         ("Measured T60", "Hammam 2.4 s · Cistern 6.6 s"),
         ("Formats", "macOS: VST3 / AU  ·  Windows: VST3"),
         ("Freeze", "Infinite hold, any space"),
         ("Echo Sync", "Valley echoes lock to tempo"),
         ("Ducking", "The tail steps back while the source plays"),
-    ]), out_dir, "kubbe_spec.png", registry)
+    ]), out_dir, "kubbe_spec_v2.png", registry)
 
     # ---------------- KASET ----------------
     save(render_box(kaset_ui, "KASET", "KS-83", "Mixtape color for your mix bus.", -1),
@@ -1310,13 +1324,13 @@ def run_all(out_dir):
     ], accent=GOLD, ui_thumb=kubbe_ui), out_dir, "cta_kubbe_oct1.png", registry)
     kaset_cta_img = render_text_card("KASET", [
         "Mixtape color for your mix bus.",
-        'DM "KASET" to reserve yours.',
-        "Out October 1.",
+        'DM "KASET" for a free code.',
+        "Out now.",
     ], accent=TEAL, ui_thumb=kaset_ui, glow="lower-left")
-    save(kaset_cta_img, out_dir, "cta_kaset_soon.png", registry)
+    save(kaset_cta_img, out_dir, "cta_kaset_out.png", registry)
 
     # ---------------- carousels ----------------
-    kubbe_hero_img = [im for n, im in registry if n == "kubbe_hero.png"][0]
+    kubbe_hero_img = [im for n, im in registry if n == "kubbe_hero_v2.png"][0]
     kubbe_cta_img = [im for n, im in registry if n == "cta_kubbe_oct1.png"][0]
     kubbe_carousel_sources = [kubbe_hero_img] + place_imgs + [kubbe_cta_img]
     for i, src in enumerate(kubbe_carousel_sources, start=1):
@@ -1331,10 +1345,10 @@ def run_all(out_dir):
     save(render_countdown_story("3", "days to launch", "Out October 1"), out_dir, "story_kubbe_countdown_3.png", registry)
     save(render_countdown_story("2", "days to launch", "Out October 1"), out_dir, "story_kubbe_countdown_2.png", registry)
     save(render_countdown_story("1", "day to launch", "Out October 1"), out_dir, "story_kubbe_countdown_1.png", registry)
-    save(render_out_now_story(kubbe_ui), out_dir, "story_kubbe_out_now.png", registry)
+    save(render_out_now_story(kubbe_ui), out_dir, "story_kubbe_out_now_v2.png", registry)
     save(render_dm_story(), out_dir, "story_kubbe_dm.png", registry)
-    save(render_kaset_teaser_story(kaset_ui), out_dir, "story_kaset_teaser.png", registry)
-    save(render_kaset_poll_story(), out_dir, "story_kaset_poll.png", registry)
+    save(render_kaset_teaser_story(kaset_ui), out_dir, "story_kaset_out_v2.png", registry)
+    save(render_kaset_poll_story(), out_dir, "story_kaset_poll_v2.png", registry)
     save(render_double_launch_story(kubbe_ui, kaset_ui), out_dir, "story_double_launch.png", registry)
 
     # ---------------- contact sheet ----------------

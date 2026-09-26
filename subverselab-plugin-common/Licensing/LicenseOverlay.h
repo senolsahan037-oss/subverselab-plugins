@@ -16,7 +16,7 @@ class LicenseOverlay : public juce::Component
 public:
     explicit LicenseOverlay (License& l) : lic (l)
     {
-        keyField.setTextToShowWhenEmpty ("XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX", ink.withAlpha (0.35f));
+        keyField.setTextToShowWhenEmpty ("Paste your licence key", ink.withAlpha (0.35f));   // SVL-... or a Lemon Squeezy key
         keyField.setFont (juce::FontOptions ("Menlo", 14.0f, juce::Font::plain));
         keyField.setJustification (juce::Justification::centred);
         keyField.setColour (juce::TextEditor::backgroundColourId, juce::Colours::white);
@@ -74,7 +74,7 @@ public:
         g.setColour (ink.withAlpha (0.8f));
         const juce::String line = on
             ? "Key ending " + lic.keyHint() + " is active on this computer."
-            : "Paste the licence key from your e-mail.\nNo key yet? Buy one, or redeem your DM code at checkout.";
+            : "Paste the licence key from your e-mail or from subverselab.com/launch.";
         g.drawFittedText (line, r.removeFromTop (44.0f).toNearestInt(), juce::Justification::centred, 3);
 
         g.setFont (juce::FontOptions ("Helvetica Neue", 12.0f, juce::Font::plain));
@@ -163,7 +163,7 @@ public:
 private:
     License& lic;
     juce::TextEditor keyField;
-    juce::TextButton primary { "ACTIVATE" }, buy { "BUY  /  REDEEM CODE" }, close { "CLOSE" };
+    juce::TextButton primary { "ACTIVATE" }, buy { "GET A KEY" }, close { "CLOSE" };
     juce::String message;
     bool messageIsError = false;
 
