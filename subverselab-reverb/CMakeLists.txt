@@ -52,6 +52,12 @@ juce_add_plugin(Kubbe
     COPY_PLUGIN_AFTER_BUILD ${SVL_KUBBE_COPY_AFTER_BUILD}
     VST3_CATEGORIES Fx Reverb
     AU_MAIN_TYPE kAudioUnitType_Effect
+    # The standalone app reads the audio input: macOS asks for microphone
+    # access with this text, and the hardened runtime needs the entitlement.
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "The standalone app processes the audio coming into your input device."
+    HARDENED_RUNTIME_ENABLED TRUE
+    HARDENED_RUNTIME_OPTIONS com.apple.security.device.audio-input
 )
 
 juce_generate_juce_header(Kubbe)
