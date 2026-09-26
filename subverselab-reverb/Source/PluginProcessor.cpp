@@ -124,6 +124,7 @@ void KubbeProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 bpm = juce::jlimit (20.0, 400.0, *b);
     uiBpm = bpm;
 
+#if SVL_LICENSING
     // No licence, no processing: the audio passes through untouched.
     if (! license.isLicensed())
     {
@@ -132,6 +133,7 @@ void KubbeProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         uiDuck = 0.0f;
         return;
     }
+#endif
 
     // Mono in: copy to both sides.
     const int inCh = getTotalNumInputChannels();

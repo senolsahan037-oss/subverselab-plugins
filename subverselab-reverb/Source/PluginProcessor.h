@@ -1,7 +1,9 @@
 #pragma once
 
 #include <JuceHeader.h>
+#if SVL_LICENSING
 #include "LicenseConfig.h"
+#endif
 #include "ReverbEngine.h"
 
 class KubbeProcessor : public juce::AudioProcessor
@@ -40,7 +42,9 @@ public:
     svrb::Controls controlsFor (double bpm) const;
 
     juce::AudioProcessorValueTreeState apvts;
+#if SVL_LICENSING
     svl::License license { kubbeLicenseConfig() };   // no licence: audio passes through untouched
+#endif
 
     std::atomic<float> uiDuck { 0.0f };    // how far the wet is ducked, 0..1
     std::atomic<double> uiBpm { 120.0 };

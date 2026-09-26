@@ -10,10 +10,17 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(Kaset VERSION 1.0.0 LANGUAGES C CXX)
+project(Kaset VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# OFF for the free launch (no activation gate; the download room on
+# subverselab.com is the gate). Licensing code still compiles behind this
+# switch for a future paid phase: build with -DSVL_LICENSING=ON to bring it
+# back. Default OFF ships the plugin with no licence checks, network calls,
+# or licence files at all.
+option(SVL_LICENSING "Build the Lemon Squeezy / SVL licence-activation gate into the plugin" OFF)
 
 # JUCE is fetched by CMake. To build offline against a checkout already on
 # disk, pass -DFETCHCONTENT_SOURCE_DIR_JUCE=/path/to/JUCE.
@@ -43,7 +50,7 @@ juce_add_plugin(Kaset
     PLUGIN_NAME "SubverseLab Kaset"
     PRODUCT_NAME "SubverseLab Kaset"
     BUNDLE_ID com.subverselab.kaset
-    VERSION "1.0.0"
+    VERSION "1.0.1"
     FORMATS ${SVL_KASET_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -73,7 +80,7 @@ set(KASET_SOURCES
 
 target_sources(Kaset PRIVATE ${KASET_SOURCES})
 
-set(KASET_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+set(KASET_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 SVL_LICENSING=$<BOOL:${SVL_LICENSING}>)
 target_compile_definitions(Kaset PUBLIC ${KASET_DEFS})
 
 target_link_libraries(Kaset

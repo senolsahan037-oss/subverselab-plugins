@@ -1,7 +1,9 @@
 #pragma once
 
 #include <JuceHeader.h>
+#if SVL_LICENSING
 #include "LicenseConfig.h"
+#endif
 #include "KasetEngine.h"
 
 class KasetProcessor : public juce::AudioProcessor
@@ -38,7 +40,9 @@ public:
     kaset::Controls controls() const;
 
     juce::AudioProcessorValueTreeState apvts;
+#if SVL_LICENSING
     svl::License license { kasetLicenseConfig() };   // no licence: audio passes through untouched
+#endif
 
     // Read by the editor.
     std::atomic<float> uiLevel[2] { { 0.0f }, { 0.0f } };   // output RMS, linear

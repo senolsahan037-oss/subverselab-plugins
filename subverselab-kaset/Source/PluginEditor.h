@@ -2,7 +2,9 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#if SVL_LICENSING
 #include "../../subverselab-plugin-common/Licensing/LicenseOverlay.h"
+#endif
 
 /*  The face of an early-80s double-cassette deck of the kind that sat in
     every Turkish living room, as it left the factory: brand new, in
@@ -131,8 +133,10 @@ private:
     int lastTape = -1;
     int lastPlay = -1;   // -1: not synced yet, so the first tick always applies the state
 
+#if SVL_LICENSING
     juce::TextButton licenseButton { "LICENSE" };
     svl::LicenseOverlay licenseOverlay;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KasetEditor)
 };

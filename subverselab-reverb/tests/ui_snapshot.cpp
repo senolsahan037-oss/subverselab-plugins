@@ -14,8 +14,10 @@ int main (int argc, char** argv)
 
     juce::ScopedJuceInitialiser_GUI init;
     KubbeProcessor processor;
+#if SVL_LICENSING
     // Licensed unless UNLICENSED is set in the environment, to draw the activation card.
     processor.license.setLicensedForTesting (std::getenv ("UNLICENSED") == nullptr);
+#endif
     auto set = [&] (const char* id, float v)
     {
         auto* p = processor.apvts.getParameter (id);

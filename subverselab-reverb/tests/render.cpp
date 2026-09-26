@@ -37,7 +37,9 @@ juce::AudioBuffer<float> run (const juce::AudioBuffer<float>& input, double sr, 
                               double bpm = 120.0, std::function<void (KubbeProcessor&, int)> perBlock = {})
 {
     KubbeProcessor proc;
+#if SVL_LICENSING
     proc.license.setLicensedForTesting (true);
+#endif
     FakeHost host;
     host.bpm = bpm;
     proc.setPlayHead (&host);
@@ -218,6 +220,7 @@ int selftest()
     }
 
 
+#if SVL_LICENSING
     // Licensing: the answers the licence server can give, parsed without a network.
     {
         svl::LicenseConfig cfg;
@@ -294,6 +297,18 @@ int selftest()
                 worst = juce::jmax (worst, std::abs (out.getSample (c, i) - in.getSample (c, i)));
         check (worst < 1.0e-9f, "No licence: the audio passes through untouched, largest difference " + juce::String (worst, 8));
     }
+#else
+    // SVL_LICENSING=0: no gate at all, a fresh instance processes immediately.
+    {
+        auto in = noise ((int) sr, 0.2f);
+        auto out = run (in, sr, [] (KubbeProcessor& p) { set (p, "mix", 1.0f); });
+        float diff = 0.0f;
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < out.getNumSamples(); ++i)
+                diff = juce::jmax (diff, std::abs (out.getSample (c, i) - in.getSample (c, i)));
+        check (diff > 1.0e-4f, "SVL_LICENSING=0: a fresh instance processes with no licence check at all, difference " + juce::String (diff, 6));
+    }
+#endif
 
     std::printf ("\n%s\n", failures == 0 ? "ALL PASS" : (juce::String (failures) + " FAILED").toRawUTF8());
     return failures == 0 ? 0 : 1;

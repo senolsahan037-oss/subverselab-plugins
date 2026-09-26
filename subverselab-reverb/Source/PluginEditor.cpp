@@ -585,7 +585,10 @@ void DuckMeter::paint (juce::Graphics& g)
 
 //==============================================================================
 KubbeEditor::KubbeEditor (KubbeProcessor& p)
-    : AudioProcessorEditor (&p), proc (p), crt (p), licenseOverlay (p.license)
+    : AudioProcessorEditor (&p), proc (p), crt (p)
+#if SVL_LICENSING
+    , licenseOverlay (p.license)
+#endif
 {
     setLookAndFeel (&lnf);
     mark = juce::ImageCache::getFromMemory (BinaryData::mark_cream_png, BinaryData::mark_cream_pngSize);
@@ -635,6 +638,7 @@ KubbeEditor::KubbeEditor (KubbeProcessor& p)
     setSize (kW, kH);
     crt.refresh();
     timerCallback();
+#if SVL_LICENSING
     // Licence: the card covers the panel until the plugin is activated; LICENSE reopens it.
     licenseButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     licenseButton.setColour (juce::TextButton::textColourOffId, Theme::ink.withAlpha (0.6f));
@@ -642,6 +646,7 @@ KubbeEditor::KubbeEditor (KubbeProcessor& p)
     addAndMakeVisible (licenseButton);
     addChildComponent (licenseOverlay);
     licenseOverlay.setVisible (! proc.license.isLicensed());
+#endif
     startTimerHz (30);
 }
 
@@ -824,8 +829,10 @@ void KubbeEditor::paint (juce::Graphics& g)
 
 void KubbeEditor::resized()
 {
+#if SVL_LICENSING
     licenseOverlay.setBounds (getLocalBounds());
     licenseButton.setBounds (getWidth() / 2 + 170, kH - 26, 70, 20);
+#endif
     for (int i = 0; i < (int) places.size(); ++i)
         places[(size_t) i]->setBounds (52 + i * 90, 138, 96, 80);
 
@@ -869,11 +876,13 @@ std::pair<juce::String, juce::String> KubbeEditor::readout (int i) const
 
 void KubbeEditor::timerCallback()
 {
+#if SVL_LICENSING
     if (! proc.license.isLicensed() && ! licenseOverlay.isVisible())
     {
         licenseOverlay.refresh();
         licenseOverlay.setVisible (true);
     }
+#endif
     const int place = (int) proc.apvts.getRawParameterValue ("place")->load();
     const bool synced = (int) proc.apvts.getRawParameterValue ("predelaySync")->load() > 0;
     if (echoSyncSwitch.isEnabled() != (place == 2) || knobs[2]->slider.isEnabled() == synced)

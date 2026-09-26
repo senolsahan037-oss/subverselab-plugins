@@ -2,7 +2,9 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#if SVL_LICENSING
 #include "../../subverselab-plugin-common/Licensing/LicenseOverlay.h"
+#endif
 
 /*  The face of a reverb unit as it would have left the factory in 1979:
     brand new, not worn. A dark green anodized rack panel with cream
@@ -118,8 +120,10 @@ private:
     double touchedAt = 0.0;
     std::vector<float> lastValues;
 
+#if SVL_LICENSING
     juce::TextButton licenseButton { "LICENSE" };
     svl::LicenseOverlay licenseOverlay;
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KubbeEditor)
 };

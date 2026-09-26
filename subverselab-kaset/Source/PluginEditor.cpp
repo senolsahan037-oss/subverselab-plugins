@@ -537,7 +537,10 @@ void SelectorButton::paintButton (juce::Graphics& g, bool over, bool down)
 
 //==============================================================================
 KasetEditor::KasetEditor (KasetProcessor& p)
-    : AudioProcessorEditor (&p), proc (p), dial (p), deckA (p, false), deckB (p, true), counter (p), licenseOverlay (p.license)
+    : AudioProcessorEditor (&p), proc (p), dial (p), deckA (p, false), deckB (p, true), counter (p)
+#if SVL_LICENSING
+    , licenseOverlay (p.license)
+#endif
 {
     setLookAndFeel (&lnf);
     mark = juce::ImageCache::getFromMemory (BinaryData::mark_cream_png, BinaryData::mark_cream_pngSize);
@@ -591,6 +594,7 @@ KasetEditor::KasetEditor (KasetProcessor& p)
     setSize (kW, kH);
     lastTick = juce::Time::getMillisecondCounterHiRes();
     timerCallback();
+#if SVL_LICENSING
     // Licence: the card covers the panel until the plugin is activated; LICENSE reopens it.
     licenseButton.setColour (juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
     licenseButton.setColour (juce::TextButton::textColourOffId, Theme::ink.withAlpha (0.6f));
@@ -598,6 +602,7 @@ KasetEditor::KasetEditor (KasetProcessor& p)
     addAndMakeVisible (licenseButton);
     addChildComponent (licenseOverlay);
     licenseOverlay.setVisible (! proc.license.isLicensed());
+#endif
     startTimerHz (30);
 }
 
@@ -799,8 +804,10 @@ void KasetEditor::paint (juce::Graphics& g)
 
 void KasetEditor::resized()
 {
+#if SVL_LICENSING
     licenseOverlay.setBounds (getLocalBounds());
     licenseButton.setBounds (getWidth() / 2 + 170, kH - 44, 70, 20);
+#endif
     // Top strip.
     playKey.setBounds (46, 92, 66, 62);
     stopKey.setBounds (118, 92, 66, 62);
@@ -828,11 +835,13 @@ void KasetEditor::resized()
 
 void KasetEditor::timerCallback()
 {
+#if SVL_LICENSING
     if (! proc.license.isLicensed() && ! licenseOverlay.isVisible())
     {
         licenseOverlay.refresh();
         licenseOverlay.setVisible (true);
     }
+#endif
     const double now = juce::Time::getMillisecondCounterHiRes();
     const float dt = (float) juce::jlimit (0.0, 0.2, (now - lastTick) / 1000.0);
     lastTick = now;

@@ -23,7 +23,9 @@ using Setup = std::function<void (KasetProcessor&)>;
 juce::AudioBuffer<float> run (const juce::AudioBuffer<float>& input, double sr, Setup setup, int block = 512)
 {
     KasetProcessor proc;
+#if SVL_LICENSING
     proc.license.setLicensedForTesting (true);
+#endif
     setup (proc);
     proc.setRateAndBufferSizeDetails (sr, block);
     proc.prepareToPlay (sr, block);
@@ -183,6 +185,7 @@ int selftest()
     }
 
 
+#if SVL_LICENSING
     // Licensing: the answers the licence server can give, parsed without a network.
     {
         svl::LicenseConfig cfg;
@@ -261,6 +264,20 @@ int selftest()
             worst = juce::jmax (worst, std::abs (out.getSample (0, i) - in.getSample (0, i - latency)));
         check (worst < 1.0e-6f, "No licence: the audio passes through untouched, largest difference " + juce::String (worst, 8));
     }
+#else
+    // SVL_LICENSING=0: no gate at all, a fresh instance processes immediately.
+    {
+        KasetProcessor probeLatency;
+        probeLatency.prepareToPlay (sr, 512);
+        const int latency = probeLatency.getLatencySamples();
+        auto in = noise ((int) sr, 0.2f);
+        auto out = run (in, sr, [] (KasetProcessor& p) { set (p, "generation", 2.0f); set (p, "mix", 1.0f); });
+        float diff = 0.0f;
+        for (int i = latency + 2000; i < out.getNumSamples(); ++i)
+            diff = juce::jmax (diff, std::abs (out.getSample (0, i) - in.getSample (0, i - latency)));
+        check (diff > 1.0e-4f, "SVL_LICENSING=0: a fresh instance processes with no licence check at all, difference " + juce::String (diff, 6));
+    }
+#endif
 
     std::printf ("\n%s\n", failures == 0 ? "ALL PASS" : (juce::String (failures) + " FAILED").toRawUTF8());
     return failures == 0 ? 0 : 1;

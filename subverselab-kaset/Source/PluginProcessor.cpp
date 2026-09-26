@@ -77,7 +77,11 @@ void KasetProcessor::prepareToPlay (double sr, int block)
     powerCoef = std::exp (-1.0 / (1.5 * sr));
     inPower = outPower = 0.0;
     autoGain = 1.0f;
+#if SVL_LICENSING
     playGain = (apvts.getRawParameterValue ("play")->load() > 0.5f && license.isLicensed()) ? 1.0f : 0.0f;
+#else
+    playGain = (apvts.getRawParameterValue ("play")->load() > 0.5f) ? 1.0f : 0.0f;
+#endif
     playStep = (float) (1.0 - std::exp (-1.0 / (0.02 * sr)));
 }
 
@@ -111,7 +115,11 @@ void KasetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // STOP bypasses the tape, fading over 20 ms; latency stays the same either way.
     // Without a licence the tape stays out: the same latency-aligned dry path as BYPASS.
+#if SVL_LICENSING
     const float playTarget = (apvts.getRawParameterValue ("play")->load() > 0.5f && license.isLicensed()) ? 1.0f : 0.0f;
+#else
+    const float playTarget = (apvts.getRawParameterValue ("play")->load() > 0.5f) ? 1.0f : 0.0f;
+#endif
 
     const int N = (int) dryDelay[0].size(), lat = engine.latency();
     double sum[2] = { 0.0, 0.0 };
