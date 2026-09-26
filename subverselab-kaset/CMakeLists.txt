@@ -5,7 +5,12 @@ if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
-project(Kaset VERSION 0.1.0 LANGUAGES C CXX)
+# Oldest macOS the release supports (Big Sur, the first with Apple Silicon).
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
+endif()
+
+project(Kaset VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,7 +43,7 @@ juce_add_plugin(Kaset
     PLUGIN_NAME "SubverseLab Kaset"
     PRODUCT_NAME "SubverseLab Kaset"
     BUNDLE_ID com.subverselab.kaset
-    VERSION "0.1.0"
+    VERSION "1.0.0"
     FORMATS ${SVL_KASET_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE

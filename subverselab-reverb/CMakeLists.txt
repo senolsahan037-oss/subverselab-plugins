@@ -5,7 +5,12 @@ if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
-project(Kubbe VERSION 0.1.0 LANGUAGES C CXX)
+# Oldest macOS the release supports (Big Sur, the first with Apple Silicon).
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
+endif()
+
+project(Kubbe VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,7 +43,7 @@ juce_add_plugin(Kubbe
     PLUGIN_NAME "SubverseLab Kubbe"
     PRODUCT_NAME "SubverseLab Kubbe"
     BUNDLE_ID com.subverselab.kubbe
-    VERSION "0.1.0"
+    VERSION "1.0.0"
     FORMATS ${SVL_KUBBE_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
