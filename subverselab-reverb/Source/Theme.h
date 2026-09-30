@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "BinaryData.h"
 
 // SubverseLab palette, and the 1979 hardware built from it: a dark green
 // anodized panel, cream silkscreen, gold for lamps and pointers, a
@@ -33,8 +34,26 @@ namespace Theme
     const juce::Colour screen        { 0xff021512 };
 
     // Panel legends set the way late-70s studio units were silkscreened:
-    // Helvetica caps, bold for names, medium for scales and fine print.
-    inline juce::Font legend (float size) { return juce::FontOptions ("Helvetica Neue", size, juce::Font::bold); }
-    inline juce::Font fine (float size)   { return juce::FontOptions ("Helvetica Neue", "Medium", size); }
-    inline juce::Font mono (float size)  { return juce::FontOptions ("Menlo", size, juce::Font::bold); }
+    // Helvetica caps, bold for names, a lighter cut for scales and fine print.
+    // The faces are compiled into the plugin (Assets/Fonts), so the panel reads
+    // the same on every machine and never depends on an installed font:
+    // TeX Gyre Heros for the legends, DejaVu Sans Mono for the displays.
+    struct Faces
+    {
+        juce::Typeface::Ptr bold    = juce::Typeface::createSystemTypefaceFor (BinaryData::texgyreherosbold_otf, BinaryData::texgyreherosbold_otfSize);
+        juce::Typeface::Ptr regular = juce::Typeface::createSystemTypefaceFor (BinaryData::texgyreherosregular_otf, BinaryData::texgyreherosregular_otfSize);
+        juce::Typeface::Ptr italic  = juce::Typeface::createSystemTypefaceFor (BinaryData::texgyreherositalic_otf, BinaryData::texgyreherositalic_otfSize);
+        juce::Typeface::Ptr mono    = juce::Typeface::createSystemTypefaceFor (BinaryData::DejaVuSansMonoBold_ttf, BinaryData::DejaVuSansMonoBold_ttfSize);
+    };
+
+    // Sizes are given as the line height the panel was drawn with; these turn
+    // them into the em size that keeps the capitals the height they were.
+    constexpr float legendEm = 0.822f, monoEm = 0.859f;
+
+    inline juce::Font face (const juce::Typeface::Ptr& tf, float em) { return juce::Font (juce::FontOptions (tf).withPointHeight (em)); }
+    // The look-and-feel holds the faces for as long as an editor is open.
+    inline juce::Font legend (float size)     { juce::SharedResourcePointer<Faces> f; return face (f->bold, size * legendEm); }
+    inline juce::Font fine (float size)       { juce::SharedResourcePointer<Faces> f; return face (f->regular, size * legendEm); }
+    inline juce::Font fineItalic (float size) { juce::SharedResourcePointer<Faces> f; return face (f->italic, size * legendEm); }
+    inline juce::Font mono (float size)       { juce::SharedResourcePointer<Faces> f; return face (f->mono, size * monoEm); }
 }

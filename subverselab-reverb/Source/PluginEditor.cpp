@@ -65,11 +65,15 @@ float drawProductName (juce::Graphics& g, const juce::String& name, float x, flo
         all.addPath (p);
         cx += w + gap;
     }
-    const juce::PathStrokeType stroke (t, juce::PathStrokeType::mitered, juce::PathStrokeType::butt);
+    // The strokes are turned into an outline here and filled, instead of being
+    // handed to the renderer to stroke: Direct2D on Windows joins these corners
+    // differently and drew spurs on the letters.
+    juce::Path outline;
+    juce::PathStrokeType (t, juce::PathStrokeType::mitered, juce::PathStrokeType::butt).createStrokedPath (outline, all);
     g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.strokePath (all, stroke, juce::AffineTransform::translation (0.0f, 1.2f));
+    g.fillPath (outline, juce::AffineTransform::translation (0.0f, 1.2f));
     g.setColour (Theme::ink);
-    g.strokePath (all, stroke);
+    g.fillPath (outline);
     return cx - gap - x;
 }
 
@@ -84,6 +88,8 @@ void glow (juce::Graphics& g, juce::Point<float> c, float radius, juce::Colour c
 //==============================================================================
 KubbeLookAndFeel::KubbeLookAndFeel()
 {
+    // Menus and tooltips too: nothing on the panel asks the system for a font.
+    setDefaultSansSerifTypeface (faces->regular);
     setColour (juce::PopupMenu::backgroundColourId, Theme::panelDeep);
     setColour (juce::PopupMenu::textColourId, Theme::ink);
     setColour (juce::TooltipWindow::backgroundColourId, Theme::panelDeep);
@@ -186,10 +192,7 @@ void PlaceButton::paintButton (juce::Graphics& g, bool over, bool down)
     g.drawRoundedRectangle (cap, 4.0f, 1.0f);
 
     g.setColour (Theme::panel.withAlpha (on ? 0.95f : 0.85f));
-    tracked (g, KubbeProcessor::placeNames[index].toUpperCase(), Theme::legend (12.0f), cap.withTrimmedTop (4.0f), juce::Justification::centred, 0.14f);
-    g.setColour (Theme::panel.withAlpha (0.5f));
-    g.setFont (Theme::mono (8.0f));
-    g.drawText (juce::String (index + 1), cap.reduced (5.0f, 3.0f), juce::Justification::topLeft);
+    tracked (g, KubbeProcessor::placeNames[index].toUpperCase(), Theme::legend (12.0f), cap, juce::Justification::centred, 0.14f);
 }
 
 //==============================================================================

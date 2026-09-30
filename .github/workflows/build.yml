@@ -49,6 +49,19 @@ jobs:
           cd "build/${{ matrix.name }}_artefacts/Release/VST3"
           7z a -r "${{ github.workspace }}/${{ matrix.artifact }}.zip" "${{ matrix.vst3_name }}"
 
+      # The panel as Windows draws it, so the lettering can be checked without a Windows machine.
+      - name: Panel snapshot
+        continue-on-error: true
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "${{ github.workspace }}/${{ matrix.name }}-windows-panel.png"
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ matrix.name }}-windows-panel
+          path: ${{ matrix.name }}-windows-panel.png
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

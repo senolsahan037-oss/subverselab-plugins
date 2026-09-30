@@ -68,11 +68,15 @@ float drawProductName (juce::Graphics& g, const juce::String& name, float x, flo
         all.addPath (p);
         cx += w + gap;
     }
-    const juce::PathStrokeType stroke (t, juce::PathStrokeType::mitered, juce::PathStrokeType::butt);
+    // The strokes are turned into an outline here and filled, instead of being
+    // handed to the renderer to stroke: Direct2D on Windows joins these corners
+    // differently and drew spurs on the letters.
+    juce::Path outline;
+    juce::PathStrokeType (t, juce::PathStrokeType::mitered, juce::PathStrokeType::butt).createStrokedPath (outline, all);
     g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.strokePath (all, stroke, juce::AffineTransform::translation (0.0f, 1.2f));
+    g.fillPath (outline, juce::AffineTransform::translation (0.0f, 1.2f));
     g.setColour (ink);
-    g.strokePath (all, stroke);
+    g.fillPath (outline);
     return cx - gap - x;
 }
 
@@ -86,6 +90,12 @@ juce::Colour tapeStripe (int tape)
 } // namespace
 
 //==============================================================================
+KasetLookAndFeel::KasetLookAndFeel()
+{
+    // Menus and tooltips too: nothing on the panel asks the system for a font.
+    setDefaultSansSerifTypeface (faces->regular);
+}
+
 void KasetLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
                                          float startAngle, float endAngle, juce::Slider& s)
 {
@@ -345,7 +355,7 @@ void CassetteWell::paint (juce::Graphics& g)
     g.setColour (Theme::panel);
     tracked (g, typeName[juce::jlimit (0, 2, tape)], Theme::legend (6.5f),
              juce::Rectangle<float> (label.getX() + 8.0f, label.getBottom() - label.getHeight() * 0.13f - 11.0f, label.getWidth() * 0.5f, 10.0f), juce::Justification::centredLeft, 0.18f);
-    g.setFont (Theme::fine (10.0f).italicised());
+    g.setFont (Theme::fineItalic (10.0f));
     g.drawText (dub ? "dub" : "mixtape", juce::Rectangle<float> (label.getCentreX(), label.getBottom() - label.getHeight() * 0.13f - 13.0f, label.getWidth() * 0.5f - 8.0f, 12.0f),
                 juce::Justification::centredRight);
 

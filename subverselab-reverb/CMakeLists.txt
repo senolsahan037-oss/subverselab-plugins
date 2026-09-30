@@ -10,7 +10,7 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(Kubbe VERSION 1.0.1 LANGUAGES C CXX)
+project(Kubbe VERSION 1.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,7 +50,7 @@ juce_add_plugin(Kubbe
     PLUGIN_NAME "SubverseLab Kubbe"
     PRODUCT_NAME "SubverseLab Kubbe"
     BUNDLE_ID com.subverselab.kubbe
-    VERSION "1.0.1"
+    VERSION "1.0.2"
     FORMATS ${SVL_KUBBE_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -69,8 +69,12 @@ juce_add_plugin(Kubbe
 
 juce_generate_juce_header(Kubbe)
 
-# The SubverseLab mark and wordmark, cream on transparent, from Assets/Brand/logo.
-juce_add_binary_data(KubbeAssets SOURCES Assets/mark_cream.png Assets/wordmark_cream.png)
+# The SubverseLab mark and wordmark, cream on transparent, from Assets/Brand/logo,
+# and the panel typefaces, so no text depends on a font installed on the machine.
+juce_add_binary_data(KubbeAssets SOURCES
+    Assets/mark_cream.png Assets/wordmark_cream.png
+    Assets/Fonts/texgyreheros-bold.otf Assets/Fonts/texgyreheros-regular.otf
+    Assets/Fonts/texgyreheros-italic.otf Assets/Fonts/DejaVuSansMono-Bold.ttf)
 set_target_properties(KubbeAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(KUBBE_SOURCES

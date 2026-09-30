@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "Theme.h"
 #if SVL_LICENSING
 #include "../../subverselab-plugin-common/Licensing/LicenseOverlay.h"
 #endif
@@ -20,8 +21,12 @@
 class KasetLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
+    KasetLookAndFeel();
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos,
                            float startAngle, float endAngle, juce::Slider&) override;
+
+private:
+    juce::SharedResourcePointer<Theme::Faces> faces;   // the embedded panel typefaces
 };
 
 /** Tuner-style dial: the red pointer sits on the dub generation. Click or drag to move it. */

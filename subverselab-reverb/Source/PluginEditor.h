@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "Theme.h"
 #if SVL_LICENSING
 #include "../../subverselab-plugin-common/Licensing/LicenseOverlay.h"
 #endif
@@ -20,6 +21,9 @@ public:
     KubbeLookAndFeel();
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos,
                            float startAngle, float endAngle, juce::Slider&) override;
+
+private:
+    juce::SharedResourcePointer<Theme::Faces> faces;   // the embedded panel typefaces
 };
 
 /** A square push button with a lamp behind its cap. */
