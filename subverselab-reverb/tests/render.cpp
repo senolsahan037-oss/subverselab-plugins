@@ -271,13 +271,28 @@ int selftest()
         check (! used.ok && used.message.contains ("activation limit") && gone.definitelyRevoked && fine.ok && ! offline.definitelyRevoked,
                "Licence: our server's refusals, re-checks and silence are read like Lemon Squeezy's");
         // A Lemon Squeezy key is never judged by the SVL rule, and our store id means nothing to it.
-        const auto lsDev = svl::License::parseActivate (svlAnswer (555, 12345), cfg, B::lemonSqueezy);
+        // A config with unset store / product ids (as before the store existed) must refuse every Lemon Squeezy key.
+        auto unset = cfg;
+        unset.storeId = 0;
+        unset.productIds = {};
+        const auto lsPlaceholder = svl::License::parseActivate (svlAnswer (555, 12345), unset, B::lemonSqueezy);
+        const auto lsPlaceholderVal = svl::License::parseValidate (R"({"valid":true,"error":null,"license_key":{"status":"active"},"meta":{"store_id":555,"product_id":12345}})", unset, B::lemonSqueezy);
         auto lsCfg = cfg;
         lsCfg.storeId = 111;
         lsCfg.productIds = { 222 };
         const auto lsOurs = svl::License::parseActivate (svlAnswer (111, 222), lsCfg);
+        const auto lsWrongStore = svl::License::parseActivate (svlAnswer (112, 222), lsCfg);
+        const auto lsWrongProduct = svl::License::parseActivate (svlAnswer (111, 223), lsCfg);
         const auto lsSvlIds = svl::License::parseActivate (svlAnswer (1, 9003), lsCfg);
-        check (lsDev.ok && lsOurs.ok && ! lsSvlIds.ok, "Licence: Lemon Squeezy keys keep the store / product rule");
+        auto storeOnly = unset;
+        storeOnly.storeId = 111;   // store set, products still empty
+        const auto lsStoreOnly = svl::License::parseActivate (svlAnswer (111, 222), storeOnly);
+        check (! lsPlaceholder.ok && ! lsPlaceholderVal.ok && ! lsStoreOnly.ok,
+               "Licence: fails closed - with unset Lemon Squeezy ids every Lemon Squeezy key is refused (an empty id is not 'accept all')");
+        // The shipped config carries the real store and the product plus the bundle.
+        check (cfg.storeId == 486764 && cfg.productIds.size() == 2 && cfg.productIds.contains (1402289),
+               "Licence: the shipped config names the SubverseLab store, this product and the KUBBE + KASET bundle");
+        check (lsOurs.ok && ! lsWrongStore.ok && ! lsWrongProduct.ok && ! lsSvlIds.ok, "Licence: Lemon Squeezy keys keep the store / product rule once the ids are set");
         // The licence file remembers its server; files from before SVL keys are Lemon Squeezy.
         const auto back = svl::License::decodeStored (svl::License::encodeStored ({ "SVL-AB12-CD34-EF56-GH78", "svl-inst", 1234, B::svl }));
         const auto ls = svl::License::decodeStored (svl::License::encodeStored ({ "38b1460a", "ls-inst", 99, B::lemonSqueezy }));
@@ -287,15 +302,70 @@ int selftest()
                "Licence: the stored server survives a save / load; an old file without it is Lemon Squeezy");
     }
 
-    // Without a licence the audio passes through untouched.
+    // Without a licence the audio passes through bit for bit; with one, it is processed.
     {
         auto in = noise ((int) sr, 0.2f);
         auto out = run (in, sr, [] (KubbeProcessor& p) { p.license.setLicensedForTesting (false); set (p, "mix", 1.0f); });
-        float worst = 0.0f;
+        int differing = 0;
         for (int c = 0; c < 2; ++c)
             for (int i = 0; i < out.getNumSamples(); ++i)
-                worst = juce::jmax (worst, std::abs (out.getSample (c, i) - in.getSample (c, i)));
-        check (worst < 1.0e-9f, "No licence: the audio passes through untouched, largest difference " + juce::String (worst, 8));
+                differing += out.getSample (c, i) != in.getSample (c, i) ? 1 : 0;
+        check (differing == 0, "No licence: the audio passes through bit for bit (dry == in), " + juce::String (differing) + " samples differ");
+
+        auto lic = run (in, sr, [] (KubbeProcessor& p) { p.license.setLicensedForTesting (true); set (p, "mix", 1.0f); });
+        float diff = 0.0f;
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < lic.getNumSamples(); ++i)
+                diff = juce::jmax (diff, std::abs (lic.getSample (c, i) - in.getSample (c, i)));
+        check (diff > 1.0e-4f, "Licensed: the same instance processes the audio, difference " + juce::String (diff, 6));
+    }
+
+    // The licence file: written when a key is activated, read back on the next start, and never lost to a network error.
+    {
+        using B = svl::License::Backend;
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("svl-selftest-" + juce::String (juce::Time::currentTimeMillis()));
+        dir.createDirectory();
+        auto cfg = kubbeLicenseConfig();
+        cfg.licenseFolder = dir;                 // never the user's real Licenses folder
+        const auto file = dir.getChildFile ("kubbe.json");
+        const juce::String key = "SVL-AB12-CD34-EF56-GH78";
+
+        bool emptyDir = false, wrote = false, readBack = false;
+        { svl::License l (cfg); emptyDir = ! l.isLicensed(); }
+        { svl::License l (cfg); l.adoptActivation (key, "inst-1", B::svl); wrote = l.isLicensed() && file.existsAsFile(); }
+        {
+            svl::License l (cfg);
+            const auto stored = svl::License::decodeStored (file.loadFileAsString());
+            readBack = l.isLicensed() && l.keyHint() == "GH78" && stored.key == key && stored.instanceId == "inst-1"
+                       && stored.backend == B::svl && stored.validated > 0;
+        }
+        check (emptyDir && wrote && readBack, "Licence file: none = unlicensed; an activation is written; the next start reads it back, licensed, offline");
+
+        file.replaceWithText ("not json");
+        bool junk = false, noInstance = false;
+        { svl::License l (cfg); junk = ! l.isLicensed(); }
+        file.replaceWithText (svl::License::encodeStored ({ key, "", 5, B::svl }));
+        { svl::License l (cfg); noInstance = ! l.isLicensed(); }
+        check (junk && noInstance, "Licence file: an unreadable file, or one without an instance id, is not a licence");
+
+        // Network error: the weekly re-check is due (validated long ago) and the server cannot be reached.
+        file.replaceWithText (svl::License::encodeStored ({ key, "inst-1", 1000, B::svl }));
+        cfg.svlApiBase = "http://127.0.0.1:9/api/license/";   // nothing listens: connection refused
+        {
+            svl::License l (cfg);
+            const bool loaded = l.isLicensed();
+            const auto until = juce::Time::getMillisecondCounter() + 30000;
+            while (l.revalidationsFinished() == 0 && juce::Time::getMillisecondCounter() < until)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (100);
+            const auto stored = svl::License::decodeStored (file.loadFileAsString());
+            check (loaded && l.revalidationsFinished() == 1 && l.isLicensed() && file.existsAsFile() && stored.key == key && stored.instanceId == "inst-1",
+                   "Network error: the due weekly re-check could not reach the server and the activation (memory and file) stayed");
+        }
+        const auto throttle = svl::License::parseValidate (R"({"message":"Too Many Attempts."})", cfg, B::lemonSqueezy);
+        const auto html = svl::License::parseValidate ("<html>502 Bad Gateway</html>", cfg, B::svl);
+        check (! throttle.definitelyRevoked && ! html.definitelyRevoked && ! throttle.ok && ! html.ok,
+               "Network error: a throttle notice or a gateway page is 'could not ask', not a revocation");
+        dir.deleteRecursively();
     }
 #else
     // SVL_LICENSING=0: no gate at all, a fresh instance processes immediately.

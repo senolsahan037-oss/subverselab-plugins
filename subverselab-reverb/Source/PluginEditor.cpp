@@ -83,6 +83,21 @@ void glow (juce::Graphics& g, juce::Point<float> c, float radius, juce::Colour c
     g.setGradientFill (grad);
     g.fillEllipse (c.x - radius, c.y - radius, radius * 2.0f, radius * 2.0f);
 }
+#if SVL_LICENSING
+/** The activation card wears the panel's own palette and its embedded typefaces. */
+svl::LicenseOverlay::Style licenseStyle()
+{
+    svl::LicenseOverlay::Style s;
+    s.panel = Theme::panel;       s.panelDeep = Theme::panelDeep;  s.ink = Theme::ink;
+    s.capCream = Theme::capCream; s.gold = Theme::gold;            s.goldDark = Theme::goldDark;
+    s.screen = Theme::screen;     s.vfd = Theme::vfd;              s.danger = Theme::danger;
+    s.legend = [] (float size) { return Theme::legend (size); };
+    s.fine   = [] (float size) { return Theme::fine (size); };
+    s.mono   = [] (float size) { return Theme::mono (size); };
+    return s;
+}
+#endif
+
 } // namespace
 
 //==============================================================================
@@ -590,7 +605,7 @@ void DuckMeter::paint (juce::Graphics& g)
 KubbeEditor::KubbeEditor (KubbeProcessor& p)
     : AudioProcessorEditor (&p), proc (p), crt (p)
 #if SVL_LICENSING
-    , licenseOverlay (p.license)
+    , licenseOverlay (p.license, licenseStyle())
 #endif
 {
     setLookAndFeel (&lnf);

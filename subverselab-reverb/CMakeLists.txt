@@ -10,17 +10,16 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(Kubbe VERSION 1.0.2 LANGUAGES C CXX)
+project(Kubbe VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# OFF for the free launch (no activation gate; the download room on
-# subverselab.com is the gate). Licensing code still compiles behind this
-# switch for a future paid phase: build with -DSVL_LICENSING=ON to bring it
-# back. Default OFF ships the plugin with no licence checks, network calls,
-# or licence files at all.
-option(SVL_LICENSING "Build the Lemon Squeezy / SVL licence-activation gate into the plugin" OFF)
+# ON from 1.1.0: an unlicensed plugin shows the activation card and passes the
+# audio through untouched (no demo mode). 1.0.x shipped with this OFF. Build with
+# -DSVL_LICENSING=OFF only for a plugin that must carry no licence checks, network
+# calls or licence files at all.
+option(SVL_LICENSING "Build the Lemon Squeezy / SVL licence-activation gate into the plugin" ON)
 
 # JUCE is fetched by CMake. To build offline against a checkout already on
 # disk, pass -DFETCHCONTENT_SOURCE_DIR_JUCE=/path/to/JUCE.
@@ -50,7 +49,7 @@ juce_add_plugin(Kubbe
     PLUGIN_NAME "SubverseLab Kubbe"
     PRODUCT_NAME "SubverseLab Kubbe"
     BUNDLE_ID com.subverselab.kubbe
-    VERSION "1.0.2"
+    VERSION "1.1.0"
     FORMATS ${SVL_KUBBE_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -103,7 +102,8 @@ target_link_libraries(Kubbe
 set(KUBBE_TOOL_DEFS ${KUBBE_DEFS}
     JucePlugin_Name="SubverseLab Kubbe"
     JucePlugin_IsSynth=0 JucePlugin_WantsMidiInput=0
-    JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+    JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0
+    JUCE_MODAL_LOOPS_PERMITTED=1)   # the selftest pumps the message loop for the background licence re-check
 set(KUBBE_TOOL_LIBS KubbeAssets
     juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats
     juce::juce_dsp juce::juce_gui_basics juce::juce_graphics juce::juce_core)

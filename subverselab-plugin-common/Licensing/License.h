@@ -21,7 +21,9 @@
       clear "disabled / expired / instance gone" answer revokes it, never a
       network failure.
     - A key is accepted only if it belongs to our store and to one of the
-      product ids listed for this plugin (single or bundle). The stored licence
+      product ids listed for this plugin (single or bundle). That check fails
+      closed: a Lemon Squeezy key is refused while storeId is 0 or productIds is
+      empty (placeholders), in every build. The stored licence
       remembers which server it came from ("backend":"svl"; a file without it
       is Lemon Squeezy), so validate and deactivate ask the same server.
 */
@@ -36,8 +38,9 @@ struct LicenseConfig
 {
     juce::String product;                 // "KUBBE", "KASET": file name and screen title
     juce::String buyUrl;                  // checkout page (buy, or redeem a DM code)
-    juce::int64 storeId = 0;              // 0 = not configured yet: any store is accepted (development only)
-    juce::Array<juce::int64> productIds;  // empty = any product in the store (development only)
+    juce::int64 storeId = 0;              // 0 = not configured yet: every Lemon Squeezy key is refused (fails closed)
+    juce::Array<juce::int64> productIds;  // empty = not configured yet: every Lemon Squeezy key is refused
+    juce::File licenseFolder;             // empty = the per-user default; set only by tests
     juce::String apiBase { "https://api.lemonsqueezy.com/v1/licenses/" };
     juce::String svlApiBase { "https://subverselab.com/api/license/" };   // our own launch keys
     juce::Array<juce::int64> svlProductIds;   // on our store; empty = no SVL key activates
@@ -46,12 +49,18 @@ struct LicenseConfig
 class License
 {
 public:
+    /** Why a request did not succeed, so the screen can say it in one quiet line. */
+    enum class Code { none, network, notFound, wrongProduct, limit, deactivated };
+
     struct Result
     {
         bool ok = false;
         juce::String message, instanceId, status;
         bool definitelyRevoked = false;   // the server said no, as opposed to "could not ask"
+        Code code = Code::none;
     };
+
+    static juce::String networkMessage() { return juce::String::fromUTF8 ("No connection \xe2\x80\x94 try again later"); }
 
     /** Which licence server a key belongs to. */
     enum class Backend { lemonSqueezy, svl };
@@ -100,17 +109,7 @@ public:
             {
                 if (! flag->load()) return;
                 if (r.ok)
-                {
-                    {
-                        const juce::ScopedLock sl (lock);
-                        key = k;
-                        instanceId = r.instanceId;
-                        backend = be;
-                        lastValidated = juce::Time::currentTimeMillis();
-                    }
-                    save();
-                    licensed = true;
-                }
+                    adoptActivation (k, r.instanceId, be);
                 done (r.ok, r.message);
             });
         });
@@ -139,10 +138,27 @@ public:
                 if (! flag->load()) return;
                 if (ok) forget();
                 done (ok, ok ? "This computer is released. You can activate the key elsewhere."
-                             : (err.isNotEmpty() ? err : "Could not reach the licence server. Check your connection."));
+                             : (err.isNotEmpty() ? err : networkMessage()));
             });
         });
     }
+
+    /** Remember an activation the server has just granted: in memory, then on disk (not while testing). */
+    void adoptActivation (const juce::String& licenseKey, const juce::String& instance, Backend be)
+    {
+        {
+            const juce::ScopedLock sl (lock);
+            key = licenseKey;
+            instanceId = instance;
+            backend = be;
+            lastValidated = juce::Time::currentTimeMillis();
+        }
+        save();
+        licensed = true;
+    }
+
+    /** How many background re-checks have finished (answered or not). For tests. */
+    int revalidationsFinished() const { return finishedChecks.load(); }
 
     /** SVL-XXXX-XXXX-XXXX-XXXX in any case is one of our launch keys; anything else is Lemon Squeezy's. */
     static Backend backendFor (const juce::String& licenseKey)
@@ -165,21 +181,27 @@ public:
     {
         Result r;
         const auto v = juce::JSON::parse (body);
-        if (! v.isObject())
+        // No JSON, or JSON that is not an activation answer (a throttle notice, a gateway page): we could not ask.
+        if (! v.isObject() || ! v.getDynamicObject()->hasProperty ("activated"))
         {
-            r.message = "Could not reach the licence server. Check your connection and try again.";
+            r.code = Code::network;
+            r.message = networkMessage();
             return r;
         }
         if (! (bool) v.getProperty ("activated", false))
         {
             const auto err = v.getProperty ("error", juce::var()).toString();
+            const auto low = err.toLowerCase();
             r.definitelyRevoked = true;
-            r.message = err.isNotEmpty() ? err : "This key could not be activated.";
+            if (low.contains ("limit"))                                   { r.code = Code::limit;       r.message = "This key has reached its activation limit."; }
+            else if (low.contains ("disabled") || low.contains ("expired")) { r.code = Code::deactivated; r.message = "This key was deactivated"; }
+            else                                                          { r.code = Code::notFound;    r.message = "Key not recognised"; }
             return r;
         }
         if (! belongsToUs (v, cfg, be))
         {
             r.definitelyRevoked = true;
+            r.code = Code::wrongProduct;
             r.message = "This key is for a different product.";
             return r;
         }
@@ -194,10 +216,11 @@ public:
     {
         Result r;
         const auto v = juce::JSON::parse (body);
-        if (! v.isObject())
-            return r;   // could not ask: keep what we have
-        const auto status = v.getProperty ("license_key", juce::var()).getProperty ("status", juce::var()).toString();
-        r.status = status;
+        // Only an explicit {"valid": ...} is an answer. Anything else (no body, a 429 or 5xx page, a JSON
+        // throttle notice) means we could not ask: keep what we have.
+        if (! v.isObject() || ! v.getDynamicObject()->hasProperty ("valid"))
+            return r;
+        r.status = v.getProperty ("license_key", juce::var()).getProperty ("status", juce::var()).toString();
         if ((bool) v.getProperty ("valid", false) && belongsToUs (v, cfg, be))
         {
             r.ok = true;
@@ -205,7 +228,8 @@ public:
         }
         // An explicit "no": disabled, expired, or this instance no longer exists.
         r.definitelyRevoked = true;
-        r.message = v.getProperty ("error", juce::var()).toString();
+        r.code = Code::deactivated;
+        r.message = "This key was deactivated";
         return r;
     }
 
@@ -257,9 +281,9 @@ private:
         const auto product = (juce::int64) meta.getProperty ("product_id", 0);
         if (be == Backend::svl)   // our own server: no development fallback, the store and product must match
             return store == svlStoreId && cfg.svlProductIds.contains (product);
-        if (cfg.storeId != 0 && store != cfg.storeId) return false;
-        if (! cfg.productIds.isEmpty() && ! cfg.productIds.contains (product)) return false;
-        return true;
+        // Lemon Squeezy: fails closed. Placeholder ids (0 / empty) accept nothing, in every build.
+        if (cfg.storeId == 0 || cfg.productIds.isEmpty()) return false;
+        return store == cfg.storeId && cfg.productIds.contains (product);
     }
 
     static juce::String instanceName()
@@ -279,10 +303,17 @@ private:
                         .withConnectionTimeoutMs (15000)
                         .withStatusCode (&status);
         std::unique_ptr<juce::InputStream> in (url.createInputStream (opts));
-        return in != nullptr ? in->readEntireStreamAsString() : juce::String();
+        // Throttled or broken server: not an answer. (404 and 400 carry the real JSON answers.)
+        if (in == nullptr || status == 429 || status >= 500)
+            return {};
+        return in->readEntireStreamAsString();
     }
 
-    juce::File file() const { return folder().getChildFile (cfg.product.toLowerCase() + ".json"); }
+    juce::File file() const
+    {
+        const auto dir = cfg.licenseFolder != juce::File() ? cfg.licenseFolder : folder();
+        return dir.getChildFile (cfg.product.toLowerCase() + ".json");
+    }
 
     void load()
     {
@@ -303,7 +334,7 @@ private:
             const juce::ScopedLock sl (lock);
             s = { key, instanceId, lastValidated, backend };
         }
-        folder().createDirectory();
+        file().getParentDirectory().createDirectory();
         file().replaceWithText (encodeStored (s));
     }
 
@@ -338,6 +369,7 @@ private:
             juce::MessageManager::callAsync ([this, flag, r]
             {
                 if (! flag->load()) return;
+                ++finishedChecks;
                 if (r.ok)
                 {
                     { const juce::ScopedLock sl (lock); lastValidated = juce::Time::currentTimeMillis(); }
@@ -352,6 +384,7 @@ private:
     LicenseConfig cfg;
     std::shared_ptr<std::atomic<bool>> alive;
     std::atomic<bool> licensed { false };
+    std::atomic<int> finishedChecks { 0 };
     bool testing = false;
     juce::CriticalSection lock;
     juce::String key, instanceId;

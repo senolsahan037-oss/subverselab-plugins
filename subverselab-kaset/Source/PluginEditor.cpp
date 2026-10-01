@@ -87,6 +87,21 @@ juce::Colour tapeStripe (int tape)
     return tape == 0 ? Theme::gold : tape == 1 ? Theme::teal : juce::Colour (0xffA9AEAB);
 }
 
+#if SVL_LICENSING
+/** The activation card wears the panel's own palette and its embedded typefaces. */
+svl::LicenseOverlay::Style licenseStyle()
+{
+    svl::LicenseOverlay::Style s;
+    s.panel = Theme::panel;       s.panelDeep = Theme::panelDeep;  s.ink = Theme::ink;
+    s.capCream = Theme::capCream; s.gold = Theme::gold;            s.goldDark = Theme::goldDark;
+    s.screen = Theme::screen;     s.vfd = Theme::vfd;              s.danger = Theme::danger;
+    s.legend = [] (float size) { return Theme::legend (size); };
+    s.fine   = [] (float size) { return Theme::fine (size); };
+    s.mono   = [] (float size) { return Theme::mono (size); };
+    return s;
+}
+#endif
+
 } // namespace
 
 //==============================================================================
@@ -549,7 +564,7 @@ void SelectorButton::paintButton (juce::Graphics& g, bool over, bool down)
 KasetEditor::KasetEditor (KasetProcessor& p)
     : AudioProcessorEditor (&p), proc (p), dial (p), deckA (p, false), deckB (p, true), counter (p)
 #if SVL_LICENSING
-    , licenseOverlay (p.license)
+    , licenseOverlay (p.license, licenseStyle())
 #endif
 {
     setLookAndFeel (&lnf);
