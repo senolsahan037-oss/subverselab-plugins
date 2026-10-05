@@ -10,6 +10,9 @@
 #include <cmath>
 #include <cstdint>
 #include <vector>
+#ifndef M_PI   // MSVC does not define it without _USE_MATH_DEFINES (Windows CI build, 2026-10-05)
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace tutkal
 {
