@@ -1,0 +1,495 @@
+MIHENK behavior_check  -  virtual-user report
+Generated 5 Oct 2026 22:30, run time 220.81 s. Plug-in mode (VST3/AU path), non-realtime kernels unless stated.
+Result: 141 PASS, 0 FAIL, 21 INFO
+This tool finds and reports. It fixes nothing; engine code is untouched.
+Not covered: the editor/GUI, a real DAW's PDC and automation timing, interactive controls.
+
+
+==== Scenario 1 ====
+INFO [1.0] baseline
+      measured: fresh rig, LEARN on 20 s, test signal -13.62 LUFS, -13.80 dB RMS, -1.00 dBTP, solved drive -0.00 dB, latency 15926 samples
+PASS [1.1] two fresh rigs, same settings and input
+      measured: largest sample difference -300.0 dBFS, level difference 0.0000 LU
+      limit:    bit-exact (non-realtime kernels)
+PASS [1.2] block size 32
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.3] block size 64
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.4] irregular block sizes 1..512
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.5] block size 2048 (larger than the 512 announced to prepareToPlay)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.6] block size 1 (2 s signal, against block 512 on the same signal)
+      measured: LUFS -18.657 vs -18.677
+      limit:    <= 0.1 dB
+PASS [1.7] after 20 x (bypass ON, play, bypass OFF, play)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.8] after 10 quick bypass flicks (20 ms apart, solves cancelled)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.9] 8 knobs moved away and back to the exact same values
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.10] preset round trip (save, another starting point, load the saved one back)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.11] RtChain::reset() (state cleared, plan and settings kept)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.12] prepareToPlay called three times (512, 128, 512)
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.13] getStateInformation then setStateInformation on the same live instance
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.14] host hops the sample rate 48 -> 44.1 -> 48 kHz (LEARN done at 48)
+      measured: LUFS -13.625 (-0.001 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.15] LEARN pressed a second time on the identical song
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.16] 40 random knob moves, then every touched knob restored to its exact value
+      measured: LUFS -13.624 (+0.000 LU), RMS +0.000 dB, drive -0.00 dB (was -0.00)
+      limit:    |level difference| <= 0.1 dB
+PASS [1.17] same instance, same signal played again without any reset
+      measured: LUFS -13.624 vs -13.624
+      limit:    <= 0.1 dB
+
+==== Scenario 2 ====
+PASS [2.a1] bypass = input delayed by the reported latency (default settings)
+      measured: reported latency 15926 samples (331.8 ms), bit-exact lag 15926, largest difference -300.0 dBFS
+      limit:    same lag, difference 0
+PASS [2.a2] bypass = input delayed by the reported latency (HIP-HOP starting point (mono below 120 Hz))
+      measured: reported latency 15926 samples (331.8 ms), bit-exact lag 15926, largest difference -300.0 dBFS
+      limit:    same lag, difference 0
+PASS [2.a3] bypass = input delayed by the reported latency (3-BAND + dynamic AIR + mono below + linear-phase EQ)
+      measured: reported latency 15926 samples (331.8 ms), bit-exact lag 15926, largest difference -300.0 dBFS
+      limit:    same lag, difference 0
+INFO [2.b0] bypass step size used for the timing
+      measured: processed and bypassed sine differ by up to 1.0 dB (drive +9 dB)
+PASS [2.b1] time from the parameter change to the first audible change (worst of 24 cases)
+      measured: 6.4 ms. ON : first change 6.0 ms, 50% 14.6 ms, 90% 23.0 ms, 99% 25.1 ms; OFF: first change 6.2 ms, 50% 15.7 ms, 90% 23.3 ms, 99% 25.2 ms; 
+      limit:    <= 12 ms
+PASS [2.b2] time from the parameter change to 90 % of the switch (worst of 24 cases)
+      measured: 23.5 ms (99 %: 25.2 ms)
+      limit:    <= 30 ms
+PASS [2.b3] bypass switch click (largest sample step / natural step of the louder level)
+      measured: 1.00 x
+      limit:    <= 1.5 x
+PASS [2.b4] bypass switch dropout (lowest level during the switch vs the quieter side)
+      measured: -0.01 dB
+      limit:    >= -1 dB
+PASS [2.c1] level after bypass OFF equals the level before bypass ON (learned session)
+      measured: -13.634 LUFS before, -13.636 after, bypassed -16.964 LUFS (input -16.964)
+      limit:    <= 0.1 dB
+PASS [2.c2] bypass ON output equals the input (learned session, aligned)
+      measured: largest difference -300.0 dBFS
+      limit:    0
+PASS [2.c3] level after a quick bypass ON/OFF (200 ms)
+      measured: -13.636 LUFS vs -13.634
+      limit:    <= 0.1 dB
+PASS [2.e1] host bypass (processBlockBypassed): passes the audio with the reported latency
+      measured: reported latency 15926 samples (331.8 ms), the bypassed impulse is delayed by 15926 samples; so with the host's bypass the signal jumps 0.0 ms earlier than the processed one (and than the other tracks the host delay-compensates)
+      limit:    delay == reported latency
+PASS [2.e2] host bypass switch: click when the host engages bypass in the middle of a tone
+      measured: largest sample step 1.0 x the natural step of a 220 Hz tone (the tone jumps 331.8 ms in phase)
+      limit:    <= 1.5 x
+PASS [2.e3] un-bypassing from the host: old audio must not play again
+      measured: after 0.5 s of host bypass the plug-in is fed silence and still plays -119.6 dBFS of the tone from before the bypass, for 0.0 ms (latency 331.8 ms)
+      limit:    < -90 dBFS
+INFO [2.d0_40] standalone app test setup
+      measured: 40 s stereo file at 44.1 kHz, started processed: yes
+PASS [2.d1_40] standalone: time from the BYPASS key to the audible switch (40 s file)
+      measured: 23.8007 ms (key to render applied 24.0271 ms)
+      limit:    <= 100 ms
+PASS [2.d2_40] standalone: time from BYPASS OFF to the processed sound returning (40 s file)
+      measured: 0.00466667 ms
+      limit:    <= 100 ms
+INFO [2.d0_180] standalone app test setup
+      measured: 180 s stereo file at 44.1 kHz, started processed: yes
+PASS [2.d1_180] standalone: time from the BYPASS key to the audible switch (180 s file)
+      measured: 23.7816 ms (key to render applied 24.0074 ms)
+      limit:    <= 100 ms
+PASS [2.d2_180] standalone: time from BYPASS OFF to the processed sound returning (180 s file)
+      measured: 0.004875 ms
+      limit:    <= 100 ms
+
+==== Scenario 3 ====
+PASS [3.1] impulse delay equals the reported latency: no splits, neutral EQ
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 0 samples
+PASS [3.2] impulse delay equals the reported latency: mono below 120 Hz (stereo split)
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 0 samples
+PASS [3.3] impulse delay equals the reported latency: high width 1.2
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 0 samples
+PASS [3.4] impulse delay equals the reported latency: 3-BAND compressor
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 0 samples
+PASS [3.5] impulse delay equals the reported latency: dynamic AIR
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 0 samples
+PASS [3.6] impulse delay equals the reported latency: linear-phase EQ, bell +2 dB
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 1 sample
+PASS [3.7] impulse delay equals the reported latency: all of the above
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 1 sample
+PASS [3.8] impulse delay equals the reported latency: HIP-HOP starting point (minimum-phase EQ, mono below)
+      measured: reported 15926 samples (331.8 ms), impulse peak at 15926 (331.8 ms), difference 0
+      limit:    |difference| <= 96 samples
+PASS [3.sr44100] all switches in, 44100 Hz: impulse delay equals reported
+      measured: reported 15361 (348.3 ms), measured 15361
+      limit:    |difference| <= 1
+PASS [3.sr96000] all switches in, 96000 Hz: impulse delay equals reported
+      measured: reported 31459 (327.7 ms), measured 31459
+      limit:    |difference| <= 1
+INFO [3.s0] latency with no delaying stage switched in
+      measured: 15926 samples = 331.8 ms
+INFO [3.sw1] switching LINEAR PHASE (EQ)
+      measured: LINEAR PHASE (EQ): latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural
+INFO [3.sw2] switching 3-BAND mode
+      measured: 3-BAND mode: latency 15926 -> 15926 samples (0.0 ms), dropout -0.9 dB, largest step 1.3 x natural
+INFO [3.sw3] switching AIR DYN (with AIR 2 dB)
+      measured: AIR DYN (with AIR 2 dB): latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural
+INFO [3.sw4] switching MONO BELOW knob 0 -> 120 Hz
+      measured: MONO BELOW knob 0 -> 120 Hz: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural
+INFO [3.sw5] switching MONO BELOW knob 0 -> 41 Hz
+      measured: MONO BELOW knob 0 -> 41 Hz: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural
+INFO [3.sw6] switching HIGH WIDTH knob 100 % -> 101 %
+      measured: HIGH WIDTH knob 100 % -> 101 %: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural
+PASS [3.swall] switching a stage that changes the latency is inaudible (no dropout, no click)
+      measured: worst click 1.3 x the natural step, worst dropout -0.9 dB. LINEAR PHASE (EQ): latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural | 3-BAND mode: latency 15926 -> 15926 samples (0.0 ms), dropout -0.9 dB, largest step 1.3 x natural | AIR DYN (with AIR 2 dB): latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural | MONO BELOW knob 0 -> 120 Hz: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural | MONO BELOW knob 0 -> 41 Hz: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural | HIGH WIDTH knob 100 % -> 101 %: latency 15926 -> 15926 samples (0.0 ms), dropout -0.6 dB, largest step 1.0 x natural | 
+      limit:    click <= 1.5 x natural, dropout >= -3 dB
+PASS [3.knob1] a continuous knob must not change the plug-in's latency (MONO BELOW 0 -> 41 -> 300 Hz)
+      measured: latency at 0 Hz 15926, 41 Hz 15926, 300 Hz 15926 samples (0.0 ms step as the knob leaves 0); before this test 15926
+      limit:    no change
+PASS [3.knob2] a continuous knob must not change the plug-in's latency (HIGH WIDTH 100 % -> 102 %)
+      measured: latency 15926 -> 15926 samples (0.0 ms)
+      limit:    no change
+
+==== Scenario 4 ====
+INFO [4.mat] test material
+      measured: finished -10.1 LUFS / -1.5 dBTP: -10.1 LUFS, -1.5 dBTP, PLR 8.6, crest 9.1 dB
+INFO [4.mat] test material
+      measured: finished -11.6 LUFS / -3.0 dBTP: -11.6 LUFS, -3.0 dBTP, PLR 8.6, crest 9.1 dB
+INFO [4.mat] test material
+      measured: finished -12.0 LUFS / -3.0 dBTP: -12.0 LUFS, -3.0 dBTP, PLR 9.0, crest 10.0 dB
+PASS [4.f1] finished material finished -10.1 LUFS / -1.5 dBTP -> STREAM -14
+      measured: STREAM -14: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -14.0 LUFS / -5.40 dBTP (PLR 8.6); boost -3.9 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost 0.0 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Turned down 3.9 dB so it sits at -14.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -14.0 LUFS, -5.4 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f2] finished material finished -10.1 LUFS / -1.5 dBTP -> CLUB -8
+      measured: CLUB -8: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -8.1 LUFS / -1.00 dBTP (PLR 7.1); boost +2.0 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.75 dB, >3 dB for 64.4 % of the time, PLR lost 1.5 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Turned up 5.0 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · -8 LUFS reached: the limiter takes up to 4.5 dB on the loudest peaks (avg 3.1 dB). Expect less punch on the drums · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.1 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f3] finished material finished -10.1 LUFS / -1.5 dBTP -> CUSTOM -9
+      measured: CUSTOM -9: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -9.0 LUFS / -1.00 dBTP (PLR 8.0); boost +1.1 dB, drive -0.0 dB, limiter GR max 0.6 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost 0.6 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Turned up 1.1 dB towards -9.0 LUFS · ceiling -1.0 dBTP (peaks touched 0.6 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · -9 LUFS reached: the limiter takes up to 0.6 dB on the loudest peaks (avg 0.1 dB) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -9.0 LUFS, -1.0 dBTP, limiter at most 0.6 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f4] finished material finished -10.1 LUFS / -1.5 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -10.1 LUFS / -1.50 dBTP (PLR 8.6); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Level kept at -10.1 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -10.1 LUFS, -1.5 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f5] finished material finished -10.1 LUFS / -1.5 dBTP -> CUSTOM -6 (beyond reach)
+      measured: CUSTOM -6 (beyond reach): in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -8.1 LUFS / -1.00 dBTP (PLR 7.1); boost +2.0 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.75 dB, >3 dB for 64.4 % of the time, PLR lost 1.5 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Turned up 5.0 dB towards -6.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Target -6 is out of reach even with +5.0 dB: the limiter gets it to -8.2 LUFS · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.1 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f6] finished material finished -11.6 LUFS / -3.0 dBTP -> STREAM -14
+      measured: STREAM -14: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -14.0 LUFS / -5.40 dBTP (PLR 8.6); boost -2.4 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Turned down 2.4 dB so it sits at -14.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -14.0 LUFS, -5.4 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f7] finished material finished -11.6 LUFS / -3.0 dBTP -> CLUB -8
+      measured: CLUB -8: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -8.1 LUFS / -1.00 dBTP (PLR 7.1); boost +3.5 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.75 dB, >3 dB for 64.4 % of the time, PLR lost 1.5 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Turned up 6.5 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · -8 LUFS reached: the limiter takes up to 4.5 dB on the loudest peaks (avg 3.1 dB). Expect less punch on the drums · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.1 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f8] finished material finished -11.6 LUFS / -3.0 dBTP -> CUSTOM -9
+      measured: CUSTOM -9: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -9.0 LUFS / -1.00 dBTP (PLR 8.0); boost +2.6 dB, drive -0.0 dB, limiter GR max 0.6 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost 0.6 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Turned up 2.6 dB towards -9.0 LUFS · ceiling -1.0 dBTP (peaks touched 0.6 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · -9 LUFS reached: the limiter takes up to 0.6 dB on the loudest peaks (avg 0.1 dB) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -9.0 LUFS, -1.0 dBTP, limiter at most 0.6 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f9] finished material finished -11.6 LUFS / -3.0 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -11.6 LUFS / -3.00 dBTP (PLR 8.6); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Level kept at -11.6 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -11.6 LUFS, -3.0 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f10] finished material finished -11.6 LUFS / -3.0 dBTP -> CUSTOM -6 (beyond reach)
+      measured: CUSTOM -6 (beyond reach): in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -8.1 LUFS / -1.00 dBTP (PLR 7.1); boost +3.5 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.75 dB, >3 dB for 64.4 % of the time, PLR lost 1.5 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Turned up 6.5 dB towards -6.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Target -6 is out of reach even with +6.5 dB: the limiter gets it to -8.2 LUFS · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.1 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f11] finished material finished -12.0 LUFS / -3.0 dBTP -> STREAM -14
+      measured: STREAM -14: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -14.0 LUFS / -4.97 dBTP (PLR 9.0); boost -2.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Turned down 2.0 dB so it sits at -14.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -14.0 LUFS, -5.0 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f12] finished material finished -12.0 LUFS / -3.0 dBTP -> CLUB -8
+      measured: CLUB -8: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -8.5 LUFS / -1.00 dBTP (PLR 7.5); boost +3.5 dB, drive -0.0 dB, limiter GR max 6.0 / mean 4.03 dB, >3 dB for 91.0 % of the time, PLR lost 1.5 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Turned up 8.0 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 6.0 dB) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Target -8 is out of reach even with +8.0 dB: the limiter gets it to -8.6 LUFS · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.5 LUFS, -1.0 dBTP, limiter at most 6.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f13] finished material finished -12.0 LUFS / -3.0 dBTP -> CUSTOM -9
+      measured: CUSTOM -9: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -8.9 LUFS / -1.00 dBTP (PLR 7.9); boost +3.1 dB, drive -0.0 dB, limiter GR max 2.2 / mean 0.91 dB, >3 dB for 0.0 % of the time, PLR lost 1.1 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Turned up 4.2 dB towards -9.0 LUFS · ceiling -1.0 dBTP (peaks touched 2.2 dB) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · -9 LUFS reached: the limiter takes up to 2.2 dB on the loudest peaks (avg 1.4 dB). Expect less punch on the drums · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.9 LUFS, -1.0 dBTP, limiter at most 2.2 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f14] finished material finished -12.0 LUFS / -3.0 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -12.0 LUFS / -3.00 dBTP (PLR 9.0); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Level kept at -12.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -12.0 LUFS, -3.0 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.f15] finished material finished -12.0 LUFS / -3.0 dBTP -> CUSTOM -6 (beyond reach)
+      measured: CUSTOM -6 (beyond reach): in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -8.5 LUFS / -1.00 dBTP (PLR 7.5); boost +3.5 dB, drive -0.0 dB, limiter GR max 6.0 / mean 4.03 dB, >3 dB for 91.0 % of the time, PLR lost 1.5 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Turned up 8.0 dB towards -6.0 LUFS · ceiling -1.0 dBTP (peaks touched 6.0 dB) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Target -6 is out of reach even with +8.0 dB: the limiter gets it to -8.6 LUFS · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.5 LUFS, -1.0 dBTP, limiter at most 6.0 dB.
+      limit:    KEEP INPUT: boost <= +3 dB, limiter peak GR <= 6 dB and mean <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU, or said 'out of reach' with the limiter's own best. True peak <= ceiling + 0.1 dB
+PASS [4.n1] NEUTRAL chain (EQ, compressor, stereo all off) on finished -10.1 LUFS / -1.5 dBTP -> CLUB -8
+      measured: CLUB -8: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -8.2 LUFS / -1.00 dBTP (PLR 7.2); boost +1.9 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.82 dB, >3 dB for 70.3 % of the time, PLR lost 1.4 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Turned up 5.0 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Target -8 is out of reach even with +5.0 dB: the limiter gets it to -8.3 LUFS · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -8.2 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.n2] NEUTRAL chain (EQ, compressor, stereo all off) on finished -10.1 LUFS / -1.5 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -10.1 LUFS / -1.5 dBTP (PLR 8.6) -> out -10.1 LUFS / -1.50 dBTP (PLR 8.6); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -10.1 LUFS, true peak -1.5 dBTP. Level kept at -10.1 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -10.1 LUFS, -1.5 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.n3] NEUTRAL chain (EQ, compressor, stereo all off) on finished -11.6 LUFS / -3.0 dBTP -> CLUB -8
+      measured: CLUB -8: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -8.2 LUFS / -1.00 dBTP (PLR 7.2); boost +3.4 dB, drive -0.0 dB, limiter GR max 4.5 / mean 2.82 dB, >3 dB for 70.3 % of the time, PLR lost 1.4 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Turned up 6.5 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Target -8 is out of reach even with +6.5 dB: the limiter gets it to -8.3 LUFS · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -8.2 LUFS, -1.0 dBTP, limiter at most 4.5 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.n4] NEUTRAL chain (EQ, compressor, stereo all off) on finished -11.6 LUFS / -3.0 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -11.6 LUFS / -3.0 dBTP (PLR 8.6) -> out -11.6 LUFS / -3.00 dBTP (PLR 8.6); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -11.6 LUFS, true peak -3.0 dBTP. Level kept at -11.6 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -11.6 LUFS, -3.0 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.n5] NEUTRAL chain (EQ, compressor, stereo all off) on finished -12.0 LUFS / -3.0 dBTP -> CLUB -8
+      measured: CLUB -8: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -8.6 LUFS / -1.00 dBTP (PLR 7.6); boost +3.4 dB, drive -0.0 dB, limiter GR max 6.0 / mean 4.17 dB, >3 dB for 91.7 % of the time, PLR lost 1.4 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Turned up 8.0 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 6.0 dB) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Target -8 is out of reach even with +8.0 dB: the limiter gets it to -8.6 LUFS · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -8.6 LUFS, -1.0 dBTP, limiter at most 6.0 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.n6] NEUTRAL chain (EQ, compressor, stereo all off) on finished -12.0 LUFS / -3.0 dBTP -> KEEP INPUT
+      measured: KEEP INPUT: in -12.0 LUFS / -3.0 dBTP (PLR 9.0) -> out -12.0 LUFS / -3.00 dBTP (PLR 9.0); boost -0.0 dB, drive -0.0 dB, limiter GR max 0.0 / mean 0.00 dB, >3 dB for 0.0 % of the time, PLR lost -0.0 LU | Measured -12.0 LUFS, true peak -3.0 dBTP. Level kept at -12.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.9 dB above the average loudness) · not done: Finished master: eqOn not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Tone amount +1.0 over plan; EQ in on; Stereo in on. Master measured -12.0 LUFS, -3.0 dBTP, limiter at most 0.0 dB.
+      limit:    KEEP INPUT: boost <= 3 dB, limiter GR <= 2 dB. Chosen target (v3 SPEC 2 REVISED): reached within 0.3 LU or said out of reach. True peak <= ceiling + 0.1 dB
+PASS [4.q1] very quiet material (-40 LUFS) to STREAM -14
+      measured: STREAM -14: in -40.0 LUFS / -25.0 dBTP (PLR 15.0) -> out -14.1 LUFS / -1.00 dBTP (PLR 13.1); boost +25.9 dB, drive 1.6 dB, limiter GR max 1.3 / mean 0.02 dB, >3 dB for 0.0 % of the time, PLR lost 1.8 LU
+      limit:    v3 SPEC 2 REVISED: the chosen target is reached (STREAM -14 within 0.3 LU, about +26 dB), the limiter holds the ceiling, no NaN; the status warns about the noise floor above +18 dB
+PASS [4.m1] ordinary mix (-20 LUFS, unmastered) to STREAM -14
+      measured: STREAM -14: in -20.0 LUFS / -5.0 dBTP (PLR 15.0) -> out -14.1 LUFS / -1.00 dBTP (PLR 13.1); boost +5.9 dB, drive -0.0 dB, limiter GR max 1.3 / mean 0.02 dB, >3 dB for 0.0 % of the time, PLR lost 1.8 LU
+      limit:    v3 SPEC 2 REVISED: the chosen target is reached (STREAM -14 within 0.3 LU), the limiter holds the ceiling; what the limiter costs is in the status, not a refusal
+PASS [4.s1] silence after music: digital silence out, no NaN, no denormals
+      measured: largest sample after 2.5 s of silence -300.0 dBFS, non-finite 0, denormals 0
+      limit:    0, 0, 0
+PASS [4.s2] 20 s of silence: no denormals, still silent
+      measured: denormals 0, level after 5 s -300.0 dBFS
+PASS [4.s3] LEARN pressed in a silent section, then the song plays
+      measured: LEARN message: Measured -inf LUFS, true peak -inf dBTP. Level kept at -14.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 0.0 dB above its average level) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -inf LUFS, -inf dBTP, limiter at most 0.0 dB. | song comes out at -16.3 LUFS, -1.29 dBTP, drive -0.0 dB, learned=yes
+      limit:    finite, no louder than -8 LUFS, ceiling held
+PASS [4.mo1] mono track (one channel) to STREAM -14
+      measured: out -14.14 LUFS (mono weight 1.0), -0.97 dBTP, drive -0.0 dB, latency 12958
+      limit:    v3: never above the target (the +3 dB cap may stop short of it), ceiling held
+PASS [4.mo2] dual-mono input stays centred (L == R)
+      measured: largest L-R difference -300.0 dBFS
+      limit:    < -100 dBFS
+PASS [4.s4] LEARN pass containing 20 ms of NaN, then clean music
+      measured: output non-finite samples 0, level -13.6 LUFS, drive -0.0 dB, learned=yes
+      limit:    finite output, sane level
+PASS [4.p1] LEARN heard only the quiet verse; the whole song then plays
+      measured: full-song LEARN: drive -0.0 dB, song -13.9 LUFS, limiter GR max 2.3 dB; verse-only LEARN: drive -0.0 dB, song -18.4 LUFS, limiter GR max 0.0 dB (limiter active 0.0 % of the time)
+      limit:    v3: a LEARN that heard under 10 s lifts nothing: not louder than the full-song master, GR <= 3 dB
+INFO [4.p2] chorus level in the two cases
+      measured: chorus -15.6 LUFS after verse-only LEARN, -10.6 after full-song LEARN
+
+==== Scenario 5 ====
+PASS [5.1a] no NaN / Inf / denormal (48000 Hz, seed 1001, 124 events)
+      measured: non-finite 0, denormals 0
+      limit:    0
+PASS [5.1b] true peak under the ceiling in force (48000 Hz, seed 1001, 124 events)
+      measured: worst overshoot -0.00 dB (6.30 s), windows over: 0
+      limit:    <= +0.1 dB over the ceiling
+PASS [5.1c] no dropout to silence while a steady pink-noise input plays (48000 Hz, seed 1001, 124 events)
+      measured: level jumps > 6 dB between 10 ms windows: 1 (worst 6.9 dB 7.65 s after b3Glue), of which 0 with no parameter event in the latency + 120 ms before (random extreme compressor / limiter settings pump by themselves, so this count is information); drops to < -50 dB: 0
+      limit:    0 dropouts
+PASS [5.1d] no click (sample step > 25 % of the local peak) on a 220 Hz sine (48000 Hz, seed 1001, 124 events)
+      measured: samples over: 0, worst step/peak 0.00 (), natural 0.029. The clicks sit at (latency before the switch) after a parameter event that changed the delay structure: the same mechanism as 3.swall
+      limit:    0
+INFO [5.1e] largest jump explained by a parameter event (48000 Hz, seed 1001, 124 events)
+      measured: 6.9 dB in one 10 ms window
+PASS [5.2a] no NaN / Inf / denormal (44100 Hz, seed 1002, 121 events)
+      measured: non-finite 0, denormals 0
+      limit:    0
+PASS [5.2b] true peak under the ceiling in force (44100 Hz, seed 1002, 121 events)
+      measured: worst overshoot -0.00 dB (10.72 s), windows over: 0
+      limit:    <= +0.1 dB over the ceiling
+PASS [5.2c] no dropout to silence while a steady pink-noise input plays (44100 Hz, seed 1002, 121 events)
+      measured: level jumps > 6 dB between 10 ms windows: 85 (worst 16.4 dB 8.68 s after lowCutOn), of which 0 with no parameter event in the latency + 120 ms before (random extreme compressor / limiter settings pump by themselves, so this count is information); drops to < -50 dB: 0
+      limit:    0 dropouts
+PASS [5.2d] no click (sample step > 25 % of the local peak) on a 220 Hz sine (44100 Hz, seed 1002, 121 events)
+      measured: samples over: 0, worst step/peak 0.00 (), natural 0.031. The clicks sit at (latency before the switch) after a parameter event that changed the delay structure: the same mechanism as 3.swall
+      limit:    0
+INFO [5.2e] largest jump explained by a parameter event (44100 Hz, seed 1002, 121 events)
+      measured: 16.4 dB in one 10 ms window
+PASS [5.3a] no NaN / Inf / denormal (96000 Hz, seed 1003, 69 events)
+      measured: non-finite 0, denormals 0
+      limit:    0
+PASS [5.3b] true peak under the ceiling in force (96000 Hz, seed 1003, 69 events)
+      measured: worst overshoot -4.05 dB (2.81 s), windows over: 0
+      limit:    <= +0.1 dB over the ceiling
+PASS [5.3c] no dropout to silence while a steady pink-noise input plays (96000 Hz, seed 1003, 69 events)
+      measured: level jumps > 6 dB between 10 ms windows: 0 (worst 0.0 dB ), of which 0 with no parameter event in the latency + 120 ms before (random extreme compressor / limiter settings pump by themselves, so this count is information); drops to < -50 dB: 0
+      limit:    0 dropouts
+PASS [5.3d] no click (sample step > 25 % of the local peak) on a 220 Hz sine (96000 Hz, seed 1003, 69 events)
+      measured: samples over: 0, worst step/peak 0.00 (), natural 0.014. The clicks sit at (latency before the switch) after a parameter event that changed the delay structure: the same mechanism as 3.swall
+      limit:    0
+INFO [5.3e] largest jump explained by a parameter event (96000 Hz, seed 1003, 69 events)
+      measured: 0.0 dB in one 10 ms window
+PASS [5.4a] no NaN / Inf / denormal (48000 Hz, real-time async kernels, seed 1004, 96 events)
+      measured: non-finite 0, denormals 0
+      limit:    0
+PASS [5.4b] true peak under the ceiling in force (48000 Hz, real-time async kernels, seed 1004, 96 events)
+      measured: worst overshoot -0.00 dB (3.80 s), windows over: 0
+      limit:    <= +0.1 dB over the ceiling
+PASS [5.4c] no dropout to silence while a steady pink-noise input plays (48000 Hz, real-time async kernels, seed 1004, 96 events)
+      measured: level jumps > 6 dB between 10 ms windows: 0 (worst 0.0 dB ), of which 0 with no parameter event in the latency + 120 ms before (random extreme compressor / limiter settings pump by themselves, so this count is information); drops to < -50 dB: 0
+      limit:    0 dropouts
+PASS [5.4d] no click (sample step > 25 % of the local peak) on a 220 Hz sine (48000 Hz, real-time async kernels, seed 1004, 96 events)
+      measured: samples over: 0, worst step/peak 0.00 (), natural 0.029. The clicks sit at (latency before the switch) after a parameter event that changed the delay structure: the same mechanism as 3.swall
+      limit:    0
+INFO [5.4e] largest jump explained by a parameter event (48000 Hz, real-time async kernels, seed 1004, 96 events)
+      measured: 0.0 dB in one 10 ms window
+PASS [5.nan1] recovery after 50 ms of NaN on the input
+      measured: output stayed finite
+      limit:    finite again within 500 ms, same level as a clean run
+PASS [5.nan2] recovery after 50 ms of +Inf on the input
+      measured: output stayed finite
+      limit:    finite again within 500 ms, same level as a clean run
+PASS [5.nan3] recovery after 50 ms of a 1e6 full-scale burst (finite) on the input
+      measured: output stayed finite
+      limit:    finite again within 500 ms, same level as a clean run
+
+==== Scenario 6 ====
+PASS [6.1] state round trip: default instance
+      measured: largest sample difference -300.0 dBFS, latency 15926 vs 15926, state 7737 bytes
+      limit:    bit-exact
+PASS [6.2] state round trip: learned HIP-HOP instance
+      measured: largest sample difference -300.0 dBFS, latency 15926 vs 15926, state 39724 bytes, learned plan included
+      limit:    bit-exact
+PASS [6.3] state round trip: 3-BAND, dynamic EQ with non-parameter fields, 30 % of the knobs random
+      measured: largest sample difference -300.0 dBFS, latency 15926 vs 15926, state 41834 bytes, learned plan included
+      limit:    bit-exact
+PASS [6.bad0] bad state: empty state (0 bytes)
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad1] bad state: 64 random bytes
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad2] bad state: valid binary XML with a foreign root tag
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad3] bad state: bare <MIHENK/> root
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad4] bad state: version-1-like state: no parameters, no settings
+      measured: no crash; non-finite samples 0, true peak -10.3 dBTP, level 0.0 dB vs the expected instance (keeps the intact parameters, drops the garbage), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad5] bad state: settings JSON truncated and 'learned' not JSON
+      measured: no crash; non-finite samples 0, true peak -11.0 dBTP, level -1.0 dB vs the expected instance (keeps the intact parameters, drops the garbage), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad6] bad state: settings JSON with absurd non-parameter values (Q 0, ratio -5, 1e30 frequency, 1e30 match curve)
+      measured: no crash; non-finite samples 0, true peak -10.3 dBTP, level 0.6 dB vs the expected instance (stays finite and under the ceiling), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad7] bad state: parameter values out of range (drive 1e9, ceiling 50, ratio -4, ...)
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (stays finite and under the ceiling), 22 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad8] bad state: learned plan with absurd values (1e30 make-ups, safeGain 1e30)
+      measured: no crash; non-finite samples 0, true peak -11.0 dBTP, level -0.3 dB vs the expected instance (stays finite and under the ceiling), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad9] bad state: settings/learned of the wrong JSON type
+      measured: no crash; non-finite samples 0, true peak -11.0 dBTP, level -1.0 dB vs the expected instance (keeps the intact parameters, drops the garbage), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad10] bad state: state truncated to half
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad11] bad state: uiScale 1e9, garbage profile
+      measured: no crash; non-finite samples 0, true peak -10.3 dBTP, level 0.0 dB vs the expected instance (keeps the intact parameters, drops the garbage), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad12] bad state: 10 MB of random bytes
+      measured: no crash; non-finite samples 0, true peak -9.7 dBTP, level 0.0 dB vs the expected instance (falls back to the default instance), 0 parameters differ from default, output identical to default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.bad13] bad state: learned block with wrong member types
+      measured: no crash; non-finite samples 0, true peak -10.3 dBTP, level 0.0 dB vs the expected instance (keeps the intact parameters, drops the garbage), 21 parameters differ from default
+      limit:    no crash, finite, level within 0.5 dB (3 dB when only the learned block is lost) of the expected instance, peak <= +0.5 dBTP
+PASS [6.loop1] an 8 s section looped 10 times (host loop, no reset): level of each pass
+      measured: per pass LUFS: -13.45 -13.49 -13.49 -13.49 -13.49 -13.49 -13.49 -13.49 -13.49 -13.49 ; passes 2..10 spread 0.000 LU, pass 1 vs pass 10 0.038 LU
+      limit:    spread <= 0.1 dB
+PASS [6.jump1] playhead jumps verse <-> chorus 4 times: level of the second half of each verse
+      measured: LUFS: -17.86 -17.93 -17.93 -17.93 -17.93 ; spread 0.070 LU
+      limit:    <= 0.1 dB
+INFO [6.dbg] reopened vs live plan
+      measured: live2 trim 18.29 plan gain 18.29 meas -16.26 present 1 | reopened trim 18.29 plan gain 18.29 meas -16.26 present 1 param trim 18.29 target 2 overrides 17 status Measured -16.3 LUFS, true peak -1.3 dBTP. Turned up 18.3 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 18.0 dB) · nothing else · The master is turned 
+PASS [6.target1] target changed to CLUB -8 from the HOST (automation / generic UI / controller): does the sound follow the label?
+      measured: label CLUB -8 (preset parameter = 2) but the loudness parameter stays at -8.0 LUFS: the output stays -7.89 LUFS (was -13.74); through the panel's own path the same change gives -7.89 LUFS
+      limit:    v3: the host's change is the same intent as the panel's: louder than before and equal to the panel path (the +3 dB cap and the limiter bound how far)
+PASS [6.reload1] reopened project (no captured audio): target changed to CLUB -8 from the panel
+      measured: live session -13.74 -> -7.89 LUFS; reopened project -13.74 -> -7.95 LUFS (stale flag set)
+      limit:    v3: a reopened project plans from the saved measurements: the same level as the live session
+PASS [6.reload2] BELL 2 +6 dB: the plan's level does not move (live session vs reopened project)
+      measured: live session -7.89 -> -7.45 LUFS; reopened project -7.95 -> -7.48 LUFS
+      limit:    v3: an EQ override is a delta over the plan and never re-solves the level (the trim stays)
+INFO [6.reset0] parameters only back to default (no RESET ALL): difference from a fresh instance
+      measured: -19.7 dBFS, level 1.09 LU (the tone-match curve, dynamic-EQ details and the learned plan are outside the parameters)
+PASS [6.reset] RESET ALL on a reopened, learned project reproduces a fresh instance
+      measured: largest difference from a fresh instance -300.0 dBFS, level 0.00 LU, latency 15926 vs 15926, learned block in the saved state: no, isLearned no
+      limit:    identical output, nothing learned left
+
+==== Scenario 7 ====
+PASS [7.1a] unmastered mix (-20 LUFS) to STREAM -14: displayed OUT loudness vs real-time output
+      measured: panel -14.13 LUFS, measured on the plug-in output -14.13 LUFS
+      limit:    <= 0.1 LU
+PASS [7.1b] unmastered mix (-20 LUFS) to STREAM -14: 'turns it up/down X dB' vs measured change
+      measured: panel "-14 LUFS reached: the limiter takes up to 1.6 dB on the loudest peaks (avg 0.2 dB). Expect less punch on the drums." (5.87 dB); measured 5.87 dB
+      limit:    <= 0.2 dB
+PASS [7.1c] unmastered mix (-20 LUFS) to STREAM -14: displayed limiter GR (max / mean) vs the live meter
+      measured: panel max 1.27 / mean 0.015 dB, live meter max 1.27 / mean 0.015 dB
+      limit:    <= 0.3 dB max, <= 0.2 dB mean
+PASS [7.1d] unmastered mix (-20 LUFS) to STREAM -14: displayed compressor GR max vs the live meter
+      measured: panel max 2.03 dB, live meter max 2.03 dB (glue loud-part mean 1.50 dB)
+      limit:    <= 0.5 dB
+PASS [7.1e] unmastered mix (-20 LUFS) to STREAM -14: status line vs measured
+      measured: status "Measured -20.0 LUFS, true peak -5.0 dBTP. Turned up 5.6 dB towards -14.0 LUFS · ceiling -1.0 dBTP (peaks touched 1.6 dB) · nothing else · -14 LUFS reached: the limiter takes up to 1.6 dB on the loudest peaks (avg 0.2 dB). Expect less punch on the drums. CHARACTER OFF: level and ceiling only. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -14.1 LUFS, -1.0 dBTP, limiter at most 1.3 dB.", no numeric claim; panel warnings: 
+      limit:    claimed level within 0.3 LU
+PASS [7.meter] live meter OUT frames are the output samples, and how far they run ahead of what is heard
+      measured: exact match at an offset of 256 samples (5.3 ms), largest difference -300.0 dBFS
+      limit:    exact; offset <= 2 internal blocks
+PASS [7.2a] finished (-11.6 LUFS / -3 dBTP) to CLUB -8: displayed OUT loudness vs real-time output
+      measured: panel -8.09 LUFS, measured on the plug-in output -8.09 LUFS
+      limit:    <= 0.1 LU
+PASS [7.2b] finished (-11.6 LUFS / -3 dBTP) to CLUB -8: 'turns it up/down X dB' vs measured change
+      measured: panel "-8 LUFS reached: the limiter takes up to 4.5 dB on the loudest peaks (avg 3.1 dB). Expect less punch on the drums." (3.51 dB); measured 3.51 dB
+      limit:    <= 0.2 dB
+PASS [7.2c] finished (-11.6 LUFS / -3 dBTP) to CLUB -8: displayed limiter GR (max / mean) vs the live meter
+      measured: panel max 4.50 / mean 2.748 dB, live meter max 4.50 / mean 2.706 dB
+      limit:    <= 0.3 dB max, <= 0.2 dB mean
+PASS [7.2d] finished (-11.6 LUFS / -3 dBTP) to CLUB -8: displayed compressor GR max vs the live meter
+      measured: panel max 0.00 dB, live meter max 0.00 dB (glue loud-part mean 0.00 dB)
+      limit:    <= 0.5 dB
+PASS [7.2e] finished (-11.6 LUFS / -3 dBTP) to CLUB -8: status line vs measured
+      measured: status "Measured -11.6 LUFS, true peak -3.0 dBTP. Turned up 6.5 dB towards -8.0 LUFS · ceiling -1.0 dBTP (peaks touched 4.5 dB) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · -8 LUFS reached: the limiter takes up to 4.5 dB on the loudest peaks (avg 3.1 dB). Expect less punch on the drums · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -8.1 LUFS, -1.0 dBTP, limiter at most 4.5 dB.", no numeric claim; panel warnings: 
+      limit:    claimed level within 0.3 LU
+PASS [7.3a] finished (-10.1 LUFS / -1.5 dBTP) to STREAM -14: displayed OUT loudness vs real-time output
+      measured: panel -14.00 LUFS, measured on the plug-in output -14.00 LUFS
+      limit:    <= 0.1 LU
+PASS [7.3b] finished (-10.1 LUFS / -1.5 dBTP) to STREAM -14: 'turns it up/down X dB' vs measured change
+      measured: panel "Your mix is -10.1 LUFS; STREAM -14 turns it down 3.9 dB (Spotify and YouTube would do the same); no peak limiting." (-3.90 dB); measured -3.90 dB
+      limit:    <= 0.2 dB
+PASS [7.3c] finished (-10.1 LUFS / -1.5 dBTP) to STREAM -14: displayed limiter GR (max / mean) vs the live meter
+      measured: panel max 0.00 / mean 0.000 dB, live meter max 0.00 / mean 0.000 dB
+      limit:    <= 0.3 dB max, <= 0.2 dB mean
+PASS [7.3d] finished (-10.1 LUFS / -1.5 dBTP) to STREAM -14: displayed compressor GR max vs the live meter
+      measured: panel max 0.00 dB, live meter max 0.00 dB (glue loud-part mean 0.00 dB)
+      limit:    <= 0.5 dB
+PASS [7.3e] finished (-10.1 LUFS / -1.5 dBTP) to STREAM -14: status line vs measured
+      measured: status "Measured -10.1 LUFS, true peak -1.5 dBTP. Turned down 3.9 dB so it sits at -14.0 LUFS · ceiling -1.0 dBTP (peaks stay under it) · nothing else, because it is already a finished master (its peaks are only 7.0 dB above the average loudness) · not done: Finished master: bell1Db not applied · not done: Finished master: bell1Hz not applied · not done: Finished master: bell2Db not applied · not done: Finished master: compOn not applied · not done: Finished master: eqOn not applied · not done: Finished master: glue not applied · not done: Finished master: highShelfDb not applied · not done: Finished master: lowCutHz not applied · not done: Finished master: lowCutOn not applied · not done: Finished master: lowCutSteep not applied · not done: Finished master: lowShelfDb not applied · not done: Finished master: lowShelfHz not applied · not done: Finished master: monoBelow not applied · not done: Finished master: scHpf not applied · not done: Finished master: toneAmount not applied · not done: Finished master: widthOn not applied. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -14.0 LUFS, -5.4 dBTP, limiter at most 0.0 dB.", no numeric claim; panel warnings: 
+      limit:    claimed level within 0.3 LU
+PASS [7.4a] dynamic mix (-20 LUFS) to CUSTOM -5 (beyond reach): displayed OUT loudness vs real-time output
+      measured: panel -7.91 LUFS, measured on the plug-in output -7.91 LUFS
+      limit:    <= 0.1 LU
+PASS [7.4b] dynamic mix (-20 LUFS) to CUSTOM -5 (beyond reach): 'turns it up/down X dB' vs measured change
+      measured: panel "Target -5 is out of reach even with +22.0 dB: the limiter gets it to -9.2 LUFS." (12.09 dB); measured 12.09 dB
+      limit:    <= 0.2 dB
+PASS [7.4c] dynamic mix (-20 LUFS) to CUSTOM -5 (beyond reach): displayed limiter GR (max / mean) vs the live meter
+      measured: panel max 18.46 / mean 8.112 dB, live meter max 18.46 / mean 7.986 dB
+      limit:    <= 0.3 dB max, <= 0.2 dB mean
+PASS [7.4d] dynamic mix (-20 LUFS) to CUSTOM -5 (beyond reach): displayed compressor GR max vs the live meter
+      measured: panel max 3.14 dB, live meter max 3.14 dB (glue loud-part mean 2.59 dB)
+      limit:    <= 0.5 dB
+PASS [7.4e] dynamic mix (-20 LUFS) to CUSTOM -5 (beyond reach): status line vs measured
+      measured: status "Measured -20.0 LUFS, true peak -5.0 dBTP. Turned up 22.0 dB towards -5.0 LUFS · ceiling -1.0 dBTP (peaks touched 18.0 dB) · nothing else · The master is turned up 22.0 dB: the noise floor of the mix rises with it · not done: Target -5 is out of reach even with +22.0 dB: the limiter gets it to -9.2 LUFS. CHARACTER OFF: level and ceiling only. Your changes: Bell 1 -1.0 dB over plan; Bell 1 freq +50.0 Hz over plan; Bell 2 +1.0 dB over plan; +14 more. Master measured -7.9 LUFS, -1.0 dBTP, limiter at most 18.5 dB.", no numeric claim; panel warnings: Limiter peak reduction 18.5 dB is above the 6.0 dB warning level: this loudness is costing transients. / Output -7.9 LUFS is 2.9 LU below the -5.0 target.
+      limit:    claimed level within 0.3 LU
+PASS [7.makeup] compressor make-up is level-neutral (panel: loud-part GR vs measured loudness change)
+      measured: compressor in -16.00 LUFS, out -16.00 LUFS (loud-part GR 1.50 dB, make-up 1.25 dB)
+      limit:    <= 0.3 LU
+
+==== BULGULAR, ÖNCELİK SIRASIYLA (şikâyet bağlantısı köşeli parantezde) ====
+
+(FAIL yok)
+TEMİZ ÇIKANLAR (ölçüldü, sorun yok):
+ - Determinizm / geçmişten bağımsızlık: iki taze eklenti bit-eşit; blok boyutu 1..2048, 20x bypass, parametre git-gel, preset gidiş-dönüş, reset(), prepareToPlay x3, state get/set, örnekleme hızı atlaması, ikinci LEARN: hepsi 0.000 LU fark (1.x).
+ - Eklenti içi bypass DSP'si: giriş latency kadar gecikmiş hâliyle bit-eşit (2.a), ilk değişim ve %90 süresi (2.b), seviye geri dönüşü (2.c).
+ - Bildirilen latency = impuls ölçümü, 44.1/48/96 kHz, tüm anahtar kombinasyonları (3.1-3.8).
+ - Sessizlik -> sessizlik, denormal yok, mono ve dual-mono, çok kısık malzeme, ortalama mix hedefe iniyor (4.s*, 4.mo*, 4.q1, 4.m1); STREAM -14 ve KEEP INPUT'ta bitmiş malzemeye boost yok (4.f1/4/6/9/11/14).
+ - Ekrandaki sayılar ölçülenle tutarlı: OUT LUFS, 'X dB yükseltir/düşürür' cümlesi, limiter ve kompresör GR, 'hedef ulaşılamıyor' durum satırı, make-up (7.x).
+ - Durum gidiş-dönüşü bit-eşit; 14 bozuk durumun hiçbiri çökertmiyor, boş/rastgele/yabancı/yarım durumlar varsayılan eklentiyle bit-eşit çıkış veriyor (6.bad0-4, 10, 12); 8 s'lik bölüm 10 kez döngüde seviye sürüklenmesi 0.000 LU, playhead atlamaları <= 0.07 LU (6.x).

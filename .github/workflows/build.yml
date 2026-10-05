@@ -57,6 +57,16 @@ jobs:
             check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
             panel_dir: "yes"
             soft_test: true
+          # MIHENK 1.0.1: VST3 + standalone app (no AU on Windows). The zip carries MIHENK.vst3 and MIHENK.exe.
+          # render --selftest needs no audio files (tests/corpus is not synced). ui_snapshot takes <out.png> <variant>.
+          - name: Mihenk
+            dir: subverselab-mihenk
+            artifact: MIHENK-windows
+            vst3_name: "MIHENK.vst3"
+            tools: "Mihenk_Standalone render ui_snapshot"
+            check: "./build/render_artefacts/Release/render.exe --selftest"
+            standalone_exe: "MIHENK.exe"
+            snapshot_variants: "v10-simple v10-advanced plugin"
     steps:
       - uses: actions/checkout@v4
 
@@ -86,17 +96,39 @@ jobs:
         run: |
           cd "build/${{ matrix.name }}_artefacts/Release/VST3"
           7z a -r "${{ github.workspace }}/${{ matrix.artifact }}.zip" "${{ matrix.vst3_name }}"
+          if [ -n "${{ matrix.standalone_exe }}" ]; then
+            cd ../Standalone
+            7z a "${{ github.workspace }}/${{ matrix.artifact }}.zip" "${{ matrix.standalone_exe }}"
+          fi
 
       # The panel as Windows draws it, so the lettering can be checked without a Windows machine.
+      - name: Panel snapshots (variants)
+        if: matrix.snapshot_variants != ''
+        continue-on-error: true
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/${{ matrix.name }}-windows-panel"
+          for v in ${{ matrix.snapshot_variants }}; do
+            ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "$GITHUB_WORKSPACE/${{ matrix.name }}-windows-panel/$v.png" "$v" 1.0
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.snapshot_variants != ''
+        continue-on-error: true
+        with:
+          name: ${{ matrix.name }}-windows-panel
+          path: ${{ matrix.name }}-windows-panel/
+
       - name: Panel snapshot
-        if: matrix.panel_dir != 'yes'
+        if: matrix.panel_dir != 'yes' && matrix.snapshot_variants == ''
         continue-on-error: true
         working-directory: ${{ matrix.dir }}
         shell: bash
         run: ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "${{ github.workspace }}/${{ matrix.name }}-windows-panel.png"
 
       - uses: actions/upload-artifact@v4
-        if: matrix.panel_dir != 'yes'
+        if: matrix.panel_dir != 'yes' && matrix.snapshot_variants == ''
         continue-on-error: true
         with:
           name: ${{ matrix.name }}-windows-panel

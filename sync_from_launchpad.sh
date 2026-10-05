@@ -15,6 +15,8 @@ DEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXCLUDES=(
   --exclude 'build/'
   --exclude 'build-release/'
+  --exclude 'build-*/'
+  --exclude 'tests/corpus/'
   --exclude 'demos/'
   --exclude 'docs/'
   --exclude '*.wav'
@@ -52,6 +54,7 @@ sync_plugin subverselab-koro
 sync_plugin subverselab-yanki
 sync_plugin subverselab-hava
 sync_plugin subverselab-tutkal
+sync_plugin subverselab-mihenk
 
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \
