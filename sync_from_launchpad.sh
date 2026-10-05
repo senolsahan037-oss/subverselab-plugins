@@ -3,7 +3,7 @@
 # truth for these plugins) into this standalone CI-only repo.
 #
 # Only sources are copied: CMakeLists.txt, Source/, tests/, Assets/,
-# tools/*.py, tools/*.cpp, README.md. Build artefacts, demos, docs, media
+# tools/*.py, tools/*.cpp, tools/*.h (verbatim engine headers the test tools include), README.md. Build artefacts, demos, docs, media
 # and logs are excluded.
 #
 # Usage: ./sync_from_launchpad.sh [path-to-Launchpad-01_AI_Tools]
@@ -14,6 +14,7 @@ DEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 EXCLUDES=(
   --exclude 'build/'
+  --exclude 'build-release/'
   --exclude 'demos/'
   --exclude 'docs/'
   --exclude '*.wav'
@@ -31,6 +32,7 @@ INCLUDES_FILTER=(
   --include 'Assets/***'
   --include 'tools/*.py'
   --include 'tools/*.cpp'
+  --include 'tools/*.h'
   --include 'README.md'
   --exclude '*'
 )
@@ -46,6 +48,10 @@ sync_plugin() {
 
 sync_plugin subverselab-reverb
 sync_plugin subverselab-kaset
+sync_plugin subverselab-koro
+sync_plugin subverselab-yanki
+sync_plugin subverselab-hava
+sync_plugin subverselab-tutkal
 
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \

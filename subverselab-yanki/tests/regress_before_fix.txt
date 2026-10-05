@@ -1,0 +1,4 @@
+FAIL nonfinite_nan_input_recovers one NaN sample per channel at 1.0 / 1.5 s: output finite NO, echo 4-6 s nan dB re the input
+FAIL nonfinite_inf_input_recovers one +inf sample per channel at 1.0 / 1.5 s: output finite NO, echo 4-6 s -4.4 dB re the input
+FAIL host_like_follows_mix start -8.7 dB; after 2 MIX moves -8.5 dB; after TIME/FEEDBACK/TONE 1.6 dB; after a NaN sample in the input nan dB; 
+REGRESS FAIL (0 passed, 3 failed)

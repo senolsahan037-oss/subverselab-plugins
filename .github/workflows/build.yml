@@ -20,6 +20,43 @@ jobs:
             dir: subverselab-kaset
             artifact: KASET-windows-vst3
             vst3_name: "SubverseLab Kaset.vst3"
+          # KORO / YANKI / HAVA / TUTKAL: 1.0.0, licensing OFF (account-bound download). Their test tools differ from
+          # KUBBE/KASET: `tools` is the extra build targets, `check` the test command (run from the project dir),
+          # `panel_dir` makes the snapshot step write a folder of PNGs (ui_snapshot <dir>) instead of one file.
+          # `soft_test`: the test needs the prototype audio (../prototypes/...), which only exists on the owner's Mac,
+          # so a failure here must not block the zip; the numbers that count come from the Mac run.
+          - name: Koro
+            dir: subverselab-koro
+            artifact: KORO-windows-vst3
+            vst3_name: "KORO.vst3"
+            tools: "render ui_snapshot"
+            check: "./build/render_artefacts/Release/render.exe --selftest"
+            panel_dir: "yes"
+            soft_test: true
+          - name: Yanki
+            dir: subverselab-yanki
+            artifact: YANKI-windows-vst3
+            vst3_name: "YANKI.vst3"
+            tools: "render ui_snapshot"
+            check: "./build/render_artefacts/Release/render.exe --selftest"
+            panel_dir: "yes"
+            soft_test: true
+          - name: Hava
+            dir: subverselab-hava
+            artifact: HAVA-windows-vst3
+            vst3_name: "HAVA.vst3"
+            tools: "plugin_check ui_snapshot"
+            check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
+            panel_dir: "yes"
+            soft_test: false
+          - name: Tutkal
+            dir: subverselab-tutkal
+            artifact: TUTKAL-windows-vst3
+            vst3_name: "TUTKAL.vst3"
+            tools: "plugin_check ui_snapshot"
+            check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
+            panel_dir: "yes"
+            soft_test: true
     steps:
       - uses: actions/checkout@v4
 
@@ -35,12 +72,13 @@ jobs:
 
       - name: Build VST3 + render + ui_snapshot
         working-directory: ${{ matrix.dir }}
-        run: cmake --build build --config Release --target ${{ matrix.name }}_VST3 render ui_snapshot --parallel
+        run: cmake --build build --config Release --target ${{ matrix.name }}_VST3 ${{ matrix.tools || 'render ui_snapshot' }} --parallel
 
       - name: Run render --selftest
+        continue-on-error: ${{ matrix.soft_test == true }}
         working-directory: ${{ matrix.dir }}
         shell: bash
-        run: ./build/render_artefacts/Release/render.exe --selftest
+        run: ${{ matrix.check || './build/render_artefacts/Release/render.exe --selftest' }}
 
       - name: Zip VST3 bundle
         working-directory: ${{ matrix.dir }}
@@ -51,16 +89,35 @@ jobs:
 
       # The panel as Windows draws it, so the lettering can be checked without a Windows machine.
       - name: Panel snapshot
+        if: matrix.panel_dir != 'yes'
         continue-on-error: true
         working-directory: ${{ matrix.dir }}
         shell: bash
         run: ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "${{ github.workspace }}/${{ matrix.name }}-windows-panel.png"
 
       - uses: actions/upload-artifact@v4
+        if: matrix.panel_dir != 'yes'
         continue-on-error: true
         with:
           name: ${{ matrix.name }}-windows-panel
           path: ${{ matrix.name }}-windows-panel.png
+
+      # KORO / YANKI / HAVA / TUTKAL: ui_snapshot takes an output folder and writes every face (front, rear, ...).
+      - name: Panel snapshots (folder)
+        if: matrix.panel_dir == 'yes'
+        continue-on-error: true
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/${{ matrix.name }}-windows-panel"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "${{ github.workspace }}/${{ matrix.name }}-windows-panel"
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.panel_dir == 'yes'
+        continue-on-error: true
+        with:
+          name: ${{ matrix.name }}-windows-panel
+          path: ${{ matrix.name }}-windows-panel/
 
       - uses: actions/upload-artifact@v4
         with:
