@@ -681,26 +681,417 @@ constexpr float kNeedleAlpha = 0.40f;                                      // pe
 constexpr int   kPeakHoldTicks = 45;                                       // 1.5 s
 }
 
+//==============================================================================
+// Dial ornaments (variants 1 .. 3). Everything is juce::Path in dial coordinates: the pivot is (0, 0), 0 dB and 20 dB
+// sit at -52 and +52 degrees. R is the scale arc radius; ticks run R .. R+9 (even dB) / R+5, the numbers sit at
+// R + 19 + numberShift. Nothing is drawn inside R - 2 except the Kandil pendant (under the peak marker and needle).
+namespace
+{
+constexpr float kDialR = 196.0f * 0.76f;
+
+float ornAng (float db) { return -kMeterSpan + 2.0f * kMeterSpan * juce::jlimit (-0.02f, 1.04f, db / kMeterMaxDb); }
+Pt ornPt (float r, float db) { return polar (0.0f, 0.0f, r, ornAng (db)); }
+
+/** A point in a local frame at (r, db): t along the scale (towards 20), o outward. */
+Pt ornLocal (float r, float db, float t, float o)
+{
+    const float a = ornAng (db) * kPi / 180.0f;
+    const auto c = ornPt (r, db);
+    return { c.x + std::cos (a) * t + std::sin (a) * o, c.y + std::sin (a) * t - std::cos (a) * o };
+}
+
+void ornBead (DisplayWindow::OrnamentCache& c, Pt p, float r)
+{
+    c.rim.addEllipse (p.x - r - 0.32f, p.y - r - 0.32f, 2.0f * r + 0.64f, 2.0f * r + 0.64f);
+    c.body.addEllipse (p.x - r, p.y - r, 2.0f * r, 2.0f * r);
+    const float hr = r * 0.42f;
+    c.hi.addEllipse (p.x - r * 0.28f - hr, p.y - r * 0.32f - hr, 2.0f * hr, 2.0f * hr);
+    if (r > 1.2f)
+    {
+        const float sr = r * 0.17f;
+        c.spark.addEllipse (p.x - r * 0.36f - sr, p.y - r * 0.40f - sr, 2.0f * sr, 2.0f * sr);
+    }
+}
+
+/** An eight-pointed star: outer radius ro, 16 vertices, rotated by rot degrees. */
+void ornStar (juce::Path& path, Pt c, float ro, float ri, float rotDeg)
+{
+    for (int i = 0; i < 16; ++i)
+    {
+        const float a = (rotDeg + (float) i * 22.5f) * kPi / 180.0f, r = (i % 2 == 0) ? ro : ri;
+        const Pt p (c.x + std::sin (a) * r, c.y - std::cos (a) * r);
+        if (i == 0) path.startNewSubPath (p); else path.lineTo (p);
+    }
+    path.closeSubPath();
+}
+
+/** Peak-hold marker variants, in local units: tip at (0,0) touching the scale, +y runs towards the dial pivot, about 13 long
+    and 5.5 wide like the triangle it replaces. Vector paths only. */
+void buildPeakMarker (DisplayWindow::PeakMarkerCache& c, int variant)
+{
+    c = {};
+    c.variant = variant;
+    auto circle = [] (juce::Path& p, float x, float y, float r) { p.addEllipse (x - r, y - r, 2.0f * r, 2.0f * r); };
+    if (variant == 1)                       // DAMLA: gold cap bead, two seed beads, a ruby teardrop pointing at the scale
+    {
+        c.ruby.startNewSubPath (0.0f, 0.0f);
+        c.ruby.cubicTo (0.5f, 1.5f, 2.7f, 2.7f, 2.7f, 4.9f);
+        c.ruby.cubicTo (2.7f, 6.8f, 1.5f, 7.7f, 0.0f, 7.7f);
+        c.ruby.cubicTo (-1.5f, 7.7f, -2.7f, 6.8f, -2.7f, 4.9f);
+        c.ruby.cubicTo (-2.7f, 2.7f, -0.5f, 1.5f, 0.0f, 0.0f);
+        c.ruby.closeSubPath();
+        c.rubyShade.addEllipse (-1.9f, 5.0f, 3.8f, 2.4f);              // deeper ruby low in the drop
+        c.goldLine.startNewSubPath (0.0f, 7.4f);
+        c.goldLine.lineTo (0.0f, 12.2f); // fine thread through the beads
+        c.goldFill.addEllipse (-1.15f, 8.1f, 2.3f, 2.3f);
+        c.goldFill.addEllipse (-1.0f, 10.2f, 2.0f, 2.0f);
+        c.goldFill.addEllipse (-1.45f, 11.9f, 2.9f, 2.9f);             // the cap bead, a little larger
+        c.goldEdge = c.goldFill;
+        circle (c.hi, -1.0f, 3.6f, 0.75f);
+        circle (c.hi, -0.45f, 12.7f, 0.5f);
+    }
+    else if (variant == 2)                  // LALE: a tulip half-palmette, red with a gold outline, one gold pearl at the base
+    {
+        auto& p = c.ruby;
+        p.startNewSubPath (0.0f, 0.0f);                                // centre petal tip, towards the scale
+        p.cubicTo (1.0f, 1.6f, 1.2f, 2.6f, 1.0f, 3.5f);                // down the centre petal, in to the notch
+        p.cubicTo (1.8f, 2.9f, 2.4f, 2.2f, 2.9f, 1.0f);                // out to the right petal tip
+        p.cubicTo (3.6f, 4.0f, 3.5f, 7.0f, 0.0f, 10.3f);               // outer curve of the cup, down to the stem
+        p.cubicTo (-3.5f, 7.0f, -3.6f, 4.0f, -2.9f, 1.0f);
+        p.cubicTo (-2.4f, 2.2f, -1.8f, 2.9f, -1.0f, 3.5f);
+        p.cubicTo (-1.2f, 2.6f, -1.0f, 1.6f, 0.0f, 0.0f);
+        p.closeSubPath();
+        c.goldLine = p;
+        c.rubyShade.startNewSubPath (0.0f, 4.6f);                      // the inner fold of the cup
+        c.rubyShade.cubicTo (1.5f, 5.6f, 1.6f, 7.2f, 0.0f, 9.0f);
+        c.rubyShade.cubicTo (-1.6f, 7.2f, -1.5f, 5.6f, 0.0f, 4.6f);
+        c.rubyShade.closeSubPath();
+        c.goldEdge.startNewSubPath (0.0f, 1.4f);                       // hairline vein up the centre petal
+        c.goldEdge.lineTo (0.0f, 4.2f);
+        c.goldFill.addEllipse (-1.15f, 10.6f, 2.3f, 2.3f);             // the pearl at the base
+        circle (c.hi, -0.4f, 11.4f, 0.4f);
+    }
+    else if (variant == 3)                  // GUL: eight-point rosette in red with a gold rim and centre bead, beaded stem outwards
+    {
+        const float cy = 7.2f;
+        juce::Path star;
+        for (int i = 0; i < 16; ++i)
+        {
+            const float a = (float) i * kPi / 8.0f, r = (i % 2 == 0) ? 3.9f : 2.35f;
+            const float x = std::sin (a) * r, y = cy - std::cos (a) * r;
+            if (i == 0) star.startNewSubPath (x, y); else star.lineTo (x, y);
+        }
+        star.closeSubPath();
+        c.ruby = star.createPathWithRoundedCorners (0.35f);
+        c.goldLine = c.ruby;
+        circle (c.rubyShade, 0.0f, cy, 1.9f);                          // deeper ring round the bead
+        circle (c.goldFill, 0.0f, cy, 1.0f);
+        circle (c.goldFill, 0.0f, 0.7f, 0.65f);                        // two stem beads towards the scale, the tip bead on it
+        circle (c.goldFill, 0.0f, 2.1f, 0.8f);
+        c.goldEdge = c.goldFill;
+        circle (c.hi, -0.3f, cy - 0.3f, 0.35f);
+    }
+    if (! c.ruby.isEmpty()) c.shadow = c.ruby;
+    c.shadow.addPath (c.goldFill);
+}
+
+
+/** Falling-leaf peak markers (kPeakLeaf 1..3). Local units: leaf centre at (0,0), the pointed tip outward (-y), the stem and
+    ONE gold bead towards the dial pivot (+y). Vector paths only, cached per variant; placed with scale + rotation + translation. */
+struct LeafCfg
+{
+    float dur, swayAmp, swayHz, rockDeg, alphaFall, scale, halfW, settleSec;
+};
+constexpr LeafCfg kLeafCfg[3] {
+    { 1.6f, 4.0f, 1.25f, 14.0f, 1.00f, 1.45f, 2.9f, 0.0f },     // Yaprak
+    { 2.0f, 6.0f, 1.05f, 18.0f, 0.80f, 1.30f, 2.4f, 0.0f },     // Sogut
+    { 1.2f, 3.0f, 1.60f, 12.0f, 1.00f, 1.35f, 3.7f, 0.30f } };  // Lale yapragi
+
+float smooth01 (float x) { x = juce::jlimit (0.0f, 1.0f, x); return x * x * (3.0f - 2.0f * x); }
+
+void buildLeaf (DisplayWindow::LeafCache& c, int variant)
+{
+    c = {};
+    c.variant = variant;
+    auto& p = c.body;
+    float beadY = 7.3f, beadR = 1.45f;
+    if (variant == 1)           // YAPRAK: pointed oval, a touch curved, fuller on the right
+    {
+        p.startNewSubPath (0.6f, -6.5f);
+        p.cubicTo (2.7f, -4.5f, 3.3f, -0.8f, 2.0f, 2.1f);
+        p.cubicTo (1.4f, 3.5f, 0.7f, 4.3f, 0.0f, 4.9f);
+        p.cubicTo (-1.7f, 3.4f, -3.1f, 0.3f, -2.3f, -2.7f);
+        p.cubicTo (-1.7f, -4.7f, -0.5f, -5.9f, 0.6f, -6.5f);
+        p.closeSubPath();
+        c.vein.startNewSubPath (0.0f, 4.5f);
+        c.vein.quadraticTo (0.6f, -0.6f, 0.5f, -5.2f);
+        for (float y : { 2.2f, 0.0f, -2.2f })
+        {
+            c.vein.startNewSubPath (0.18f, y + 0.4f); c.vein.lineTo (1.7f, y - 1.0f);
+            c.vein.startNewSubPath (0.12f, y + 0.4f); c.vein.lineTo (-1.5f, y - 1.0f);
+        }
+        c.shade.startNewSubPath (0.0f, 4.7f);              // the darker half of the blade
+        c.shade.quadraticTo (-0.2f, 0.0f, 0.5f, -5.6f);
+        c.shade.cubicTo (-0.5f, -5.9f, -1.7f, -4.7f, -2.3f, -2.7f);
+        c.shade.cubicTo (-3.1f, 0.3f, -1.7f, 3.4f, 0.0f, 4.7f);
+        c.shade.closeSubPath();
+    }
+    else if (variant == 2)      // SOGUT: narrow willow leaf, long and softly bent
+    {
+        p.startNewSubPath (1.2f, -8.6f);
+        p.cubicTo (2.4f, -5.2f, 2.3f, -0.6f, 0.7f, 4.5f);
+        p.cubicTo (0.4f, 5.3f, 0.2f, 5.6f, 0.0f, 5.9f);
+        p.cubicTo (-1.5f, 2.4f, -2.0f, -4.6f, 1.2f, -8.6f);
+        p.closeSubPath();
+        c.vein.startNewSubPath (0.0f, 5.5f);
+        c.vein.cubicTo (0.7f, 1.0f, 0.9f, -4.0f, 1.1f, -7.4f);
+        for (float y : { 3.0f, 0.4f, -2.4f, -5.0f })
+        {
+            c.vein.startNewSubPath (0.5f, y + 0.3f); c.vein.lineTo (1.5f, y - 0.8f);
+            c.vein.startNewSubPath (0.45f, y + 0.3f); c.vein.lineTo (-0.7f, y - 0.8f);
+        }
+        c.shade.startNewSubPath (0.0f, 5.6f);
+        c.shade.cubicTo (0.8f, 1.0f, 1.0f, -4.0f, 1.2f, -8.2f);
+        c.shade.cubicTo (-2.0f, -4.6f, -1.5f, 2.4f, 0.0f, 5.6f);
+        c.shade.closeSubPath();
+        beadY = 8.4f; beadR = 1.35f;
+    }
+    else                        // LALE YAPRAGI: tulip petal, rounder, cupped
+    {
+        p.startNewSubPath (0.0f, -6.4f);
+        p.cubicTo (3.0f, -4.5f, 4.3f, -0.6f, 3.0f, 2.5f);
+        p.cubicTo (2.2f, 4.3f, 0.9f, 5.1f, 0.0f, 5.3f);
+        p.cubicTo (-0.9f, 5.1f, -2.2f, 4.3f, -3.0f, 2.5f);
+        p.cubicTo (-4.3f, -0.6f, -3.0f, -4.5f, 0.0f, -6.4f);
+        p.closeSubPath();
+        c.vein.startNewSubPath (0.0f, 4.6f);
+        c.vein.lineTo (0.0f, -3.4f);
+        c.vein.startNewSubPath (-0.3f, 4.0f); c.vein.quadraticTo (-1.9f, 1.0f, -1.9f, -1.6f);
+        c.vein.startNewSubPath (0.3f, 4.0f);  c.vein.quadraticTo (1.9f, 1.0f, 1.9f, -1.6f);
+        c.shade.startNewSubPath (0.0f, 4.5f);              // the cup: a deeper fold in the lower half
+        c.shade.cubicTo (2.2f, 3.8f, 2.9f, 1.6f, 2.0f, -0.4f);
+        c.shade.cubicTo (1.2f, 0.8f, -1.2f, 0.8f, -2.0f, -0.4f);
+        c.shade.cubicTo (-2.9f, 1.6f, -2.2f, 3.8f, 0.0f, 4.5f);
+        c.shade.closeSubPath();
+        beadY = 7.1f; beadR = 1.45f;
+    }
+    c.stem.startNewSubPath (0.0f, 4.6f);
+    c.stem.lineTo (0.0f, beadY);
+    c.bead.addEllipse (-beadR, beadY - beadR, 2.0f * beadR, 2.0f * beadR);
+    c.beadHi.addEllipse (-beadR * 0.55f - 0.45f, beadY - beadR * 0.6f - 0.45f, 0.9f, 0.9f);
+}
+
+void buildOrnament (DisplayWindow::OrnamentCache& c, int variant)
+{
+    c = {};
+    c.variant = variant;
+    const float R = kDialR;
+    if (variant == 1)                       // TESPIH: a fine chain of gold beads, just inside the numbers
+    {
+        c.numberShift = 2.6f;
+        const float Rb = R + 12.0f;
+        c.fine.addCentredArc (0.0f, 0.0f, Rb, Rb, 0.0f, ornAng (0.0f) * kPi / 180.0f, ornAng (20.0f) * kPi / 180.0f, true);
+        for (int k = 0; k <= 80; ++k)
+        {
+            const float r = (k % 8 == 0) ? 2.35f : (k % 4 == 0) ? 1.55f : 1.0f;
+            ornBead (c, ornPt (Rb, (float) k * 0.25f), r);
+        }
+    }
+    else if (variant == 2)                  // RUMI: a slender vine band with half-palmettes and curls, pearls on the major ticks
+    {
+        c.numberShift = 6.0f;
+        const float Rc = R + 14.0f, A = 1.8f;
+        for (int k = 0; k <= 200; ++k)
+        {
+            const float db = (float) k * 0.1f;
+            const Pt p = ornPt (Rc + A * std::sin (kPi * db), db);
+            if (k == 0) c.thin.startNewSubPath (p); else c.thin.lineTo (p);
+        }
+        for (int i = 0; i < 20; ++i)
+        {
+            const float mid = (float) i + 0.5f;
+            const float s = (i % 2 == 0) ? 1.0f : -1.0f;               // sin(pi * db) is positive on even intervals
+            const float rr = Rc + s * A;
+            // half-palmette: a pointed leaf leaning out of the crest, along the scale
+            const Pt b = ornLocal (rr, mid, -0.3f, 0.0f);
+            const Pt tip = ornLocal (rr, mid, 6.6f, s * 2.0f);
+            c.leaf.startNewSubPath (b);
+            c.leaf.quadraticTo (ornLocal (rr, mid, 2.2f, s * 4.4f), tip);
+            c.leaf.quadraticTo (ornLocal (rr, mid, 4.2f, s * 0.2f), b);
+            c.leaf.closeSubPath();
+            // a curl springing from the vine just before the crest, spiralling away from the leaf
+            for (int q = 0; q <= 24; ++q)
+            {
+                const float u = (float) q / 24.0f, th = 0.5f * kPi + u * 2.5f * kPi, rad = 2.0f * (1.0f - 0.8f * u);
+                const Pt p = ornLocal (rr, mid, -3.2f + rad * std::cos (th), s * (-2.3f + rad * std::sin (th)));
+                if (q == 0) c.fine.startNewSubPath (p); else c.fine.lineTo (p);
+            }
+        }
+        for (int d = 0; d <= 20; d += 2)
+            ornBead (c, ornPt (Rc, (float) d), 1.9f);
+    }
+    else if (variant == 3)                  // KANDIL: pearl lace scallops outside the numbers, rosettes at 0 / 10 / 20, pendant under 10
+    {
+        c.numberShift = 0.0f;
+        const float Ro = R + 26.3f, depth = 2.6f;
+        for (int i = 0; i < 20; ++i)
+        {
+            for (int q = 0; q <= 24; ++q)
+            {
+                const float u = (float) q / 24.0f;
+                const Pt p = ornPt (Ro + depth * std::sin (kPi * u), (float) i + u);
+                if (q == 0) c.fine.startNewSubPath (p); else c.fine.lineTo (p);
+            }
+            for (int q = 1; q <= 6; ++q)
+            {
+                const float u = (float) q / 7.0f;
+                ornBead (c, ornPt (Ro + depth * std::sin (kPi * u), (float) i + u), 0.78f);
+            }
+        }
+        for (int d = 0; d <= 20; ++d)
+            if (d % 10 != 0)
+                ornBead (c, ornPt (Ro, (float) d), (d % 2 == 0) ? 1.55f : 1.25f);
+        for (int d = 0; d <= 20; d += 10)
+        {
+            const Pt sc = ornPt (Ro + 2.2f, (float) d);
+            const float rot = ornAng ((float) d);
+            ornStar (c.star, sc, 4.5f, 1.7f, rot);
+            ornStar (c.starIn, sc, 2.9f, 1.1f, rot + 22.5f);
+            ornBead (c, sc, 1.05f);
+        }
+        // a delicate beaded pendant under the 10: hangs from the scale arc on a thin chain (the peak marker and needle
+        // pass over it), beads and a drop below the marker so it stays visible when the peak holds near 10
+        ornBead (c, { 0.0f, -R }, 1.35f);
+        c.fine.startNewSubPath (0.0f, -R);
+        c.fine.lineTo (0.0f, -(R - 21.0f));
+        ornBead (c, { 0.0f, -(R - 7.0f) }, 0.8f);
+        ornBead (c, { 0.0f, -(R - 18.2f) }, 1.0f);
+        ornBead (c, { 0.0f, -(R - 21.4f) }, 1.25f);
+        const float ty = -(R - 26.4f);
+        c.leaf.addEllipse (-2.0f, ty - 2.0f, 4.0f, 4.0f);
+        c.leaf.addTriangle (0.0f, ty - 5.2f, -1.5f, ty - 1.0f, 1.5f, ty - 1.0f);
+        c.spark.addEllipse (-1.1f, ty - 1.3f, 1.0f, 1.0f);
+    }
+}
+} // namespace
+
+double DisplayWindow::nowMs() const
+{
+    return snapshotClockMs >= 0.0 ? snapshotClockMs : juce::Time::getMillisecondCounterHiRes();
+}
+
+float DisplayWindow::leafFallSeconds() const
+{
+    return kLeafCfg[juce::jlimit (1, 3, TutkalUi::peakLeaf) - 1].dur;
+}
+
+/** The leaf: hold at the peak for 1.5 s, then float down to the live needle (or 0) over cfg.dur seconds. Everything is a
+    function of the clock, not of the tick count; nothing is allocated; message thread only. */
+void DisplayWindow::refreshLeaf (float gr, double now)
+{
+    const int variant = juce::jlimit (1, 3, TutkalUi::peakLeaf);
+    const auto& cf = kLeafCfg[variant - 1];
+    const float dtMs = lastNowMs < 0.0 ? 0.0f : (float) juce::jlimit (0.0, 200.0, now - lastNowMs);
+    lastNowMs = now;
+    constexpr double holdMs = 1500.0;
+    auto catchPeak = [&] { peak = gr; leafState = 0; holdUntilMs = now + holdMs; };
+    pose.swayU = pose.bobU = pose.rockDeg = 0.0f;
+    pose.alpha = 1.0f;
+    pose.width = 1.0f;
+
+    if (leafState == 0)
+    {
+        if (gr >= peak) catchPeak();
+        else if (now >= holdUntilMs)
+        {
+            if (peak > 0.05f) { leafState = 1; fallStartMs = now; fallFrom = peak; }
+            else peak = 0.0f;
+        }
+    }
+    else if (gr >= peak)
+        catchPeak();                                         // a new, higher peak catches the leaf at once
+
+    const float target = juce::jmax (0.0f, juce::jmin (needle, fallFrom));
+    if (leafState == 1)
+    {
+        const double ts = (now - fallStartMs) * 0.001;
+        const float t = (float) (ts / cf.dur);
+        if (t >= 1.0f)
+        {
+            if (target < 0.05f) { peak = 0.0f; leafState = 0; holdUntilMs = now; }
+            else if (cf.settleSec > 0.0f) { peak = target; leafState = 2; settleStartMs = now; }
+            else { peak = target; leafState = 0; holdUntilMs = now + holdMs; }
+        }
+        else
+        {
+            const float e = 1.0f - (1.0f - t) * (1.0f - t);                       // ease out
+            peak = fallFrom + (target - fallFrom) * e;
+            const float env = std::sin (kPi * t);
+            const float w = 2.0f * kPi * cf.swayHz * (float) ts;
+            pose.swayU = cf.swayAmp * std::sin (w) * env;
+            pose.rockDeg = cf.rockDeg * std::sin (w + 1.2f) * env;
+            pose.bobU = 1.0f * std::sin (2.0f * w + 0.5f) * env;
+            pose.alpha = 1.0f - (1.0f - cf.alphaFall) * env;
+            if (variant == 3)                                                       // a little spin about its own axis
+            {
+                const float cs = std::cos (2.0f * kPi * t);
+                pose.width = (cs < 0.0f ? -1.0f : 1.0f) * juce::jmax (0.3f, std::abs (cs));
+            }
+            pose.alpha *= 1.0f - smooth01 ((t - 0.75f) / 0.25f) * juce::jlimit (0.0f, 1.0f, 1.0f - target / 0.3f);   // fades only if it reaches 0
+        }
+    }
+    if (leafState == 2)                                                             // Lale: one small bounce on landing
+    {
+        const float u = (float) ((now - settleStartMs) / (1000.0 * cf.settleSec));
+        const float live = juce::jmax (0.0f, juce::jmin (needle, fallFrom));
+        if (u >= 1.0f) { peak = live; leafState = 0; holdUntilMs = now + holdMs; }
+        else
+        {
+            const float h = 0.45f * std::sin (kPi * u) * (1.0f - u);
+            peak = live + h;
+            pose.bobU = 2.2f * std::sin (kPi * u) * (1.0f - u);
+        }
+    }
+    // the digits' clearance only applies while it rests; it eases off over 150 ms when the fall starts and back when it lands
+    const float wTarget = (leafState == 0 || leafState == 2 || (leafState == 1 && (now - fallStartMs) * 0.001 > cf.dur - 0.2)) ? 1.0f : 0.0f;   // clears the digits again just before it lands
+    const float step = dtMs / 150.0f;
+    pose.nudgeW += juce::jlimit (-step, step, wTarget - pose.nudgeW);
+    pose.db = peak;
+}
+
 void DisplayWindow::refresh()
 {
     const float gr = juce::jlimit (0.0f, 40.0f, proc.getGainReductionDb());
     needle += (gr - needle) * kNeedleAlpha;
     if (needle < 0.005f) needle = 0.0f;
-    if (gr >= peak) { peak = gr; peakHold = kPeakHoldTicks; }
-    else if (peakHold > 0) --peakHold;
-    else peak = juce::jmax (0.0f, peak - 0.5f);
+    const bool leafMode = TutkalUi::peakLeaf > 0;
+    bool leafMoving = false;
+    if (leafMode)
+    {
+        refreshLeaf (gr, nowMs());
+        leafMoving = leafState != 0 || pose.nudgeW < 0.999f;
+    }
+    else
+    {
+        if (gr >= peak) { peak = gr; peakHold = kPeakHoldTicks; }
+        else if (peakHold > 0) --peakHold;
+        else peak = juce::jmax (0.0f, peak - 0.5f);
+    }
 
     auto& a = proc.apvts;
     juce::String key;
-    key << juce::roundToInt (needle * 20.0f) << '|' << juce::roundToInt (peak * 10.0f) << '|' << juce::roundToInt (rawOf (a, "voicing"))
+    key << juce::roundToInt (needle * 20.0f) << '|' << (leafMode ? 0 : juce::roundToInt (peak * 10.0f)) << '|' << juce::roundToInt (rawOf (a, "voicing"))
         << '|' << rawOf (a, "scHpf") << '|' << rawOf (a, "autoRelease") << '|' << rawOf (a, "limit") << '|' << rawOf (a, "ext")
         << '|' << rawOf (a, "pumpNote") << '|' << rawOf (a, "pumpShape") << '|' << juce::roundToInt (proc.getHostBpm() * 10.0f)
-        << '|' << (int) proc.isSidechainConnected();
+        << '|' << (int) proc.isSidechainConnected() << '|' << (int) (peak >= 0.5f);
     if (key != lastKey)
     {
         lastKey = key;
         repaint();
     }
+    else if (leafMode && (leafMoving || juce::roundToInt (peak * 10.0f) != lastLeafKey))
+        repaint (14 + (int) dPad - 6, 38 + (int) dPad - 6, 402 + 12, 196 + 12);   // only the meter box
+    lastLeafKey = juce::roundToInt (peak * 10.0f);
 }
 
 void DisplayWindow::paint (juce::Graphics& g)
@@ -739,6 +1130,9 @@ void DisplayWindow::paint (juce::Graphics& g)
     const float cx = box.getCentreX(), py = box.getBottom() - bh * 0.06f, R = bh * 0.76f;
     auto ang = [] (float db) { return -kMeterSpan + 2.0f * kMeterSpan * juce::jlimit (-0.02f, 1.04f, db / kMeterMaxDb); };
     const auto dark = rgb (32, 32, 30), goldInk = rgb (128, 97, 42), red = rgb (190, 55, 38);
+    const int ornVariant = juce::jlimit (0, 3, TutkalUi::dialOrnament);
+    if (ornVariant != orn.variant)
+        buildOrnament (orn, ornVariant);            // once per variant change; nothing is rebuilt per frame
     g.saveState();
     g.reduceClipRegion (box.toNearestInt());
     {
@@ -759,9 +1153,34 @@ void DisplayWindow::paint (juce::Graphics& g)
         g.drawLine ({ polar (cx, py, R, an), polar (cx, py, R + (major ? 9.0f : 5.0f), an) }, major ? 1.3f : 0.9f);
         if (major)
         {
-            const auto t = polar (cx, py, R + 19.0f, an);
+            const auto t = polar (cx, py, R + 19.0f + orn.numberShift, an);
             silk (g, juce::String (db), Theme::legendEm (7.8f), t.x, t.y, 'm', 0.0f, db >= 12 ? rgb (120, 70, 30) : goldInk);
         }
+    }
+    if (ornVariant != 0)
+    {
+        const auto at = juce::AffineTransform::translation (cx, py);
+        g.setColour (rgb (0, 0, 0, 42));
+        g.fillPath (orn.rim, at.translated (0.5f, 0.8f));
+        g.setColour (goldInk);
+        g.strokePath (orn.thin, juce::PathStrokeType (0.9f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded), at);
+        g.setColour (Theme::goldDark);
+        g.strokePath (orn.fine, juce::PathStrokeType (0.55f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded), at);
+        g.fillPath (orn.leaf, at);
+        g.setColour (Theme::gold);
+        g.fillPath (orn.star, at);
+        g.setColour (goldInk);
+        g.strokePath (orn.star, juce::PathStrokeType (0.55f), at);
+        g.setColour (Theme::goldDark);
+        g.fillPath (orn.starIn, at);
+        g.setColour (Theme::goldDark.darker (0.25f));
+        g.fillPath (orn.rim, at);
+        g.setColour (Theme::gold);
+        g.fillPath (orn.body, at);
+        g.setColour (Theme::goldLight);
+        g.fillPath (orn.hi, at);
+        g.setColour (rgb (255, 252, 240, 210));
+        g.fillPath (orn.spark, at);
     }
     silk (g, "GR", Theme::legendEm (17.0f), box.getX() + bw * 0.17f, py - R * 0.30f, 'm', 2.0f, dark);
     silk (g, "dB", Theme::fineEm (8.5f), box.getX() + bw * 0.17f, py - R * 0.30f + 17.0f, 'm', 1.0f, ink2);
@@ -770,10 +1189,79 @@ void DisplayWindow::paint (juce::Graphics& g)
     if (peak > 0.05f)
     {
         const float pa = ang (juce::jmin (peak, kMeterMaxDb));
-        juce::Path tri;
-        tri.addTriangle (polar (cx, py, R - 2.0f, pa), polar (cx, py, R - 15.0f, pa - 2.6f), polar (cx, py, R - 15.0f, pa + 2.6f));
-        g.setColour (red);
-        g.fillPath (tri);
+        const int marker = juce::jlimit (0, 3, TutkalUi::peakMarker);
+        const int leafV = juce::jlimit (0, 3, TutkalUi::peakLeaf);
+        if (leafV > 0)
+        {
+            if (leafV != lf.variant)
+                buildLeaf (lf, leafV);              // once per variant change
+            const auto& cf = kLeafCfg[leafV - 1];
+            // on the number ring; while it rests, nudged sideways into the gap between two digits (never over one)
+            const float rc = R + 19.0f + orn.numberShift;
+            const float perDb = rc * (2.0f * kMeterSpan / kMeterMaxDb) * kPi / 180.0f;
+            const float clearDb = (4.8f + cf.halfW * cf.scale + 0.9f) / perDb;
+            const float pdb = juce::jmin (pose.db, kMeterMaxDb);
+            const float even = juce::jlimit (0.0f, kMeterMaxDb, 2.0f * std::round (pdb * 0.5f));
+            const float dd = pdb - even;
+            float shown = pdb;
+            if (std::abs (dd) < clearDb)
+                shown = even + ((even <= 0.0f || (dd >= 0.0f && even < kMeterMaxDb)) ? clearDb : -clearDb);
+            shown = pdb + (shown - pdb) * pose.nudgeW;
+            const float la = ang (shown), lr = la * kPi / 180.0f;
+            Pt centre = polar (cx, py, rc, la);
+            centre.x += std::cos (lr) * pose.swayU + std::sin (lr) * pose.bobU;
+            centre.y += std::sin (lr) * pose.swayU - std::cos (lr) * pose.bobU;
+            lastLeafCentre = { centre.x, centre.y };
+            const float rot = (la + pose.rockDeg) * kPi / 180.0f;
+            const auto leafAt = juce::AffineTransform::scale (pose.width * cf.scale, cf.scale).rotated (rot).translated (centre);
+            const auto beadAt = juce::AffineTransform::scale (cf.scale).rotated (rot).translated (centre);
+            const float al = pose.alpha;
+            g.setColour (rgb (0, 0, 0, (juce::uint8) juce::roundToInt (50.0f * al)));
+            g.fillPath (lf.body, leafAt.translated (0.4f, 0.7f));
+            g.fillPath (lf.bead, beadAt.translated (0.4f, 0.7f));
+            g.setColour (red.withAlpha (al));
+            g.fillPath (lf.body, leafAt);
+            g.setColour (red.darker (0.4f).withAlpha (al * 0.75f));
+            g.fillPath (lf.shade, leafAt);
+            g.setColour (Theme::goldLight.withAlpha (al * 0.9f));
+            g.strokePath (lf.vein, juce::PathStrokeType (0.4f), leafAt);
+            g.setColour (Theme::gold.withAlpha (al));
+            g.strokePath (lf.body, juce::PathStrokeType (0.65f), leafAt);
+            g.strokePath (lf.stem, juce::PathStrokeType (0.6f), beadAt);
+            g.fillPath (lf.bead, beadAt);
+            g.setColour (goldInk.withAlpha (al));
+            g.strokePath (lf.bead, juce::PathStrokeType (0.3f), beadAt);
+            g.setColour (rgb (255, 246, 226, (juce::uint8) juce::roundToInt (225.0f * al)));
+            g.fillPath (lf.beadHi, beadAt);
+        }
+        else if (marker == 0)
+        {
+            juce::Path tri;
+            tri.addTriangle (polar (cx, py, R - 2.0f, pa), polar (cx, py, R - 15.0f, pa - 2.6f), polar (cx, py, R - 15.0f, pa + 2.6f));
+            g.setColour (red);
+            g.fillPath (tri);
+        }
+        else
+        {
+            if (marker != pk.variant)
+                buildPeakMarker (pk, marker);       // once per variant change
+            // the fine motifs are drawn a little larger than the triangle's 5 px so that they still read as a red mark at 1x
+            const float sx = marker == 1 ? 1.3f : marker == 2 ? 1.35f : 1.3f, sy = marker == 1 ? 1.12f : marker == 2 ? 1.15f : 1.2f;
+            const auto at = juce::AffineTransform::scale (sx, sy).rotated (pa * kPi / 180.0f).translated (polar (cx, py, R - 2.0f, pa));
+            g.setColour (rgb (0, 0, 0, 55));
+            g.fillPath (pk.shadow, at.translated (0.4f, 0.7f));
+            g.setColour (red);
+            g.fillPath (pk.ruby, at);
+            g.setColour (red.darker (0.45f));
+            g.fillPath (pk.rubyShade, at);
+            g.setColour (Theme::gold);
+            g.strokePath (pk.goldLine, juce::PathStrokeType (marker == 1 ? 0.5f : 0.8f), at);
+            g.fillPath (pk.goldFill, at);
+            g.setColour (goldInk);
+            g.strokePath (pk.goldEdge, juce::PathStrokeType (0.3f), at);
+            g.setColour (rgb (255, 246, 226, 225));
+            g.fillPath (pk.hi, at);
+        }
     }
     redLed (g, box.getRight() - 86.0f, box.getY() + 18.0f, 3.0f, peak >= 0.5f);
     silk (g, "PEAK HOLD", Theme::legendEm (7.0f), box.getRight() - 78.0f, box.getY() + 18.5f, 'l', 0.8f, peak >= 0.5f ? ink : ink2);

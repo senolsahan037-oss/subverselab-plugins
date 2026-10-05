@@ -106,6 +106,7 @@ void run (const Scenario& sc, int stopAt, const std::function<void (TutkalAudioP
         if (sinceTick >= kTickEvery)
         {
             sinceTick -= kTickEvery;
+            editor.frontPanel().displayWindow().setSnapshotClock (1000.0 * (double) (pos + len) / 48000.0);   // deterministic leaf clock
             editor.tickForSnapshot();
         }
     }
@@ -113,14 +114,179 @@ void run (const Scenario& sc, int stopAt, const std::function<void (TutkalAudioP
 }
 } // namespace
 
+// --ornaments: renders the three dial ornaments (LA voicing with programme, as front_la) to ornament_N_name.png and a 2x
+// zoom of the meter box (vector re-render at scale 2, not a bitmap upscale) to ornament_N_name_zoom.png.
+// ORNAMENT_ZOOM=4 in the environment renders the zoom crops at 4x for close inspection (default 2x).
+static float kOrnamentZoom = 2.0f;
+static bool renderOrnaments (const juce::File& dir, const juce::File& session, bool peaks = false, bool leaves = false)
+{
+    const Audio vocal = readWav (session.getChildFile ("DRY_vocal_in_backing.wav"));
+    const Scenario sc { "front_la", vocal, nullptr, { { "voicing", 1 }, { "peakReduction", 0.5f } }, -1.0 };
+    const char* names[3] { "ornament_1_tespih", "ornament_2_rumi", "ornament_3_kandil" };
+    bool ok = true;
+    int stopAt = 0;
+    {
+        // the deepest-needle moment, found with the plain dial (same ticks)
+        TutkalAudioProcessor proc;
+        auto layout = proc.getBusesLayout();
+        layout.inputBuses.set (1, juce::AudioChannelSet::disabled());
+        proc.setBusesLayout (layout);
+        proc.setRateAndBufferSizeDetails (48000.0, kBlock);
+        proc.prepareToPlay (48000.0, kBlock);
+        for (auto& kv : sc.settings) setParam (proc.apvts, kv.first, kv.second);
+        std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
+        auto& editor = *static_cast<TutkalEditor*> (ed.get());
+        editor.setSize (TutkalEditor::kW, TutkalEditor::kH);
+        const int total = juce::jmax (proc.getTotalNumInputChannels(), proc.getTotalNumOutputChannels());
+        const int n = (int) sc.in[0].size(), mainCh = (int) sc.in.size();
+        juce::AudioBuffer<float> buf (total, kBlock);
+        juce::MidiBuffer midi;
+        int sinceTick = 0;
+        float bestNeedle = -1.0f;
+        for (int pos = 0; pos < n; pos += kBlock)
+        {
+            const int len = juce::jmin (kBlock, n - pos);
+            buf.setSize (total, len, false, false, true);
+            buf.clear();
+            for (int c = 0; c < mainCh; ++c) std::copy (sc.in[(size_t) c].begin() + pos, sc.in[(size_t) c].begin() + pos + len, buf.getWritePointer (c));
+            proc.processBlock (buf, midi);
+            sinceTick += len;
+            if (sinceTick >= kTickEvery)
+            {
+                sinceTick -= kTickEvery;
+                editor.tickForSnapshot();
+                const float nd = editor.frontPanel().needleDb();
+                if (pos > 96000 && nd > bestNeedle) { bestNeedle = nd; stopAt = pos + len; }
+            }
+        }
+    }
+    const char* peakNames[3] { "peak_1_damla", "peak_2_lale", "peak_3_gul" };
+    for (int v = 1; v <= 3; ++v)
+    {
+        if (leaves) TutkalUi::peakLeaf = v; else if (peaks) TutkalUi::peakMarker = v; else TutkalUi::dialOrnament = v;
+        run (sc, stopAt, [&] (TutkalAudioProcessor& proc, TutkalEditor& editor)
+        {
+            auto save = [&] (const juce::Image& image, const juce::String& file)
+            {
+                const auto f = dir.getChildFile (file);
+                f.deleteFile();
+                juce::FileOutputStream stream (f);
+                const bool w = stream.openedOk() && juce::PNGImageFormat().writeImageToStream (image, stream);
+                std::printf ("  %s %s %dx%d\n", w ? "wrote" : "FAILED", f.getFullPathName().toRawUTF8(), image.getWidth(), image.getHeight());
+                ok &= w;
+            };
+            if (leaves)
+            {
+                // --leaves: held-peak frames (2x meter box, 4x close-up) and the release animation, 24 frames driven by the
+                // editor's own clock (set here, so the result does not depend on the machine's speed)
+                const char* ln[3] { "leaf_1_yaprak", "leaf_2_sogut", "leaf_3_lale" };
+                auto& dw = editor.frontPanel().displayWindow();
+                const juce::Rectangle<int> meter (484, 58, 434, 226);
+                std::printf ("leaf %d, peak %.2f dB, needle %.2f dB\n", v, (double) editor.frontPanel().peakDb(), (double) editor.frontPanel().needleDb());
+                save (editor.createComponentSnapshot (meter, true, 2.0f), juce::String (ln[v - 1]) + "_zoom.png");
+                const auto c = dw.lastLeafCentre;
+                save (editor.createComponentSnapshot (juce::Rectangle<int> ((int) std::lround (c.x) - 20, (int) std::lround (c.y) - 22, 40, 44), true, 4.0f), juce::String (ln[v - 1]) + "_close.png");
+                const char* fe = std::getenv ("LEAF_FRAMES_DIR");
+                const juce::File fdir = fe != nullptr ? juce::File (fe) : dir.getChildFile ("leaf_frames");
+                fdir.createDirectory();
+                double clock = dw.leafClockMs();
+                const int total = juce::jmax (proc.getTotalNumInputChannels(), proc.getTotalNumOutputChannels());
+                juce::AudioBuffer<float> quiet (total, kBlock);
+                juce::MidiBuffer midi;
+                auto stepTo = [&] (double to)           // silence through the real processor, ticked every 33 ms
+                {
+                    while (clock < to - 1e-6)
+                    {
+                        const double dt = juce::jmin (1000.0 / 30.0, to - clock);
+                        for (int left = (int) std::lround (dt * 48.0); left > 0; left -= kBlock)
+                        {
+                            quiet.setSize (total, juce::jmin (kBlock, left), false, false, true);
+                            quiet.clear();
+                            proc.processBlock (quiet, midi);
+                        }
+                        clock += dt;
+                        dw.setSnapshotClock (clock);
+                        editor.tickForSnapshot();
+                    }
+                };
+                int guard = 0;
+                while (! dw.leafFalling() && guard++ < 400) stepTo (clock + 1000.0 / 30.0);   // wait for the hold to end
+                const double fs = dw.leafFallStartMs();
+                const double span = 1000.0 * (double) dw.leafFallSeconds() + (v == 3 ? 300.0 : 0.0);
+                std::printf ("  fall starts at %.0f ms, span %.0f ms, needle %.2f dB\n", fs, span, (double) editor.frontPanel().needleDb());
+                for (int i = 0; i < 24; ++i)
+                {
+                    stepTo (fs + span * (double) i / 23.0 + (i == 23 ? 1.0 : 0.0));
+                    char nm[64];
+                    std::snprintf (nm, sizeof nm, "%s_%02d.png", ln[v - 1], i);
+                    const auto f = fdir.getChildFile (nm);
+                    f.deleteFile();
+                    juce::FileOutputStream stream (f);
+                    ok &= stream.openedOk() && juce::PNGImageFormat().writeImageToStream (editor.createComponentSnapshot (meter, true, 2.0f), stream);
+                }
+                std::printf ("  frames: %s  step %.1f ms\n", fdir.getFullPathName().toRawUTF8(), span / 23.0);
+                return;
+            }
+            if (peaks)
+            {
+                // marker area: tip at R-2 on the peak angle; meter box (498,73,402,196), pivot 6% above its bottom, R = 0.76 h
+                const float pk = juce::jmin (editor.frontPanel().peakDb(), 20.0f);
+                const float a = (-52.0f + 104.0f * pk / 20.0f) * 3.14159265f / 180.0f;
+                const float cx = 498.0f + 201.0f, py = 73.0f + 196.0f - 196.0f * 0.06f, R = 196.0f * 0.76f;
+                const int mx = (int) std::lround (cx + std::sin (a) * (R - 9.0f)), my = (int) std::lround (py - std::cos (a) * (R - 9.0f));
+                std::printf ("peak marker %d, peak %.2f dB, needle %.2f dB\n", v, (double) pk, (double) editor.frontPanel().needleDb());
+                save (editor.createComponentSnapshot (juce::Rectangle<int> (484, 58, 434, 226), true, 2.0f), juce::String (peakNames[v - 1]) + "_zoom.png");
+                save (editor.createComponentSnapshot (juce::Rectangle<int> (mx - 28, my - 20, 56, 40), true, 4.0f), juce::String (peakNames[v - 1]) + "_close.png");
+                if (v == 1) save (editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f), "peak_1_damla_1x.png");
+                if (v == 2) save (editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f), "peak_2_lale_1x.png");
+                if (v == 3) save (editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f), "peak_3_gul_1x.png");
+                return;
+            }
+            std::printf ("ornament %d, needle %.2f dB\n", v, (double) editor.frontPanel().needleDb());
+            save (editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f), juce::String (names[v - 1]) + ".png");
+            save (editor.createComponentSnapshot (juce::Rectangle<int> (484, 58, 434, 226), true, kOrnamentZoom), juce::String (names[v - 1]) + "_zoom.png");
+        });
+    }
+    TutkalUi::dialOrnament = TutkalUi::kDialOrnament;
+    TutkalUi::peakMarker = TutkalUi::kPeakMarker;
+    return ok;
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    bool ornamentsOnly = false, peaksOnly = false, leavesOnly = false;
+    if (const char* z = std::getenv ("ORNAMENT_ZOOM")) kOrnamentZoom = juce::jlimit (1.0f, 6.0f, (float) std::atof (z));
+    for (int i = 1; i < argc;)
+    {
+        if (juce::String (argv[i]) == "--leaves")
+        {
+            leavesOnly = true;
+            for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
+            --argc;
+        }
+        else if (juce::String (argv[i]) == "--peaks")
+        {
+            peaksOnly = true;
+            for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
+            --argc;
+        }
+        else if (juce::String (argv[i]) == "--ornaments")
+        {
+            ornamentsOnly = true;
+            for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
+            --argc;
+        }
+        else ++i;
+    }
     const juce::File cwd = juce::File::getCurrentWorkingDirectory();
     const juce::File dir = cwd.getChildFile (argc > 1 ? argv[1] : "docs/ui");
     const juce::File session = cwd.getChildFile (argc > 2 ? argv[2] : "../prototypes/DINLE/10_TUTKAL_v3/_session");
     dir.createDirectory();
     if (! session.isDirectory()) { std::printf ("session dir not found: %s\n", session.getFullPathName().toRawUTF8()); return 2; }
+    if (leavesOnly) return renderOrnaments (dir, session, true, true) ? 0 : 1;
+    if (peaksOnly) return renderOrnaments (dir, session, true) ? 0 : 1;
+    if (ornamentsOnly) return renderOrnaments (dir, session) ? 0 : 1;
 
     const Audio drum = readWav (session.getChildFile ("DRY_drumbus.wav"));
     const Audio vocal = readWav (session.getChildFile ("DRY_vocal_in_backing.wav"));

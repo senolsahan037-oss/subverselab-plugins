@@ -127,6 +127,27 @@ struct Toggle
 };
 
 /** The cream window: the gain-reduction needle, and per voicing the lamps, the 7-segment GR and the notes. */
+/** Optional ornament on the meter dial (owner's "beaded arabesque" memory). Default 0 = the plain dial.
+    1 = Tespih (gold bead chain), 2 = Rumi (tezhip vine band), 3 = Kandil (pearl lace edge with star rosettes).
+    The default is the constant; ui_snapshot --ornaments overrides the variable to render each variant. */
+namespace TutkalUi
+{
+constexpr int kDialOrnament = 0;
+inline int dialOrnament = kDialOrnament;
+
+/** The peak-hold marker on the meter dial (owner: only this changes, the dial stays as it is).
+    0 = the original red triangle, 1 = Damla (beaded pendant with a ruby drop), 2 = Lale (tulip half-palmette),
+    3 = Gul (eight-point tezhip rosette on a beaded stem). Moves exactly like the triangle. */
+constexpr int kPeakMarker = 0;
+inline int peakMarker = kPeakMarker;
+
+/** Falling-leaf peak marker (owner: on the number ring, a small leaf with ONE gold bead at its bottom, floats down when
+    released). 0 = off (the marker above is used), 1 = Yaprak, 2 = Sogut (narrow willow leaf, slower, more sway),
+    3 = Lale yapragi (tulip petal, shorter fall with a spin and a tiny settle bounce). Takes precedence over kPeakMarker. */
+constexpr int kPeakLeaf = 3;
+inline int peakLeaf = kPeakLeaf;
+}
+
 class DisplayWindow : public juce::Component
 {
 public:
@@ -135,12 +156,55 @@ public:
     void paint (juce::Graphics&) override;
 
     float needleDb() const { return needle; }
+    float peakDb() const { return peak; }
+
+    /** Leaf animation clock. Normally the high-resolution millisecond counter; ui_snapshot sets it so frames are deterministic. */
+    void setSnapshotClock (double ms) { snapshotClockMs = ms; }
+    double leafFallStartMs() const { return fallStartMs; }
+    double leafClockMs() const { return lastNowMs; }
+    bool leafFalling() const { return leafState == 1; }
+    float leafFallSeconds() const;
+    juce::Point<float> lastLeafCentre;      // where the leaf was drawn, in editor units (for the close-up crop)
 
 private:
     TutkalAudioProcessor& proc;
     float needle = 0.0f, peak = 0.0f;
     int peakHold = 0;
     juce::String lastKey;
+
+    void refreshLeaf (float gr, double now);
+    double nowMs() const;
+    double snapshotClockMs = -1.0;
+    // leaf state machine (message thread only): 0 hold, 1 fall, 2 settle (variant 3)
+    int leafState = 0, lastLeafKey = -1;
+    double holdUntilMs = 0.0, fallStartMs = 0.0, settleStartMs = 0.0, lastNowMs = -1.0;
+    float fallFrom = 0.0f;
+    struct LeafPose { float db = 0, swayU = 0, bobU = 0, rockDeg = 0, alpha = 1, width = 1, nudgeW = 1; } pose;
+
+    /** The ornament, built once (the dial geometry is fixed in logical units; the 5:2 resize scales the whole editor as
+        one piece) and drawn with a translation to the dial pivot. Rebuilt only when the variant changes. */
+public:
+    struct OrnamentCache
+    {
+        int variant = -1;
+        float numberShift = 0.0f;     // radial shift of the scale numbers that makes room for the ornament
+        juce::Path thin, fine, leaf, star, starIn, rim, body, hi, spark;
+    } orn;
+
+    /** The peak marker, drawn in local units (tip at 0,0 on the scale, +y towards the pivot) and placed with one
+        rotation + translation, so one cache serves every size and angle. Rebuilt only when the variant changes. */
+    struct PeakMarkerCache
+    {
+        int variant = -1;
+        juce::Path shadow, ruby, rubyShade, goldLine, goldFill, goldEdge, hi;
+    } pk;
+
+    struct LeafCache
+    {
+        int variant = -1;
+        juce::Path body, shade, vein, stem, bead, beadHi;
+    } lf;
+private:
 };
 
 class FrontPanel : public juce::Component
@@ -152,6 +216,8 @@ public:
     void tick();
 
     float needleDb() const { return display.needleDb(); }
+    float peakDb() const { return display.peakDb(); }
+    DisplayWindow& displayWindow() { return display; }
     PlateKey& voicingKey (int i) { return *voicingKeys[(size_t) i]; }
     Knob* findKnob (const juce::String& id) const;      // the one on the face now (a knob can sit in two voicings)
 
