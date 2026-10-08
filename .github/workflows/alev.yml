@@ -1,0 +1,57 @@
+name: ALEV
+
+# ALEV alone (project folder subverselab-kor, its working name), so an ALEV release does not rebuild every other plug-in.
+# Run by hand (gh workflow run alev.yml) or by a push that touches subverselab-kor/.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'subverselab-kor/**'
+      - '.github/workflows/alev.yml'
+
+jobs:
+  windows:
+    name: windows-vst3 (Alev)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: subverselab-kor
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: subverselab-kor/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-subverselab-kor
+
+      - name: Configure (Release, x64)
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + ui_snapshot
+        run: cmake --build build --config Release --target Kor_VST3 ui_snapshot --parallel
+
+      # ui_snapshot runs real audio through the real processor and checks the controls, link modes and bypass:
+      # a hard gate here (exit code = failures). Its PNGs show the panel as Windows draws it.
+      - name: Panel + control checks
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/ALEV-windows-panel"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe "$GITHUB_WORKSPACE/ALEV-windows-panel"
+
+      - name: Zip VST3 bundle
+        run: |
+          cd build/Kor_artefacts/Release/VST3
+          7z a -r "$GITHUB_WORKSPACE/ALEV-windows-vst3.zip" "ALEV.vst3"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: ALEV-windows-panel
+          path: ALEV-windows-panel/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ALEV-windows-vst3
+          path: ALEV-windows-vst3.zip

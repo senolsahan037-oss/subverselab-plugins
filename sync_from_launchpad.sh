@@ -56,6 +56,7 @@ sync_plugin subverselab-hava
 sync_plugin subverselab-tutkal
 sync_plugin subverselab-mihenk
 sync_plugin subverselab-taban
+sync_plugin subverselab-kor        # ALEV (working name KOR)
 
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \
