@@ -55,6 +55,7 @@ sync_plugin subverselab-yanki
 sync_plugin subverselab-hava
 sync_plugin subverselab-tutkal
 sync_plugin subverselab-mihenk
+sync_plugin subverselab-taban
 
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \

@@ -1,0 +1,61 @@
+name: TABAN
+
+# TABAN alone, so a TABAN release does not rebuild every other plug-in.
+# Run by hand (gh workflow run taban.yml) or by a push that touches subverselab-taban/.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'subverselab-taban/**'
+      - '.github/workflows/taban.yml'
+
+jobs:
+  windows:
+    name: windows-vst3 (Taban)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: subverselab-taban
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: subverselab-taban/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-subverselab-taban
+
+      - name: Configure (Release, x64)
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + test + ui_snapshot
+        run: cmake --build build --config Release --target Taban_VST3 test_taban_engine ui_snapshot --parallel
+
+      # The engine self-test is plain C++ and needs no audio files: it is a hard gate here.
+      - name: Engine self-test
+        run: ./build/Release/test_taban_engine.exe
+
+      - name: Zip VST3 bundle
+        run: |
+          cd build/Taban_artefacts/Release/VST3
+          7z a -r "$GITHUB_WORKSPACE/TABAN-windows-vst3.zip" "TABAN.vst3"
+
+      # The panel as Windows draws it, so the lettering can be checked without a Windows machine.
+      - name: Panel snapshots
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/TABAN-windows-panel"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out "$GITHUB_WORKSPACE/TABAN-windows-panel/front_default.png"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out "$GITHUB_WORKSPACE/TABAN-windows-panel/front_lifting.png" --floor -18 --signal -36
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: TABAN-windows-panel
+          path: TABAN-windows-panel/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TABAN-windows-vst3
+          path: TABAN-windows-vst3.zip
