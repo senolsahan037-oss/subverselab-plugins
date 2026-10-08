@@ -422,29 +422,32 @@ private:
         if (sTone == 0.0f) { cur.b0 = 1.0f; cur.invB0 = 1.0f; cur.a1 = cur.b1; }
     }
 
-    template <int Start, int End>
+    // Balanced dot product of a fixed-length FIR window, written as DotTree<Start, Len> (Len = number of taps)
+    // so the end cases are plain partial specialisations on a constant (MSVC rejects DotTree<Start, Start + 1>).
+    // The split (Len / 2 on the left) and so the order of the additions are the same as before: bit-identical.
+    template <int Start, int Len>
     struct DotTree {
         template <const float* Coef>
         static inline void run2(const float buf[][2], int pos, float& s0, float& s1) noexcept {
-            constexpr int Mid = Start + (End - Start) / 2;
+            constexpr int H = Len / 2;
             float l0, l1, r0, r1;
-            DotTree<Start, Mid>::template run2<Coef>(buf, pos, l0, l1);
-            DotTree<Mid, End>::template run2<Coef>(buf, pos, r0, r1);
+            DotTree<Start, H>::template run2<Coef>(buf, pos, l0, l1);
+            DotTree<Start + H, Len - H>::template run2<Coef>(buf, pos, r0, r1);
             s0 = l0 + r0;
             s1 = l1 + r1;
         }
         template <const float* Coef>
         static inline void run1(const float buf[][2], int pos, int k, float& s) noexcept {
-            constexpr int Mid = Start + (End - Start) / 2;
+            constexpr int H = Len / 2;
             float l, r;
-            DotTree<Start, Mid>::template run1<Coef>(buf, pos, k, l);
-            DotTree<Mid, End>::template run1<Coef>(buf, pos, k, r);
+            DotTree<Start, H>::template run1<Coef>(buf, pos, k, l);
+            DotTree<Start + H, Len - H>::template run1<Coef>(buf, pos, k, r);
             s = l + r;
         }
     };
 
     template <int Start>
-    struct DotTree<Start, Start + 1> {
+    struct DotTree<Start, 1> {
         template <const float* Coef>
         static inline void run2(const float buf[][2], int pos, float& s0, float& s1) noexcept {
             s0 = Coef[Start] * buf[pos + Start][0];
@@ -457,7 +460,7 @@ private:
     };
 
     template <int Start>
-    struct DotTree<Start, Start + 2> {
+    struct DotTree<Start, 2> {
         template <const float* Coef>
         static inline void run2(const float buf[][2], int pos, float& s0, float& s1) noexcept {
             s0 = Coef[Start] * buf[pos + Start][0] + Coef[Start + 1] * buf[pos + Start + 1][0];
@@ -470,7 +473,7 @@ private:
     };
 
     template <int Start>
-    struct DotTree<Start, Start + 3> {
+    struct DotTree<Start, 3> {
         template <const float* Coef>
         static inline void run2(const float buf[][2], int pos, float& s0, float& s1) noexcept {
             s0 = (Coef[Start] * buf[pos + Start][0] + Coef[Start + 1] * buf[pos + Start + 1][0]) + Coef[Start + 2] * buf[pos + Start + 2][0];
@@ -483,7 +486,7 @@ private:
     };
 
     template <int Start>
-    struct DotTree<Start, Start + 4> {
+    struct DotTree<Start, 4> {
         template <const float* Coef>
         static inline void run2(const float buf[][2], int pos, float& s0, float& s1) noexcept {
             s0 = (Coef[Start] * buf[pos + Start][0] + Coef[Start + 1] * buf[pos + Start + 1][0]) + (Coef[Start + 2] * buf[pos + Start + 2][0] + Coef[Start + 3] * buf[pos + Start + 3][0]);

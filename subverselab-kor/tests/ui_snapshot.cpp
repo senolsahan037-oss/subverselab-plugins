@@ -1,7 +1,7 @@
 /*  Draws the ALEV panel into PNGs without a screen, after real programme has gone through the real processor, so the
     ember shows the band heat the engine measured (nothing is faked), and checks the panel's controls.
 
-        ui_snapshot [outdir]        (default docs/ui)
+        ui_snapshot [outdir] [scale]   (default docs/ui; scale > 1 also writes <name>_2x.png etc. at that pixel scale)
 
       alev_default.png  : LOW 30, MID 30, HIGH 20, MIX 100
       alev_hot.png      : LOW 90, MID 70, HIGH 100, MIX 100
@@ -158,6 +158,7 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File dir = juce::File::getCurrentWorkingDirectory().getChildFile (argc > 1 ? argv[1] : "docs/ui");
+    const float hiScale = argc > 2 ? (float) std::atof (argv[2]) : 1.0f;
     dir.createDirectory();
     const auto loop = drumLoop();
     std::printf ("programme: %d samples at %.0f Hz, peak %.2f dBFS\n", loop.getNumSamples(), kRate,
@@ -200,6 +201,12 @@ int main (int argc, char** argv)
                          (double) proc.glow (0), (double) proc.glow (1), (double) proc.glow (2));
             const auto image = editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f);
             check (save (image, dir.getChildFile (shot.file)), juce::String ("write ") + shot.file);
+            if (hiScale > 1.0f)
+            {
+                const auto hi = editor.createComponentSnapshot (editor.getLocalBounds(), true, hiScale);
+                const juce::String name = juce::String (shot.file).replace (".png", "_" + juce::String ((int) hiScale) + "x.png");
+                check (save (hi, dir.getChildFile (name)), "write " + name);
+            }
             const auto corner = image.getPixelAt (2, 2), centre = image.getPixelAt ((int) KorEditor::kCx, (int) KorEditor::kCy);
             check (corner.getRed() == 0x03 && corner.getGreen() == 0x37 && corner.getBlue() == 0x33,
                    juce::String (shot.file) + ": corner pixel (2,2) " + hex (corner) + " (want #033733, brand green)");
