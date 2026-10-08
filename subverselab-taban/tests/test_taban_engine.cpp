@@ -103,6 +103,18 @@ int main()
         const auto out = run (in, p);
         check (identical (in.l, out.l), "bypass: IN off passes through", "bit-identical", 0);
     }
+    // 2b. The LIFT read-out reports what is applied: 18 dB with IN on, 0 with IN off (nothing is lifted then).
+    {
+        const auto in = sine (440.0, -36.0, 1.0);
+        P p; p.floorDb = -18.0f;
+        svl::TabanEngine e;
+        run (in, p, 512, {}, &e);
+        const double on = e.getLiftDb();
+        p.enabled = false;
+        run (in, p, 512, {}, &e);
+        const double off = e.getLiftDb();
+        check (std::abs (on - 18.0) < 0.25 && off == 0.0, "lift read-out follows IN", "IN on %.2f dB (want 18), IN off %.2f dB (want 0)", on, off);
+    }
     // 3. Above the floor: gain exactly 1.
     {
         const auto in = sine (440.0, -6.0, 1.0);

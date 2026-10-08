@@ -118,9 +118,7 @@ public:
                     // Linear, not via dB: floor / env times |x| <= floor survives float rounding.
                     const float allowDb = kMaxLiftDb * std::clamp ((envDb - kGateBottomDb) / (kGateTopDb - kGateBottomDb), 0.0f, 1.0f);
                     gain = std::min (std::pow (10.0f, m_floorDb * 0.05f) / m_env, std::pow (10.0f, allowDb * 0.05f));
-                    if (gain > 1.0f)
-                        liftMax = std::max (liftMax, std::min (m_floorDb - envDb, allowDb));
-                    else
+                    if (gain <= 1.0f)
                         gain = 1.0f;
                 }
             }
@@ -134,6 +132,10 @@ public:
                 const float k = 1.0f + m_mix * (wet - 1.0f);
                 yL = xL * k; yR = xR * k;
             }
+
+            // The lift actually applied (IN off: none; during the IN crossfade: the blended part), for the read-out.
+            if (gain > 1.0f && m_mix > 0.0f)
+                liftMax = std::max (liftMax, 20.0f * std::log10 (1.0f + m_mix * (gain - 1.0f)));
 
             outL[i] = yL;
             if (outR != nullptr) outR[i] = nIn > 1 ? yR : yL;
