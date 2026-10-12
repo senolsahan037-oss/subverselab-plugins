@@ -141,6 +141,9 @@ endif()
 # Three copies of a 302 MB file per build is not cheap. Copying it to fewer
 # would mean shipping a format that cannot separate, which is the bug this
 # replaces.
+# macOS bundles only: on Windows the WIN32 block above puts the model and onnxruntime.dll next to each binary (a Windows
+# Standalone is not a bundle, and TARGET_BUNDLE_CONTENT_DIR stops CMake there; first Windows CI run, 2026-10-12).
+if(APPLE)
 foreach(format Standalone VST3 AU)
     if(TARGET SubverseSplitter_${format})
         add_custom_command(TARGET SubverseSplitter_${format} POST_BUILD
@@ -153,6 +156,7 @@ foreach(format Standalone VST3 AU)
         )
     endif()
 endforeach()
+endif()
 
 # ONNX Runtime ships INSIDE every macOS bundle (Contents/Frameworks), found through @loader_path. Before 12 Oct the binaries
 # carried an absolute rpath into this project's _deps folder and no copy of the library: on any other Mac ELEK would not start
