@@ -47,6 +47,7 @@ public:
     /** What the panel shows besides the gain reduction. Written by the audio thread, read by the editor's timer. */
     float getHostBpm() const noexcept { return hostBpm.load (std::memory_order_relaxed); }                 // 0: the host gave no tempo (the engine then uses 120)
     bool  isSidechainConnected() const noexcept { return scConnected.load (std::memory_order_relaxed); }    // the sidechain bus is enabled in the host
+    bool  isKeyHeard() const noexcept { return keyHeardFlag.load (std::memory_order_relaxed); }             // signal has arrived on the sidechain bus (KEY AUTO)
 
     std::atomic<int> editorWidth { 1280 };   // the scalable panel's last width, kept in the state
 
@@ -56,7 +57,7 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
 private:
-    tutkal::Params readParams (bool sidechainEnabled, double bpm) const noexcept;
+    tutkal::Params readParams (bool sidechainEnabled, bool keyHeard, double bpm) const noexcept;
     bool sidechainBusEnabled() const;
 
     tutkal::Engine engine;
@@ -67,6 +68,10 @@ private:
     std::atomic<float> grMaxDb { 0.0f };
     std::atomic<float> hostBpm { 0.0f };
     std::atomic<bool> scConnected { false };
+    std::atomic<bool> keyHeardFlag { false };
+    bool keyHeard = false;   // audio thread: set when the sidechain carries signal; cleared after kKeyLetGoS of silence, when the bus goes away, on prepare
+    int64_t keySilent = 0;
+    static constexpr double kKeyLetGoS = 4.0;
 
     std::atomic<float>* pVoicing = nullptr; std::atomic<float>* pThreshold = nullptr; std::atomic<float>* pRatio = nullptr;
     std::atomic<float>* pAttack = nullptr;  std::atomic<float>* pRelease = nullptr;   std::atomic<float>* pAuto = nullptr;

@@ -348,6 +348,43 @@ int main (int argc, char** argv)
         return best;
     };
 
+    // Demo hook (env, unset = unchanged behaviour): TUTKAL_ONLY=<name> runs ONE scenario and writes <name>.png only.
+    //   TUTKAL_IN = wav inside the session dir, TUTKAL_KEY = wav on the sidechain bus (optional), TUTKAL_BPM host tempo,
+    //   TUTKAL_SETTINGS = "voicing=0,threshold=-18,ratio=4,..." (parameter ids, plain values), TUTKAL_AT=<seconds>: stop there
+    //   instead of at the deepest needle moment.
+    if (const char* onlyName = std::getenv ("TUTKAL_ONLY"))
+    {
+        static std::vector<std::string> keep;
+        static Settings st;
+        keep.clear(); st.clear();
+        std::vector<std::pair<std::string, float>> parsed;
+        for (auto& tok : juce::StringArray::fromTokens (juce::String (std::getenv ("TUTKAL_SETTINGS") != nullptr ? std::getenv ("TUTKAL_SETTINGS") : ""), ",", ""))
+            if (tok.contains ("=")) parsed.push_back ({ tok.upToFirstOccurrenceOf ("=", false, false).toStdString(), tok.fromFirstOccurrenceOf ("=", false, false).getFloatValue() });
+        keep.reserve (parsed.size());
+        for (auto& kv : parsed) { keep.push_back (kv.first); st.push_back ({ keep.back().c_str(), kv.second }); }
+        static Audio keyAudio;
+        const char* kf = std::getenv ("TUTKAL_KEY");
+        if (kf != nullptr) keyAudio = readWav (session.getChildFile (kf));
+        const double bpm = std::getenv ("TUTKAL_BPM") != nullptr ? std::atof (std::getenv ("TUTKAL_BPM")) : -1.0;
+        const Scenario sc { onlyName, readWav (session.getChildFile (std::getenv ("TUTKAL_IN") != nullptr ? std::getenv ("TUTKAL_IN") : "DRY_drumbus.wav")),
+                            kf != nullptr ? &keyAudio : nullptr, st, bpm };
+        const int stopAt = std::getenv ("TUTKAL_AT") != nullptr ? (int) (48000.0 * std::atof (std::getenv ("TUTKAL_AT"))) : deepestMoment (sc);
+        bool good = false;
+        run (sc, stopAt, [&] (TutkalAudioProcessor& proc, TutkalEditor& editor)
+        {
+            std::printf ("  state: meter GR %.2f dB, needle %.2f dB, peak hold %.2f dB, host bpm %.1f, voicing %d\n", (double) proc.getGainReductionDb(),
+                         (double) editor.frontPanel().needleDb(), (double) editor.frontPanel().peakDb(), (double) proc.getHostBpm(),
+                         (int) std::lround (proc.apvts.getRawParameterValue ("voicing")->load()));
+            const auto image = editor.createComponentSnapshot (editor.getLocalBounds(), true, 1.0f);
+            const auto f = dir.getChildFile (juce::String (sc.name) + ".png");
+            f.deleteFile();
+            juce::FileOutputStream stream (f);
+            good = stream.openedOk() && juce::PNGImageFormat().writeImageToStream (image, stream);
+            std::printf ("  %s %s %dx%d\n", good ? "wrote" : "FAILED", f.getFullPathName().toRawUTF8(), image.getWidth(), image.getHeight());
+        });
+        return good ? 0 : 1;
+    }
+
     bool ok = true;
     juce::Image lastRearImage;
     for (const auto& sc : scenarios)
@@ -549,14 +586,18 @@ int main (int argc, char** argv)
             thr->slider.mouseDown (down);
             thr->slider.mouseUp (down);
             check (std::abs (raw ("threshold") + 27.0f) < 1.0e-4f && proc.undo.undoSteps() == steps0, "a plain click on the knob changes nothing and adds no step");
-            // Double-click on the knob opens the field, on the window too.
+            // Double-click on the knob: back to the default, one undo step (owner 2026-10-12). On the window: the type-in field.
+            thr->slider.mouseDown (down); thr->slider.mouseUp (down); thr->slider.mouseDown (down);
             thr->slider.mouseDoubleClick (down);
-            check (thr->box->isEditing(), "double-click on the knob opens the type-in field");
-            thr->box->textField()->onEscapeKey();
+            thr->slider.mouseUp (down);
+            check (std::abs (raw ("threshold") + 18.0f) < 1.0e-4f && ! thr->box->isEditing() && proc.undo.undoSteps() == steps0 + 1,
+                   "double-click on the knob: THRESHOLD back to -18.0 (was -27), no field, one undo step");
+            typeIn (thr, "-27");
+            const int steps1 = proc.undo.undoSteps();
             thr->box->mouseDoubleClick (down);
             check (thr->box->isEditing(), "double-click on the value window opens the type-in field");
             thr->box->textField()->onEscapeKey();
-            check (proc.undo.undoSteps() == steps0, "opening and closing the field adds no step");
+            check (proc.undo.undoSteps() == steps1, "opening and closing the field adds no step");
         }
         // 5. LA / PUMP faces: PEAK REDUCTION (0 .. 10), choices.
         {
@@ -606,13 +647,13 @@ int main (int argc, char** argv)
             check (hpf && drive, "rear plate: SC HPF and DRIVE value windows");
             if (hpf && drive)
             {
-                check (hpf->box->text() == "AUTO" && drive->box->text() == "0 %", "rear windows: " + hpf->box->text() + " / " + drive->box->text());
+                check (hpf->box->text() == "OFF" && drive->box->text() == "0 %", "rear windows: " + hpf->box->text() + " / " + drive->box->text());
                 typeIn (hpf, "150 Hz");
                 check (std::abs (raw ("scHpf") - 150.0f) < 1.0e-3f && hpf->box->text() == "150 Hz", "type \"150 Hz\" into SC HPF: window " + hpf->box->text());
                 typeIn (hpf, "off");
                 check (hpf->box->text() == "OFF", "type \"off\" into SC HPF: window " + hpf->box->text());
                 typeIn (hpf, "auto");
-                check (raw ("scHpf") == 0.0f && hpf->box->text() == "AUTO", "type \"auto\" into SC HPF: window " + hpf->box->text());
+                check (raw ("scHpf") == 0.0f && hpf->box->text() == "OFF", "type \"auto\" into SC HPF: window " + hpf->box->text());
                 typeIn (drive, "35");
                 check (std::abs (raw ("drive") - 35.0f) < 1.0e-3f && drive->box->text() == "35 %", "type \"35\" into DRIVE: window " + drive->box->text());
                 const int steps0 = proc.undo.undoSteps();

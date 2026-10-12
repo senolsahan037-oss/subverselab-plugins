@@ -101,6 +101,7 @@ bool TutkalAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 void TutkalAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate);
+    keyHeard = false; keySilent = 0; keyHeardFlag.store (false);
     setLatencySamples (tutkal::Engine::latency());   // 63 at every sample rate; a knob never changes it
     grScratch.assign ((size_t) juce::jmax (4096, samplesPerBlock), 0.0f);   // process() also chunks, so a larger host block never allocates
     for (auto& l : bypassLine) l.assign ((size_t) tutkal::kLatency, 0.0f);
@@ -115,7 +116,7 @@ bool TutkalAudioProcessor::sidechainBusEnabled() const
     return bus != nullptr && bus->isEnabled() && bus->getNumberOfChannels() > 0;
 }
 
-tutkal::Params TutkalAudioProcessor::readParams (bool sidechainEnabled, double bpm) const noexcept
+tutkal::Params TutkalAudioProcessor::readParams (bool sidechainEnabled, bool keyIsHeard, double bpm) const noexcept
 {
     tutkal::Params p;
     p.voicing       = kVoicingMap[juce::jlimit (0, 3, juce::roundToInt (pVoicing->load()))];
@@ -127,10 +128,11 @@ tutkal::Params TutkalAudioProcessor::readParams (bool sidechainEnabled, double b
     p.makeupDb      = pMakeup->load();
     p.mix           = pMix->load() * 0.01f;
     const float hpf = pScHpf->load();
-    p.scHpfHz       = hpf < 0.5f ? -1.0f : (hpf < 20.0f ? 0.0f : hpf);   // 0 = AUTO -> the voicing's own default
-    // EXT hears only the sidechain bus. With the bus disabled there is no key to hear (the engine would hear silence
-    // and never compress), so the detector stays on the programme: PUMP then keys from the main input.
-    p.ext           = pExt->load() > 0.5f && sidechainEnabled;
+    p.scHpfHz       = hpf < 0.5f ? -1.0f : (hpf < 20.0f ? 0.0f : hpf);   // 0 = AUTO = off in every voicing since 2026-10-12 (the engine reads -1 as off)
+    // KEY (parameter "ext"): ON = the detector hears only the sidechain bus; AUTO (off) = it does so as soon as signal has arrived
+    // on the sidechain bus (owner 2026-10-12: routing a key in the host must be enough, no hidden switch). With the bus disabled
+    // there is no key to hear (the engine would hear silence and never compress), so the detector stays on the programme.
+    p.ext           = (pExt->load() > 0.5f || keyIsHeard) && sidechainEnabled;
     p.drive         = pDrive->load() * 0.01f;
     p.in            = pIn->load() > 0.5f;
     p.peakReduction = pPeakRed->load();
@@ -161,7 +163,6 @@ void TutkalAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     const bool scOn = sidechainBusEnabled();
     scConnected.store (scOn, std::memory_order_relaxed);
-    const tutkal::Params p = readParams (scOn, bpm);
 
     const float* key[2] = { nullptr, nullptr };
     int keyCh = 0;
@@ -173,6 +174,23 @@ void TutkalAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             if (mainCh + c < buffer.getNumChannels()) key[c] = buffer.getReadPointer (mainCh + c);
             else keyCh = c;
     }
+    // KEY AUTO: engages once the sidechain carries anything above -60 dBFS; a silent bus (Live: "No Input") never engages it.
+    // It holds through gaps in the key (a bar without a kick must not hand the detector back to the programme) and lets go after
+    // kKeyLetGoS of silence on the sidechain or when the bus goes away (host_check 2026-10-12: latched for good, a key switched to
+    // "No Input" left the detector listening to silence, no gain reduction at all, and the lamp still said "heard").
+    if (! scOn) { keyHeard = false; keySilent = 0; }
+    else
+    {
+        bool loud = false;
+        for (int c = 0; c < keyCh && ! loud; ++c)
+            if (key[c] != nullptr)
+                loud = juce::FloatVectorOperations::findMaximum (key[c], n) > 1.0e-3f
+                    || -juce::FloatVectorOperations::findMinimum (key[c], n) > 1.0e-3f;
+        if (loud) { keyHeard = true; keySilent = 0; }
+        else if (keyHeard && (keySilent += n) > (int64_t) (kKeyLetGoS * getSampleRate())) { keyHeard = false; keySilent = 0; }
+    }
+    keyHeardFlag.store (keyHeard, std::memory_order_relaxed);
+    const tutkal::Params p = readParams (scOn, keyHeard, bpm);
 
     const int chunk = (int) grScratch.size();
     float blockMax = 0.0f;

@@ -328,9 +328,8 @@ std::unique_ptr<Knob> makeKnob (juce::AudioProcessorValueTreeState& apvts, const
     k->slider.setRotaryParameters (kPi * 1.25f, kPi * 2.75f, true);
     k->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (apvts, id, k->slider);
     k->slider.bindParameter (dynamic_cast<juce::RangedAudioParameter*> (apvts.getParameter (id)));   // Option / Cmd-click: default
-    k->slider.setDoubleClickReturnValue (false, 0.0);                                                   // a double-click types a value
+    k->slider.setDoubleClickReturnValue (false, 0.0);                                                   // the double-click is ours (KnobSlider): default value, one undo step
     ValueBox* box = k->box.get();
-    k->slider.onDoubleClick = [box] { box->beginEdit(); };
     k->slider.onHold = [box] (bool held) { box->setLive (held); };
     return k;
 }
@@ -390,10 +389,9 @@ const char* const kVoicingNames[3] { "GLUE", "LA", "PUMP" };
 const char* const kNoteNames[4] { "1/16", "1/8", "1/4", "1/2" };
 const char* const kShapeNames[3] { "EXP", "LINEAR", "SWELL" };
 
-/** What the SC HPF actually does for the current setting: the AUTO value follows the voicing (GLUE 200 Hz, the others off). */
-int effectiveHpfHz (float raw, int voicingIndex)
+/** What the SC HPF actually does for the current setting: AUTO and OFF are both off in every voicing (2026-10-12). */
+int effectiveHpfHz (float raw, int /*voicingIndex*/)
 {
-    if (raw < 0.5f) return voicingIndex == 0 ? 200 : 0;
     if (raw < 20.0f) return 0;
     return juce::roundToInt (raw);
 }
@@ -516,7 +514,9 @@ void KnobSlider::mouseUp (const juce::MouseEvent& e)
 
 void KnobSlider::mouseDoubleClick (const juce::MouseEvent&)
 {
-    if (onDoubleClick) onDoubleClick();
+    // Owner 2026-10-12: a double-click on a knob puts it back to its default (the convention every DAW user expects).
+    // Typing a value is a double-click on the value window under the knob.
+    resetToDefault();
 }
 
 //==============================================================================
@@ -1083,7 +1083,7 @@ void DisplayWindow::refresh()
     key << juce::roundToInt (needle * 20.0f) << '|' << (leafMode ? 0 : juce::roundToInt (peak * 10.0f)) << '|' << juce::roundToInt (rawOf (a, "voicing"))
         << '|' << rawOf (a, "scHpf") << '|' << rawOf (a, "autoRelease") << '|' << rawOf (a, "limit") << '|' << rawOf (a, "ext")
         << '|' << rawOf (a, "pumpNote") << '|' << rawOf (a, "pumpShape") << '|' << juce::roundToInt (proc.getHostBpm() * 10.0f)
-        << '|' << (int) proc.isSidechainConnected() << '|' << (int) (peak >= 0.5f);
+        << '|' << (int) proc.isSidechainConnected() << '|' << (int) proc.isKeyHeard() << '|' << (int) (peak >= 0.5f);
     if (key != lastKey)
     {
         lastKey = key;
@@ -1300,21 +1300,25 @@ void DisplayWindow::paint (juce::Graphics& g)
             silk (g, sub, Theme::fineEm (7.0f), tx, rowY[i] + 13.0f, 'l', 0.8f, ink2);
     };
     const bool ext = rawOf (a, "ext") > 0.5f;
-    const bool keyLive = ext && proc.isSidechainConnected();
+    const bool sc = proc.isSidechainConnected(), heard = proc.isKeyHeard();
+    const bool keyLive = sc && (ext || heard);   // the processor's own rule (readParams): KEY ON, or AUTO once the sidechain carried signal
+    const juce::String keyText = ! sc ? (ext ? "KEY ON, NO SIDECHAIN ROUTED" : "NO SIDECHAIN: SELF-KEYED")
+                               : ext  ? (heard ? "KEY ON, SIDECHAIN HEARD" : "KEY ON, SIDECHAIN SILENT")
+                                      : (heard ? "AUTO: SIDECHAIN HEARD" : "AUTO: SIDECHAIN SILENT");
     const int hpf = effectiveHpfHz (rawOf (a, "scHpf"), voicing);
     const juce::String hpfText = hpf > 0 ? juce::String (hpf) + " HZ" : juce::String ("OFF");
     if (lay == 0)
     {
-        row (0, hpf > 0, "SC HPF  " + hpfText, rawOf (a, "scHpf") < 0.5f ? "AUTO: THE VOICING'S OWN" : "SET ON THE REAR PLATE");
+        row (0, hpf > 0, "SC HPF  " + hpfText, hpf > 0 ? "SET ON THE REAR PLATE" : "OFF UNTIL SET ON THE REAR PLATE");
         row (1, rawOf (a, "autoRelease") > 0.5f, "AUTO RELEASE", "RELEASE REMEMBERS THE SQUEEZE");
-        row (2, keyLive, keyLive ? "KEY  SIDECHAIN" : "KEY  SELF", ext ? (proc.isSidechainConnected() ? "EXT ON, BUS CONNECTED" : "EXT ON, NO SIDECHAIN BUS") : "THE DETECTOR HEARS THE INPUT");
+        row (2, keyLive, keyLive ? "KEY  SIDECHAIN" : "KEY  SELF", keyText);
     }
     else if (lay == 1)
     {
         const bool lim = rawOf (a, "limit") > 0.5f;
         row (0, ! lim, "COMPRESS", "3:1, SOFT KNEE");
         row (1, lim, "LIMIT", "12:1, TIGHT KNEE");
-        row (2, keyLive, keyLive ? "KEY  SIDECHAIN" : "KEY  SELF", ext ? (proc.isSidechainConnected() ? "EXT ON, BUS CONNECTED" : "EXT ON, NO SIDECHAIN BUS") : "THE DETECTOR HEARS THE INPUT");
+        row (2, keyLive, keyLive ? "KEY  SIDECHAIN" : "KEY  SELF", keyText);
     }
     else
     {
@@ -1326,7 +1330,7 @@ void DisplayWindow::paint (juce::Graphics& g)
         silk (g, bpm > 0.0f ? "NOTE  " + kDot + "  HOST TEMPO" : "NOTE  " + kDot + "  NO HOST TEMPO, 120 USED", Theme::fineEm (7.0f), lx - 4.0f, rowY[0] + 20.0f, 'l', 0.8f, ink2);
         redLed (g, lx, rowY[1] + 4.0f, 3.2f, keyLive);
         silk (g, keyLive ? "KEY  SIDECHAIN" : "KEY  SELF", Theme::legendEm (8.5f), tx, rowY[1] + 4.5f, 'l', 1.4f, keyLive ? ink : ink2);
-        silk (g, ext ? (proc.isSidechainConnected() ? "EXT ON, BUS CONNECTED" : "EXT ON, NO SIDECHAIN BUS") : "EXT OFF: THE INPUT KEYS ITSELF", Theme::fineEm (7.0f), tx, rowY[1] + 17.0f, 'l', 0.8f, ink2);
+        silk (g, keyText, Theme::fineEm (7.0f), tx, rowY[1] + 17.0f, 'l', 0.8f, ink2);
         for (int i = 0; i < 3; ++i)
         {
             const float sx = lx + (float) i * 62.0f;
@@ -1361,14 +1365,14 @@ void DisplayWindow::paint (juce::Graphics& g)
     g.fillRect (x0 + 440, y0 + 162, x1 - x0 - 452, 1.2f);
     const char* notes[3][3] = {
         { "RELEASE THAT REMEMBERS: FAST AFTER A HIT, SLOW AFTER A LONG SQUEEZE (AUTO).",
-          "THE KICK ALONE DOES NOT DRIVE IT: THE DETECTOR SITS BEHIND AN SC HPF.",
+          "KEYED BY A SIDECHAIN, IT DUCKS ON THE KEY'S PEAKS.",
           "RATIO UP, MORE GAIN REDUCTION. ON DRUMS AND THE MIX BUS." },
         { "PEAK REDUCTION SETS HOW HARD IT LEVELS; COMPRESS AND LIMIT SET THE SHAPE.",
           "THE LONGER IT WORKS, THE SLOWER IT LETS GO.",
           "MADE FOR VOCALS AND BASS. RATIO AND ATTACK ARE NOT USED." },
         { "THE KICK ON THE SIDECHAIN BUS SETS THE PUMP: DEPTH IN dB.",
           "NOTE LENGTH COMES FROM THE HOST TEMPO; SHAPE IS THE CURVE OF THE RECOVERY.",
-          "EXT ON: ONLY THE SIDECHAIN IS HEARD BY THE DETECTOR." } };
+          "KEY: AUTO WHEN A SIDECHAIN IS ROUTED, ON TO FORCE IT." } };
     for (int i = 0; i < 3; ++i)
         silk (g, notes[lay][i], Theme::fineEm (7.2f), x0 + 446, y0 + 180 + (float) i * 16.0f, 'l', 0.7f, ink2);
     silk (g, "METER: PEAK GAIN REDUCTION OF EACH BLOCK  " + kDot + "  NEEDLE 300 MS", Theme::fineEm (7.0f), x0 + 16, y1 - 14, 'l', 0.8f, ink2);
@@ -1452,11 +1456,11 @@ FrontPanel::FrontPanel (TutkalAudioProcessor& p, std::function<void()> showRear)
         addKnob (makeKnob (a, "threshold", "THRESHOLD", { 760, cy }, r,
                            marksAt (a, "threshold", { { -40.0f, "\xe2\x88\x92" "40" }, { -30.0f, "\xe2\x88\x92" "30" }, { -20.0f, "\xe2\x88\x92" "20" }, { -10.0f, "\xe2\x88\x92" "10" }, { 0.0f, "0" } }),
                            Knob::intervalMarks, 2));
-        toggles.push_back (makeToggle (a, "ext", { 930, 446 }, 1.0f, 2, "EXT", "SIDECHAIN KEY"));
         addKnob (makeKnob (a, "mix", "MIX", { 1220, cy }, r,
                            marksAt (a, "mix", { { 0.0f, "0" }, { 50.0f, "50" }, { 100.0f, "100" } }), Knob::intervalMarks, 2));
     }
     toggles.push_back (makeToggle (a, "in", { 1450, 146 }, 1.0f, -1, "IN", "OFF = BYPASSED"));
+    toggles.push_back (makeToggle (a, "ext", { 1450, 446 }, 1.0f, -1, "KEY", "AUTO: WHEN A SIDECHAIN IS ROUTED", "ON", "AUTO"));   // every voicing, on the front (owner 2026-10-12)
 
     for (auto& k : knobs)
     {
@@ -1593,9 +1597,6 @@ void FrontPanel::paint (juce::Graphics& g)
             toggleLegends (g, *t);
 
     silk (g, "SET-UP PANEL", Theme::fineEm (7.0f), 1450.0f, 292.0f, 'm', 1.2f, Theme::muted);
-    silk (g, "LATENCY", Theme::fineEm (8.0f), 1450.0f, 450.0f, 'm', 1.6f, Theme::ink);
-    silk (g, "63 SMP", Theme::fineEm (8.0f), 1450.0f, 463.0f, 'm', 1.6f, Theme::ink);
-    silk (g, "ALL RATES", Theme::fineEm (7.0f), 1450.0f, 480.0f, 'm', 1.2f, Theme::muted);
 
     // Foot of the panel.
     {
@@ -1607,6 +1608,9 @@ void FrontPanel::paint (juce::Graphics& g)
         silk (g, t, f, 800.0f, 610.5f, 'm', 2.6f, Theme::gold);
     }
     silk (g, "MEASURED, NOT GUESSED", Theme::fineEm (7.5f), 72.0f, 611.0f, 'l', 1.8f, Theme::muted);
+   #ifdef JucePlugin_VersionString
+    silk (g, "V " JucePlugin_VersionString, Theme::fineEm (7.5f), 260.0f, 611.0f, 'l', 1.8f, Theme::muted);   // the owner sees which build is loaded
+   #endif
     drawLogo (g, mark, wordmark, 1530.0f, 611.0f, 17.0f, 26.0f);
 }
 
@@ -1628,9 +1632,9 @@ RearPanel::Plate::Plate (TutkalAudioProcessor& p, std::function<void()> showFron
 
     auto& a = proc.apvts;
     {
-        // SC HPF: AUTO, OFF and 50 .. 300 Hz on one knob (the parameter's own scale).
+        // SC HPF: OFF and 50 .. 300 Hz on one knob (the parameter's own scale; its 0 .. 19 end is all off).
         auto k = makeKnob (a, "scHpf", "SC HPF", { 250.0f, 214.0f }, 46.0f,
-                           marksAt (a, "scHpf", { { 0.0f, "AUTO" }, { 10.0f, "OFF" }, { 50.0f, "50" }, { 100.0f, "100" }, { 200.0f, "200" }, { 300.0f, "300" } }),
+                           marksAt (a, "scHpf", { { 0.0f, "OFF" }, { 50.0f, "50" }, { 100.0f, "100" }, { 200.0f, "200" }, { 300.0f, "300" } }),
                            Knob::intervalMarks, -1, 10.5f);
         k->ring = 1.72f; k->markSize = 7.5f;
         knobs.push_back (std::move (k));
@@ -1639,7 +1643,7 @@ RearPanel::Plate::Plate (TutkalAudioProcessor& p, std::function<void()> showFron
                            Knob::intervalMarks, -1, 10.5f);
         knobs.push_back (std::move (d));
     }
-    toggles.push_back (makeToggle (a, "ext", { 600.0f, 214.0f }, 1.0f, -1, "EXT", "SIDECHAIN KEY"));
+    toggles.push_back (makeToggle (a, "ext", { 600.0f, 214.0f }, 1.0f, -1, "KEY", "AUTO: WHEN A SIDECHAIN IS ROUTED", "ON", "AUTO"));
     for (auto& k : knobs)
     {
         k->slider.getProperties().set ("stepped", false);
@@ -1683,10 +1687,10 @@ void RearPanel::Plate::paint (juce::Graphics& g)
         paintKnobScale (g, *k);
     for (auto& t : toggles)
         toggleLegends (g, *t);
-    silk (g, "AUTO = THE VOICING'S OWN (GLUE 200 HZ, THE OTHERS OFF)", Theme::fineEm (7.0f), 250.0f, 356.0f, 'm', 0.8f, Theme::muted);
+    silk (g, "OFF UNTIL A FREQUENCY IS SET", Theme::fineEm (7.0f), 250.0f, 356.0f, 'm', 0.8f, Theme::muted);
     silk (g, "12 dB/OCT, ON THE DETECTOR ONLY", Theme::fineEm (7.0f), 250.0f, 368.0f, 'm', 0.8f, Theme::muted);
-    silk (g, "ON: ONLY THE SIDECHAIN BUS IS HEARD", Theme::fineEm (7.0f), 600.0f, 356.0f, 'm', 0.8f, Theme::muted);
-    silk (g, "BY THE DETECTOR; OFF: IT IS IGNORED", Theme::fineEm (7.0f), 600.0f, 368.0f, 'm', 0.8f, Theme::muted);
+    silk (g, "ON: ONLY THE SIDECHAIN IS HEARD", Theme::fineEm (7.0f), 600.0f, 356.0f, 'm', 0.8f, Theme::muted);
+    silk (g, "AUTO: AS SOON AS IT CARRIES SIGNAL", Theme::fineEm (7.0f), 600.0f, 368.0f, 'm', 0.8f, Theme::muted);
     silk (g, "TRANSFORMER SATURATION, LOW-FREQUENCY WEIGHTED", Theme::fineEm (7.0f), 940.0f, 356.0f, 'm', 0.8f, Theme::muted);
     silk (g, "0 = THE OUTPUT PATH IS BIT-EXACT", Theme::fineEm (7.0f), 940.0f, 368.0f, 'm', 0.8f, Theme::muted);
 }

@@ -27,7 +27,7 @@ struct Params
     bool  autoRelease = false;    // two-path release with memory
     float makeupDb    = 0.0f;     // 0 .. 20
     float mix         = 1.0f;     // 0 .. 1
-    float scHpfHz     = -1.0f;    // below 0: the voicing's own default (GLUE 200 Hz, every other voicing off); 0 .. 19: off; 20 .. 300: that cutoff
+    float scHpfHz     = -1.0f;    // below 20: off (AUTO = off in every voicing, owner 2026-10-12: "no filter unless I turn it on"); 20 .. 300: that cutoff
     bool  ext         = false;    // the detector hears only the sidechain
     float drive       = 0.0f;     // 0 .. 1, output transformer
     bool  in          = true;     // false: bypass (the input, delayed by the latency)
@@ -50,10 +50,21 @@ constexpr float kMaxGrDb  = 60.0f;    // a ceiling for the envelope states
 // Voicing constants. Every number here is placed by a measurement in tools/measure.py (G*, L*, P*).
 constexpr float kGlueRmsMs = 5.0f, kGlueSlowRmsMs = 100.0f;                      // GLUE detector: two mean-square windows
 constexpr float kGlueWPeak = 0.05f, kGlueWRms = 0.10f;                              // ... blended with the peak; the rest (0.85) is the 100 ms mean square
-constexpr float kGlueCapDb = 1.5f;                                                  // the fast stage may add at most this much gain reduction over the slow one
+constexpr float kGlueCapDb = 1.5f;                                                  // the fast stage may add at most this much gain reduction over the slow one (AUTO, and a manual release >= 1.2 s)
+// GLUE v4, punch via the release knob (manual release only; AUTO and a release >= kGlueRelLong are the v3 numbers above, bit-exact). Both the
+// fast-stage cap and the detector weights move with the knob, log-time between the points.
+constexpr float kGlueRelShort = 0.1f, kGlueRelMid = 0.3f, kGlueRelLong = 1.2f;      // release knob points (s)
+constexpr float kGlueCapShortDb = 9.0f, kGlueCapMidDb = 4.0f;                        // cap at 0.1 s (and below) / 0.3 s; 1.5 dB (kGlueCapDb) at 1.2 s and above
+constexpr float kGlueSlowScaleShort = 0.50f;                                        // share of the slow stage that still counts at release <= 0.1 s (1 at >= 1.2 s). Not in the first design: the slow stage (release >= 1.6 s) followed the programme's mean GR and was a floor under every hit, p10 of the GR stayed at 3.7 dB on DED2
+constexpr float kGlueWPeakShort = 0.85f, kGlueWRmsShort = 0.12f;                    // detector weights at release <= 0.1 s: peak 0.85, 5 ms mean square 0.12, 100 ms mean square the rest (0.03). The first design (0.30 / 0.45 / 0.25) gave an attack knob 3 vs 30 ms difference of only 1.0-1.4 dB on the hits (G10 wants >= 2)
 constexpr float kGlueAutoFastS = 0.4f, kGlueSlowAttackS = 0.8f, kGlueSlowReleaseS = 1.6f, kGlueSlowReleaseK = 4.0f;   // stage times (tau, s)
-constexpr float kGlueDetDb = 11.0f;                                                 // GLUE detector level offset: the RMS-weighted, SC-HPF'd level reads ~11 dB under a peak bus compressor's; with it THRESHOLD/RATIO give the GR of a classic bus comp at the same settings (owner 2026-10-04: "Glue at -18 compresses, TUTKAL barely does")
-constexpr float kGlueHpfHz = 200.0f;                                                 // GLUE's default sidechain high-pass
+constexpr float kGlueDetDb = 0.0f;                                                  // GLUE detector level offset (0 since 2026-10-12, was 11 dB with the old 200 Hz AUTO HPF; G8). Old note: the RMS-weighted, SC-HPF'd level reads ~11 dB under a peak bus compressor's; with it THRESHOLD/RATIO give the GR of a classic bus comp at the same settings (owner 2026-10-04: "Glue at -18 compresses, TUTKAL barely does")
+// GLUE keyed (EXT on), 1.0.2: the detector is the key's peak with no level offset and no slow stage, i.e. a peak compressor on the key
+// with the attack / release knobs (AUTO: kGlueAutoFastS). Owner 2026-10-12: kick keyed into GLUE gave ~1 dB on a -2 dBFS kick at -18;
+// the 200 Hz AUTO HPF took 99 % of the kick and the 100 ms mean square held the GR flat between hits (no duck, no release).
+// ATTACK authority at 0.1 ms (none at kGlueAttRefMs and above, log-time between). Scanned 2026-10-12 on the drum bus (-18, 4:1, 0.3 s):
+// attack 0.1 -> 30 ms moves the GR on the first 2.5 ms of each hit by -3.45 dB (plain peak comp -4.2; before -1.77); median GR 2.63 dB unchanged.
+constexpr float kGlueAttRefMs = 10.0f, kGlueAttCapDb = 12.0f, kGlueAttPeak = 1.0f, kGlueAttSlow = 0.5f;
 constexpr float kGlueC2 = 0.0034f, kGlueC3 = 0.0072f;                                 // GLUE colour per 4 dB of gain reduction
 constexpr float kLaRmsMs = 6.0f, kLaAttackMs = 12.0f, kLaFastMs = 55.0f;         // LA detector, slowest attack, fast release stage (tau)
 constexpr float kLaChargeS = 0.25f, kLaMemS = 3.0f, kLaForgetS = 30.0f;          // slow stage fills, press memory fills, press memory fades
@@ -222,8 +233,12 @@ public:
         cMsGlue  = 1.0f - (float) std::exp (-1.0 / (kGlueRmsMs * 0.001 * fs));
         cMsLa    = 1.0f - (float) std::exp (-1.0 / (kLaRmsMs * 0.001 * fs));
         cMsGlueSlow = 1.0f - (float) std::exp (-1.0 / (kGlueSlowRmsMs * 0.001 * fs));
+        cMsGlueMid  = 1.0f - (float) std::exp (-1.0 / (0.040 * fs));
+        aGluePkEnv  = (float) std::exp (-1.0 / (0.100 * fs));
+        cGlueSteady = 1.0f - (float) std::exp (-1.0 / (0.005 * fs));
         aGlueSlowA = (float) std::exp (-1.0 / (kGlueSlowAttackS * fs));
         aGlueFastAuto = (float) std::exp (-1.0 / (kGlueAutoFastS * fs));
+        // (AUTO <-> manual glides with the other controls, so the punch weights and the cap never jump)
         aGlueSlowAuto = (float) std::exp (-1.0 / (kGlueSlowReleaseS * fs));
         aLaFast  = (float) std::exp (-1.0 / (kLaFastMs * 0.001 * fs));
         cLaCharge = 1.0f - (float) std::exp (-1.0 / (kLaChargeS * fs));
@@ -243,7 +258,7 @@ public:
         linePos = 0;
         for (auto& s : hp) s = {};
         y1 = yFast = ySlow = yL = 0.0f;
-        msGlue = msGlueSlow = msLa = laFast = laSlow = laMem = 0.0f; gFast = gSlow = 0.0f;
+        msGlue = msGlueSlow = msGlueMid = gPkEnv = gSteadyS = msLa = laFast = laSlow = laMem = 0.0f; gFast = gSlow = 0.0f;
         pkEnv = pumpY = pumpY0 = pumpP = 0.0f; pumpHold = 0; envC[0] = envC[1] = 0.0f;
         voicingPrev = -1;
         first = true;
@@ -270,9 +285,11 @@ public:
         const float tIn    = p.in ? 1.0f : 0.0f;
         const float tAtt   = std::clamp (p.attackMs, 0.02f, 200.0f);
         const float tRel   = std::clamp (p.releaseMs, 20.0f, 5000.0f);
-        const float hpfReq = p.scHpfHz < 0.0f ? (p.voicing == kGlue ? kGlueHpfHz : 0.0f) : p.scHpfHz;
+        const float hpfReq = std::max (p.scHpfHz, 0.0f);
+        const float tExt   = p.ext ? 1.0f : 0.0f;
         const float tHpf   = hpfReq < 20.0f ? 0.0f : std::min (hpfReq, 1000.0f);
         const float tPr    = std::clamp (p.peakReduction, 0.0f, 1.0f);
+        const float tAuto  = p.autoRelease ? 1.0f : 0.0f;
         const float tDepth = std::clamp (p.depthDb, 0.0f, 48.0f);
         rBpm = std::clamp (p.bpm, 20.0f, 300.0f); rNote = std::clamp (p.pumpNote, 0.01f, 2.0f);
         pumpShape = std::clamp (p.pumpShape, 0, 2);
@@ -280,7 +297,7 @@ public:
         if (first)
         {
             sThr = tThr; sRatio = tRatio; sMake = tMake; sMix = tMix; sDrive = tDrive; sIn = tIn;
-            sAtt = tAtt; sRel = tRel; sHpf = tHpf; sPr = tPr; sDepth = tDepth;
+            sAtt = tAtt; sRel = tRel; sHpf = tHpf; sPr = tPr; sDepth = tDepth; sAuto = tAuto; sRelP = tRel; sExt = tExt;
             first = false;
             refresh();
         }
@@ -301,6 +318,12 @@ public:
             sHpf   += smooth * (tHpf - sHpf);
             sPr    += smooth * (tPr - sPr);
             sDepth += smooth * (tDepth - sDepth);
+            sAuto  += smooth * (tAuto - sAuto);
+            if (std::abs (tAuto - sAuto) < 1.0e-4f) sAuto = tAuto;   // lands exactly: AUTO is then the v3 numbers bit for bit
+            sExt   += smooth * (tExt - sExt);
+            if (std::abs (tExt - sExt) < 1.0e-4f) sExt = tExt;       // lands exactly: EXT off is the unkeyed GLUE bit for bit
+            sRelP  += smooth * (tRel - sRelP);                          // the release the punch weights follow: its own glide, snapped, so the weights are the same bits however the knob got there
+            if (std::abs (tRel - sRelP) < 1.0e-4f * tRel) sRelP = tRel;
             if ((count++ & 15) == 0)
                 refresh();
 
@@ -337,6 +360,8 @@ public:
             msGlue += cMsGlue * (pk * pk - msGlue);
             msLa   += cMsLa   * (pk * pk - msLa);
             msGlueSlow += cMsGlueSlow * (pk * pk - msGlueSlow);
+            msGlueMid += cMsGlueMid * (pk * pk - msGlueMid);
+            if (msGlueMid < 1.0e-30f) msGlueMid = 0.0f;
             if (msGlue < 1.0e-30f) msGlue = 0.0f;
             if (msGlueSlow < 1.0e-30f) msGlueSlow = 0.0f;
             if (msLa   < 1.0e-30f) msLa   = 0.0f;
@@ -406,15 +431,36 @@ public:
                 // it is the glue, a gain reduction that does not swing back to zero between hits. The FAST stage (attack knob,
                 // release knob, AUTO 0.4 s) may add at most kGlueCapDb over the slow one: the hit's own grab, bounded,
                 // so a hit never leaves its own ducked shadow. Both rise and fall toward the target (attack before release).
-                const float level = std::sqrt (kGlueWPeak * pk * pk + kGlueWRms * 2.0f * msGlue + (1.0f - kGlueWPeak - kGlueWRms) * 2.0f * msGlueSlow);
+                // Static rule on sustained signal (2026-10-12, K3: GLUE sat up to 2.3 dB under (level - threshold) x (1 - 1/ratio) at a manual release).
+                // gSteady is 1 on a sustained signal (crest of the last 100 ms <= 1 dB) and 0 on hits (crest >= 3 dB); only then do the two corrections
+                // below act, so drums keep the punch and the glue exactly as before. (1) The peak weight a short release adds over the AUTO share reads
+                // max(peak, 40 ms RMS x sqrt 2): a waveform reads its peak, not each half cycle's fall to zero. AUTO (gWPeak == kGlueWPeak) is the 1.0.1 detector (G11).
+                gPkEnv = std::max (pk, aGluePkEnv * gPkEnv);
+                if (gPkEnv < 1.0e-9f) gPkEnv = 0.0f;
+                // crest^2 = peak^2 / (2 x mean square): 1.259 (1 dB) -> steady 1, 1.995 (3 dB) -> 0; smoothed over 5 ms (G12: no step on control moves; longer lags into the hit, G10).
+                const float crest2 = gPkEnv * gPkEnv / std::max (2.0f * msGlueSlow, 1.0e-14f);
+                gSteadyS += cGlueSteady * (std::clamp ((1.995f - crest2) / (1.995f - 1.259f), 0.0f, 1.0f) - gSteadyS);
+                const float steady = gSteadyS;
+                const float pkR = pk * pk + steady * (std::max (pk * pk, 2.0f * msGlueMid) - pk * pk);
+                const float level = std::sqrt (kGlueWPeak * pk * pk + (gWPeak - kGlueWPeak) * pkR + gWRms * 2.0f * msGlue + gWSlow * 2.0f * msGlueSlow);
                 const float levelDb = 20.0f * std::log10 (std::max (level, 1.0e-7f)) + kGlueDetDb;
-                const float target = std::min (staticGr (levelDb - sThr, sRatio, knee), kMaxGrDb - kGlueCapDb);   // slow + cap never passes kMaxGrDb
+                // Keyed (EXT): the glue's level and the key's peak cross-fade with sExt, so the switch glides. At sExt = 1 it is a peak
+                // compressor on the key (no offset, no slow floor); the slow stage keeps following so a switch back is warm.
+                // At sExt = 0 both blends add an exact zero: the unkeyed GLUE, bit for bit.
+                const float detDb = sExt > 0.0f ? levelDb + sExt * (20.0f * std::log10 (std::max (pk, 1.0e-7f)) - levelDb) : levelDb;
+                const float target = std::min (staticGr (detDb - sThr, sRatio, knee), kMaxGrDb - gCap);   // slow + cap never passes kMaxGrDb
                 const float aFastRel = p.autoRelease ? aGlueFastAuto : aRel;
                 const float aSlowRel = p.autoRelease ? aGlueSlowAuto : aGlueSlowKnob;
                 gFast += (1.0f - (target > gFast ? aAtt : aFastRel)) * (target - gFast);
                 gSlow += (1.0f - (target > gSlow ? aGlueSlowA : aSlowRel)) * (target - gSlow);
-                const float ex = std::max (0.0f, gFast - gSlow);
-                y1 = yFast = ySlow = gSlow + kGlueCapDb * std::tanh (ex / kGlueCapDb);
+                // (2) gSlowK < 1 (punch mode) scales the slow stage down; on a sustained signal the whole of it counts again, so the curve holds.
+                const float sl = gSlowK < 1.0f ? gSlowK * gSlow + steady * (1.0f - gSlowK) * std::min (gSlow, gFast) : gSlow;   // gSlowK = 1 (AUTO, release >= 1.2 s): the v3 numbers
+                const float ex = std::max (0.0f, gFast - sl);
+                // On a steady signal both stages sit on the target, so the static curve holds: THRESHOLD and RATIO mean what they say
+                // (owner 2026-10-12: GLUE gave 15.7 dB where (-6 - (-30)) x (1 - 1/4) = 18 dB, because the punch mode scales the slow stage
+                // down). min(gFast, gSlow) is the target on a steady tone and falls with the fast stage between hits, so no floor comes back.
+                const float glue = sl + gCap * std::tanh (ex / gCap);
+                y1 = yFast = ySlow = sExt > 0.0f ? glue + sExt * (gFast - glue) : glue;
                 yL = y1;
                 if (yL < 1.0e-5f && target <= 0.0f) { yL = y1 = yFast = ySlow = gFast = gSlow = 0.0f; }   // no denormal tails
                 const float g = std::clamp (yL / 4.0f, 0.0f, 2.5f);
@@ -511,6 +557,33 @@ private:
         aAttPump = (float) std::exp (-1.0 / (0.001 * std::min (sAtt, kPumpAttackMs) * fs));
         aLaSlow  = (float) std::exp (-1.0 / ((kLaSlowMinS + kLaSlowSpanS * laMem) * fs));
         pumpStep = (float) (1.0 / (std::clamp ((double) rNote * 240.0 / rBpm, 0.02, 8.0) * fs));
+        {
+            // GLUE v4: with a manual release the knob sets how much the fast stage may move (cap) and how peaky the detector is (weights).
+            // u = 1 at a release <= 0.1 s, 0 at >= 1.2 s, in log-time; AUTO (sAuto = 1) gives u = 0 and the v3 cap.
+            const float relS = std::max (sRelP * 0.001f, kGlueRelShort);
+            const float u = std::clamp (std::log (kGlueRelLong / relS) / std::log (kGlueRelLong / kGlueRelShort), 0.0f, 1.0f);
+            float capKnob;
+            if (relS >= kGlueRelLong)      capKnob = kGlueCapDb;
+            else if (relS >= kGlueRelMid)  capKnob = kGlueCapMidDb + (kGlueCapDb - kGlueCapMidDb) * std::log (relS / kGlueRelMid) / std::log (kGlueRelLong / kGlueRelMid);
+            else                           capKnob = kGlueCapShortDb + (kGlueCapMidDb - kGlueCapShortDb) * std::log (relS / kGlueRelShort) / std::log (kGlueRelMid / kGlueRelShort);
+            const float man = 1.0f - sAuto, uw = u * man;
+            gCap   = kGlueCapDb + (capKnob - kGlueCapDb) * man;
+            gWPeak = kGlueWPeak + (kGlueWPeakShort - kGlueWPeak) * uw;
+            gWRms  = kGlueWRms  + (kGlueWRmsShort  - kGlueWRms)  * uw;
+            gWSlow = 1.0f - gWPeak - gWRms;
+            gSlowK = 1.0f + (kGlueSlowScaleShort - 1.0f) * uw;
+            // ATTACK authority (2026-10-12, owner: every knob must move the sound like it does on any compressor). ua = 1 at 0.1 ms,
+            // 0 at kGlueAttRefMs and above (log-time): a fast attack lets the fast stage grab more over the glue (cap), hears the
+            // hit's peak more (weight taken from the 100 ms mean square) and leans less on the slow floor.
+            const float ua = std::clamp (std::log (kGlueAttRefMs / std::max (sAtt, 0.1f)) / std::log (kGlueAttRefMs / 0.1f), 0.0f, 1.0f);
+            if (ua > 0.0f)
+            {
+                gCap   += kGlueAttCapDb * ua;
+                const float take = kGlueAttPeak * ua * gWSlow;
+                gWPeak += take; gWSlow -= take;
+                gSlowK *= 1.0f - kGlueAttSlow * ua;
+            }
+        }
         hpOn = sHpf >= 19.0f;
         if (hpOn)
         {
@@ -536,11 +609,13 @@ private:
     float aGlueSlowKnob = 0.0f, aAttPump = 0.0f, aLaSlow = 0.0f, pumpStep = 0.0f, rBpm = 120.0f, rNote = 0.125f;
     float cMsGlue = 0.0f, cMsLa = 0.0f, aLaFast = 0.0f, cLaCharge = 0.0f, cLaMem = 0.0f, cLaMemDown = 0.0f, aPumpDec = 0.0f;
     float sPr = 0.5f, sDepth = 12.0f, aEnvC = 0.0f, envC[2] {};
+    float msGlueMid = 0.0f, cMsGlueMid = 0.0f, gPkEnv = 0.0f, aGluePkEnv = 0.0f, gSteadyS = 0.0f, cGlueSteady = 0.0f;
     float msGlueSlow = 0.0f, gFast = 0.0f, gSlow = 0.0f, cMsGlueSlow = 0.0f, aGlueSlowA = 0.0f, aGlueFastAuto = 0.0f, aGlueSlowAuto = 0.0f;
     float msGlue = 0.0f, msLa = 0.0f, laFast = 0.0f, laSlow = 0.0f, laMem = 0.0f, pkEnv = 0.0f, pumpY = 0.0f, pumpY0 = 0.0f, pumpP = 0.0f;
     int pumpHoldN = 0, pumpHold = 0, pumpShape = 0, voicingPrev = -1;
     float sThr = -18.0f, sRatio = 4.0f, sMake = 0.0f, sMix = 1.0f, sDrive = 0.0f, sIn = 1.0f;
-    float sAtt = 10.0f, sRel = 300.0f, sHpf = 0.0f;
+    float sAtt = 10.0f, sRel = 300.0f, sRelP = 300.0f, sHpf = 0.0f, sAuto = 0.0f, sExt = 0.0f;
+    float gCap = kGlueCapDb, gWPeak = kGlueWPeak, gWRms = kGlueWRms, gWSlow = 1.0f - kGlueWPeak - kGlueWRms, gSlowK = 1.0f;
     float y1 = 0.0f, yFast = 0.0f, ySlow = 0.0f, yL = 0.0f;
     float grDb = 0.0f, inPeak = 0.0f, outPeak = 0.0f;
 };

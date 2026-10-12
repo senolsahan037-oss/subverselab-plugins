@@ -8,7 +8,7 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(Tutkal VERSION 1.0.1 LANGUAGES C CXX)
+project(Tutkal VERSION 1.0.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,7 +44,7 @@ juce_add_plugin(Tutkal
     PLUGIN_NAME "TUTKAL"
     PRODUCT_NAME "TUTKAL"
     BUNDLE_ID com.subverselab.tutkal
-    VERSION "1.0.1"
+    VERSION "1.0.3"
     FORMATS ${SVL_TUTKAL_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -86,7 +86,7 @@ target_link_libraries(Tutkal
 
 # plugin_check: offline test of the real processor against the raw engine.
 set(TUTKAL_TOOL_DEFS ${TUTKAL_DEFS}
-    JucePlugin_Name="TUTKAL"
+    JucePlugin_Name="TUTKAL" JucePlugin_VersionString="${PROJECT_VERSION}"
     JucePlugin_IsSynth=0 JucePlugin_WantsMidiInput=0
     JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
 juce_add_console_app(plugin_check PRODUCT_NAME "plugin_check")
@@ -110,3 +110,12 @@ target_link_libraries(ui_snapshot PRIVATE
     juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats
     juce::juce_gui_basics juce::juce_graphics juce::juce_core
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
+# host_check: loads the INSTALLED bundles (what a buyer has) as a DAW does and turns the knobs (2026-10-12). Read-only.
+juce_add_console_app(host_check PRODUCT_NAME "host_check")
+juce_generate_juce_header(host_check)
+target_sources(host_check PRIVATE tests/host_check.cpp)
+target_compile_definitions(host_check PRIVATE JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=1 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+target_link_libraries(host_check PRIVATE
+    juce::juce_audio_utils juce::juce_audio_processors juce::juce_gui_basics juce::juce_core
+    juce::juce_recommended_config_flags)

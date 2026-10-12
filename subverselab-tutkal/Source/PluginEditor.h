@@ -45,15 +45,14 @@ private:
     float s;
 };
 
-/** The knob's slider: Option- or Cmd-click puts the parameter back to its default (one undo step), Shift-drag turns it
-    five times finer, a double-click opens the value box's type-in field. The wheel is the Slider's own. */
+/** The knob's slider: a double-click, Option-click or Cmd-click puts the parameter back to its default (one undo step),
+    Shift-drag turns it five times finer. Typing is a double-click on the value window. The wheel is the Slider's own. */
 class KnobSlider : public juce::Slider
 {
 public:
     KnobSlider() = default;
     void bindParameter (juce::RangedAudioParameter* p) { param = p; }
     void resetToDefault();                              // one gesture = one undo step
-    std::function<void()> onDoubleClick;
     std::function<void (bool)> onHold;                  // knob grabbed / let go
 
     void mouseDown (const juce::MouseEvent&) override;

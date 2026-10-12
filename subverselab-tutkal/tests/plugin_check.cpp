@@ -180,11 +180,11 @@ static int runControlProof (int argc, char** argv)
         D ("voicing", 0, nullptr, 0, nullptr, "", "four characters, not an ordered scale"),
         D ("threshold", -1, reductionDb(), 0.25, voicingIs ({ 0, 2, 3 }), "gain reduction (in rms - out rms, dB)", "threshold up = less reduction; LA ignores it (PEAK REDUCTION replaces it)"),
         D ("ratio", +1, reductionDb(), 0.25, voicingIs ({ 0, 2, 3 }), "gain reduction", "LA ignores RATIO; PUMP clamps it to 10..20 so it is flat below 10"),
-        D ("attack", +1, outPeakDb(), 0.1, nullptr, "output peak (dB), CORE, DRIVE 0, MAKEUP 0", "slower attack lets more transient through, so the peak rises; tested in CORE (GLUE: the 0.8 s slow stage dominates, measured peak change <= 0.2 dB over the whole knob; PUMP clamps to 0.7 ms; LA ignores it)",
+        D ("attack", +1, outPeakDb(), 0.1, nullptr, "output peak (dB), CORE, DRIVE 0, MAKEUP 0", "slower attack lets more transient through, so the peak rises; tested in CORE (GLUE: in AUTO the 0.8 s slow stage dominates, measured peak change <= 0.2 dB over the whole knob; in the 1.0.2 punch mode (manual release 0.1 s) the knob moves the hit peaks by about 2 dB, tools/measure.py G10; PUMP clamps to 0.7 ms; LA ignores it)",
            { { "voicing", kCore }, { "threshold", 0.2f }, { "ratio", 0.7f }, { "autoRelease", 0.0f }, { "drive", 0.0f }, { "makeup", 0.0f } }),
         D ("release", +1, reductionDb(), 0.25, nullptr, "gain reduction, CORE, AUTO off", "longer release holds the reduction longer; AUTO replaces it, PUMP uses the note, LA ignores it",
            { { "voicing", kCore }, { "autoRelease", 0.0f } }),
-        D ("release", +1, reductionDb(), 0.25, nullptr, "gain reduction, GLUE, AUTO off", "same in GLUE (fast stage release = the knob, slow stage max(1.6 s, 4 x knob))",
+        D ("release", 0, nullptr, 0, nullptr, "", "GLUE (1.0.2): a manual release below 1.2 s is the punch mode, the knob also sets the fast-stage cap and how peaky the detector is, so the mean reduction is not ordered by it (hard limiting, 20:1 and threshold -40: 2.4 dB MORE reduction at 0.1 s than at 0.4 s; drums at the default state: 0.6 dB more at 0.4 s than at 1.2 s; a steady tone: 1.3 dB less at 0.1 s). Proved by tools/measure.py G7 (tail order), G9-G13",
            { { "voicing", kGlue }, { "autoRelease", 0.0f } }),
         D ("autoRelease", 0, nullptr, 0, nullptr, "", "switch that changes the release law; no ordering"),
         D ("makeup", +1, outRmsDb(), 0.25, nullptr, "output rms (dB)", "output gain of the compressed path"),
@@ -245,6 +245,36 @@ int main (int argc, char** argv)
                      { { "voicing", 2 }, { "ratio", 10.0f }, { "attack", 0.5f }, { "threshold", -30.0f }, { "ext", 1 },
                        { "pumpNote", 1 }, { "pumpShape", 0 }, { "depth", 10.0f } },
                      q, 100.0, 0.0, 10.2);
+        // KEY AUTO (2026-10-12): the switch off, a kick routed to the sidechain bus -> the plug-in keys from it by itself == raw with ext=true.
+        compareCase ("PUMP, KEY AUTO with a kick on the sidechain bus -> keys from the kick", pad, &kick, true,
+                     { { "voicing", 2 }, { "ratio", 10.0f }, { "attack", 0.5f }, { "threshold", -30.0f }, { "ext", 0 },
+                       { "pumpNote", 1 }, { "pumpShape", 0 }, { "depth", 10.0f } },
+                     p, 100.0, 8.0, 10.2);
+        tutkal::Params g = p; g.voicing = tutkal::kGlue; g.thresholdDb = -18.0f; g.ratio = 4.0f; g.attackMs = 0.1f; g.releaseMs = 300.0f; g.autoRelease = false;
+        compareCase ("GLUE, KEY AUTO with a kick on the sidechain bus -> keys from the kick (owner's Live case)", pad, &kick, true,
+                     { { "voicing", 0 }, { "threshold", -18.0f }, { "ratio", 4.0f }, { "attack", 0.1f }, { "release", 300.0f }, { "autoRelease", 0 }, { "ext", 0 } },
+                     g, 100.0, 6.0);
+        // KEY AUTO with the bus enabled but silent (Live: "No Input"): the detector stays on the programme == raw with ext=false.
+        Audio silent = kick; for (auto& ch : silent) std::fill (ch.begin(), ch.end(), 0.0f);
+        tutkal::Params s = p; s.ext = false;
+        compareCase ("PUMP, KEY AUTO with a silent sidechain bus -> keys from main input", pad, &silent, true,
+                     { { "voicing", 2 }, { "ratio", 10.0f }, { "attack", 0.5f }, { "threshold", -30.0f }, { "ext", 0 },
+                       { "pumpNote", 1 }, { "pumpShape", 0 }, { "depth", 10.0f } },
+                     s, 100.0, 0.0, 10.2);
+        // KEY AUTO lets go: the kick for the first 3 s, then the sidechain falls silent ("No Input"). For 4 s the detector keeps the (silent)
+        // key, so PUMP does not duck; after that it hears the programme again and ducks the pad by itself.
+        {
+            Audio pad3 = pad, k3 = kick;
+            const size_t n3 = juce::jmin (pad3[0].size(), (size_t) (12 * 48000));
+            for (auto& ch : pad3) ch.resize (n3);
+            for (auto& ch : k3) { ch.resize (n3); std::fill (ch.begin() + 3 * 48000, ch.end(), 0.0f); }
+            auto r = runPlugin (pad3, &k3, true, 512, 512, { { "voicing", 2 }, { "ratio", 10.0f }, { "attack", 0.5f }, { "threshold", -30.0f }, { "ext", 0 },
+                                                          { "pumpNote", 1 }, { "pumpShape", 0 }, { "depth", 10.0f } }, 100.0);
+            auto maxIn = [&] (double a, double b) { float m = 0.0f; for (size_t i = (size_t) (a * 48000 / 512); i < juce::jmin (r.grBlock.size(), (size_t) (b * 48000 / 512)); ++i) m = juce::jmax (m, r.grBlock[i]); return m; };
+            const float held = maxIn (4.0, 6.8), back = maxIn (8.0, 12.0);
+            check (held < 0.01f && back > 3.0f, "PUMP, KEY AUTO lets go after 4 s of a silent sidechain",
+                   juce::String::formatted ("GR 4-6.8 s (silent key, held) %.2f dB, 8-12 s (back on the programme) %.2f dB", held, back));
+        }
         // no play-head at all: tempo falls back to 120
         tutkal::Params f = p; f.bpm = 120.0f;
         compareCase ("PUMP, no play-head -> 120 bpm", pad, &kick, true,
@@ -354,7 +384,7 @@ int main (int argc, char** argv)
             { "makeup", 6.0f, "6.0 dB" }, { "depth", 10.0f, "10.0 dB" },
             { "mix", 100.0f, "100 %" }, { "mix", 47.5f, "47.5 %" }, { "drive", 0.0f, "0 %" },
             { "peakReduction", 0.5f, "5.0" }, { "peakReduction", 1.0f, "10.0" },
-            { "scHpf", 0.0f, "AUTO" }, { "scHpf", 10.0f, "OFF" }, { "scHpf", 200.0f, "200 Hz" },
+            { "scHpf", 0.0f, "OFF" }, { "scHpf", 10.0f, "OFF" }, { "scHpf", 200.0f, "200 Hz" },
             { "pumpNote", 1.0f, "1/8" }, { "pumpNote", 3.0f, "1/2" }, { "pumpShape", 2.0f, "SWELL" }, { "pumpShape", 1.0f, "LINEAR" } };
         for (const auto& e : shown)
         {
@@ -387,7 +417,7 @@ int main (int argc, char** argv)
         check (near (fromText ("attack", "25 ms"), 25.0f) && near (fromText ("attack", "0.002 s"), 2.0f) && near (fromText ("attack", "1.5"), 1.5f), "typed attack: ms, s, bare = ms");
         check (near (fromText ("release", "0.4 s"), 400.0f) && near (fromText ("release", "400 ms"), 400.0f) && near (fromText ("release", "0.4"), 400.0f) && near (fromText ("release", "400"), 400.0f),
                "typed release: 0.4 s / 400 ms / 0.4 / 400");
-        check (near (fromText ("scHpf", "150 Hz"), 150.0f) && near (fromText ("scHpf", "auto"), 0.0f) && near (fromText ("scHpf", "OFF"), 10.0f) && near (fromText ("scHpf", "200"), 200.0f),
+        check (near (fromText ("scHpf", "150 Hz"), 150.0f) && near (fromText ("scHpf", "auto"), 0.0f) && near (fromText ("scHpf", "OFF"), 0.0f) && near (fromText ("scHpf", "200"), 200.0f),
                "typed SC HPF: 150 Hz / auto / OFF / 200");
         check (near (fromText ("peakReduction", "7"), 0.7f) && near (fromText ("mix", "50 %"), 50.0f) && near (fromText ("drive", "25"), 25.0f), "typed PEAK REDUCTION 7 (= 0.7), MIX 50 %, DRIVE 25");
         check (near (fromText ("pumpNote", "1/4"), 2.0f) && near (fromText ("pumpNote", "1/16"), 0.0f) && near (fromText ("pumpShape", "swell"), 2.0f) && near (fromText ("pumpShape", "lin"), 1.0f),

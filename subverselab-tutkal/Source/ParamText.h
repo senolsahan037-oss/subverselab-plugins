@@ -6,7 +6,7 @@
     view and automation lane show the same strings as the panel) and by the panel's type-in boxes.
 
       threshold  -18.0 dB       ratio  4.0 : 1        attack   10.0 ms / 0.10 ms     release  0.30 s
-      makeup/depth  6.0 dB      mix/drive  100 %      peakReduction  5.0 (0 .. 10)   scHpf  AUTO / OFF / 200 Hz
+      makeup/depth  6.0 dB      mix/drive  100 %      peakReduction  5.0 (0 .. 10)   scHpf  OFF / 200 Hz
       pumpNote  1/8             pumpShape  EXP / LINEAR / SWELL
 
     parse() is strict: it returns false for text it cannot read (so a typo changes nothing), accepts a unit only when it
@@ -63,8 +63,7 @@ inline juce::String percent (float v)
 
 inline juce::String hpf (float v)
 {
-    if (v < 0.5f)  return "AUTO";
-    if (v < 20.0f) return "OFF";
+    if (v < 20.0f) return "OFF";   // AUTO (0) and OFF are the same since 2026-10-12: no filter until a frequency is set
     return juce::String (juce::roundToInt (v)) + " Hz";
 }
 
@@ -95,7 +94,7 @@ inline bool parse (const juce::String& id, const juce::String& text, float& plai
     {
         const auto l = t.toLowerCase();
         if (l.startsWith ("auto") || l == "a") { plain = 0.0f; return true; }
-        if (l.startsWith ("off")) { plain = 10.0f; return true; }
+        if (l.startsWith ("off")) { plain = 0.0f; return true; }
     }
     double v = 0.0;
     juce::String u;
