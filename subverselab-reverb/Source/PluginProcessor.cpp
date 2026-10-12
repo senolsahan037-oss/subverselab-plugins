@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SvlParamText.h"
 
 const juce::StringArray KubbeProcessor::placeNames { "Hammam", "Cistern", "Valley" };
 const juce::StringArray KubbeProcessor::placeLines {
@@ -28,24 +29,26 @@ juce::AudioProcessorValueTreeState::ParameterLayout KubbeProcessor::createLayout
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout l;
-    auto pct = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + " %"; });
-    auto hz  = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
+    auto pctBase = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + " %"; });
+    auto pct = [pctBase] (float lo, float hi, float def) { return svl::paramtext::percent (pctBase, lo, hi, def); };
+    auto hzBase = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
                    { return v >= 1000.0f ? String (v / 1000.0f, 1) + " kHz" : String (roundToInt (v)) + " Hz"; });
+    auto hz = [hzBase] (float lo, float hi, float def) { return svl::paramtext::frequency (hzBase, lo, hi, def); };
 
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "place", 1 }, "Place", placeNames, 0));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "mix", 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), 0.3f, pct));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "mix", 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), 0.3f, pct (0.0f, 1.0f, 0.3f)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "decay", 1 }, "Decay",
                                                   NormalisableRange<float> (0.25f, 3.0f, 0.0f, 0.5f), 1.0f,
-                                                  AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return "x" + String (v, 2); })));
+                                                  svl::paramtext::multiplier (AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return "x" + String (v, 2); }), 0.25f, 3.0f, 1.0f)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "predelay", 1 }, "Pre-delay",
                                                   NormalisableRange<float> (0.0f, 250.0f, 0.0f, 0.5f), 0.0f,
-                                                  AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; })));
+                                                  svl::paramtext::milliseconds (AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; }), 0.0f, 250.0f, 0.0f)));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "predelaySync", 1 }, "Pre-delay Sync", noteNames, 0));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "distance", 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "lowCut", 1 }, "Low Cut", hzRange (20.0f, 1000.0f, 150.0f), 20.0f, hz));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "highCut", 1 }, "High Cut", hzRange (1000.0f, 20000.0f, 6000.0f), 20000.0f, hz));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "width", 1 }, "Width", NormalisableRange<float> (0.0f, 1.5f), 1.0f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "duck", 1 }, "Duck", NormalisableRange<float> (0.0f, 1.0f), 0.0f, pct));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "distance", 1 }, "Distance", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct (0.0f, 1.0f, 0.5f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "lowCut", 1 }, "Low Cut", hzRange (20.0f, 1000.0f, 150.0f), 20.0f, hz (20.0f, 1000.0f, 20.0f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "highCut", 1 }, "High Cut", hzRange (1000.0f, 20000.0f, 6000.0f), 20000.0f, hz (1000.0f, 20000.0f, 20000.0f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "width", 1 }, "Width", NormalisableRange<float> (0.0f, 1.5f), 1.0f, pct (0.0f, 1.5f, 1.0f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "duck", 1 }, "Duck", NormalisableRange<float> (0.0f, 1.0f), 0.0f, pct (0.0f, 1.0f, 0.0f)));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "freeze", 1 }, "Freeze", false));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "echoSync", 1 }, "Echo Sync", false));
     return l;
@@ -99,6 +102,8 @@ void KubbeProcessor::prepareToPlay (double sr, int block)
 
     mixSmooth.reset (sr, 0.05);
     mixSmooth.setCurrentAndTargetValue (apvts.getRawParameterValue ("mix")->load());
+    duckSmooth.reset (sr, 0.05);
+    duckSmooth.setCurrentAndTargetValue (apvts.getRawParameterValue ("duck")->load());
     duckEnv = 0.0f;
     duckAttack = std::exp (-1.0f / (0.005f * (float) sr));
     duckRelease = std::exp (-1.0f / (0.30f * (float) sr));
@@ -171,7 +176,7 @@ void KubbeProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     }
 
     mixSmooth.setTargetValue (apvts.getRawParameterValue ("mix")->load());
-    const float duck = apvts.getRawParameterValue ("duck")->load();
+    duckSmooth.setTargetValue (apvts.getRawParameterValue ("duck")->load());
     const int outCh = getTotalNumOutputChannels();
     float duckedMost = 0.0f;
     for (int i = 0; i < n; ++i)
@@ -181,6 +186,7 @@ void KubbeProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         const float coef = level > duckEnv ? duckAttack : duckRelease;
         duckEnv = level + coef * (duckEnv - level);
         // Up to 24 dB down at full Duck, scaled by how loud the source is (full at -12 dBFS).
+        const float duck = duckSmooth.getNextValue();
         const float ducked = 1.0f - juce::Decibels::decibelsToGain (-24.0f * duck * juce::jmin (1.0f, duckEnv * 4.0f));
         duckedMost = juce::jmax (duckedMost, ducked);
 
@@ -209,7 +215,10 @@ void KubbeProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (apvts.state.getType()))
+        {
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            undo.clear();   // the old steps describe a state that is gone
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new KubbeProcessor(); }

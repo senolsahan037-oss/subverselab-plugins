@@ -63,6 +63,10 @@ public:
     static constexpr double pixelsForFullRange = 700.0, fineFactor = 10.0;
     /** > 0: this many pixels for the whole range (and no Cmd-fine drag); a stepped knob needs a short throw so a small drag crosses a step. */
     double pixelsOverride = 0.0;
+    /** Double-click target, asked at the moment of the click (set by the panel: the parameter's default). Unset: the fixed value from setDoubleClickReturnValue. */
+    std::function<double()> doubleClickValueFn;
+    double doubleClickValue() const { return doubleClickValueFn ? doubleClickValueFn() : getDoubleClickReturnValue(); }
+    void resetToDefault() { setValue (doubleClickValue(), juce::sendNotificationSync); }
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;

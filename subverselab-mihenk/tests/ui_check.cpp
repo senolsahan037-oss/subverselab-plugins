@@ -19,6 +19,7 @@
 #include <new>
 #include "../Source/app/MainComponent.h"
 #include "../Source/plugin/PluginProcessor.h"
+#include "../Source/plugin/Params.h"
 #include "../Source/engine/AudioIO.h"
 #include "../Source/dsp/Filters.h"
 #include "../Source/dsp/Spectrum.h"
@@ -459,6 +460,44 @@ int main()
         s.settingsChanged();                                      // a hand turn on a finished master is refused
         check (s.inMeas.integrated >= -14.3 && level && std::abs (s.settings.eq.bell2Db) < 1e-9 && s.status.contains ("finished master"),
                "Input already at the target (" + fmt (s.inMeas.integrated, 1) + " LUFS): level + ceiling only with CHARACTER FULL, a hand turn is refused, the status says why: \"" + s.status.substring (0, 160) + "\"");
+    }
+
+    section ("Double-click on a knob goes to the parameter's default (plug-in and app use the same Def)");
+    {
+        MihenkProcessor p;
+        p.setStandaloneModeForTesting (true);
+        p.getSession().profile.setFolder (tmp.getChildFile ("profile3"));
+        MainComponent panel (p);
+        panel.setPresetsFolder (tmp.getChildFile ("presets"));
+        panel.setFace (true, false);
+        int withId = 0, noId = 0, bad = 0, changed = 0;
+        juce::String badList, changedList;
+        for (int i = 0; i < panel.knobCountForTesting(); ++i)
+        {
+            juce::String label, id; double scale = 1, fixedDef = 0, target = 0; bool stepped = false;
+            if (! panel.knobDoubleClickInfoForTesting (i, label, id, scale, fixedDef, target, stepped)) continue;
+            const auto* d = id.isNotEmpty() ? mihenk::params::findDef (id) : nullptr;
+            if (d == nullptr) { ++noId; continue; }
+            ++withId;
+            const double dv = d->defaultValue();
+            const double expect = stepped ? (double) juce::roundToInt (dv) + 0.5 : dv * scale;
+            if (std::abs (target - expect) > 1.0e-9) { ++bad; badList << " " << label << "(" << id << ")"; }
+            if (std::abs (target - fixedDef) > 1.0e-9)
+            {
+                ++changed;
+                changedList << "\n     " << label << " [" << id << "]  " << juce::String (fixedDef, 3) << " -> " << juce::String (target, 3);
+            }
+        }
+        check (withId > 50 && bad == 0, "Every knob with a parameter id (" + juce::String (withId) + ") double-clicks to that parameter's default; wrong:" + (badList.isEmpty() ? " none" : badList)
+                                          + "; no id (keeps its own value): " + juce::String (noId));
+        std::printf ("     knobs whose double-click value changed (old -> new, display units): %d%s\n", changed, changedList.toRawUTF8());
+        // The real path: turn a knob away, double-click it, it is back on the default.
+        panel.turnKnobForTesting ("TONE AMOUNT", 50.0);
+        panel.doubleClickKnobForTesting ("TONE AMOUNT");
+        check (std::abs (panel.knobValueForTesting ("TONE AMOUNT") - 0.0) < 1.0e-6, "TONE AMOUNT: turned to 50, double-click -> " + fmt (panel.knobValueForTesting ("TONE AMOUNT"), 2) + " (parameter default 0)");
+        panel.turnKnobForTesting ("BELL 1 Q", 3.0);
+        panel.doubleClickKnobForTesting ("BELL 1 Q");
+        check (std::abs (panel.knobValueForTesting ("BELL 1 Q") - mihenk::params::findDef ("bell1Q")->defaultValue()) < 1.0e-4, "BELL 1 Q: double-click -> " + fmt (panel.knobValueForTesting ("BELL 1 Q"), 3));
     }
 
     tmp.deleteRecursively();

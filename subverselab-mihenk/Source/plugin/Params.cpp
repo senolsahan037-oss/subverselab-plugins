@@ -1,5 +1,6 @@
 #include "Params.h"
 #include "../engine/Plan.h"
+#include "SvlParamText.h"
 
 namespace mihenk::params
 {
@@ -155,6 +156,61 @@ std::vector<Def> build()
     v.push_back (real ("toneSmooth", "Tone smooth", "oct", 0.33f, 3.0f, 1.0f, [] (S& s) -> double& { return s.toneSmoothOct; }));
     return v;
 }
+
+// Host-facing text (family batch, 2026-10-12): every real-valued parameter prints in its unit and parses what it prints,
+// plus the bare number in display units. Ids, ranges and defaults are untouched.
+juce::String hzText (float v)
+{
+    if (v >= 1000.0f) return juce::String (v / 1000.0f, 2) + " kHz";
+    return juce::String (v, v < 100.0f ? 1 : 0) + " Hz";
+}
+juce::String msText (float v)
+{
+    return juce::String (v, v < 10.0f ? 2 : (v < 100.0f ? 1 : 0)) + " ms";
+}
+
+juce::AudioParameterFloatAttributes textFor (const Def& d, float def)
+{
+    namespace pt = svl::paramtext;
+    using A = juce::AudioParameterFloatAttributes;
+    const float lo = d.minimum, hi = d.maximum;
+    const juce::String id = d.id, u = d.unit;
+    const bool signedRange = lo < 0.0f;
+    A a;
+    if (u == "Hz")
+    {
+        if (id == "monoBelow")
+        {
+            a = a.withStringFromValueFunction ([] (float v, int) { return v <= 0.0f ? juce::String ("OFF") : hzText (v); });
+            const auto fr = pt::frequency (A(), lo, hi, def).getValueFromStringFunction();
+            return a.withValueFromStringFunction ([fr] (const juce::String& t)
+            {
+                const auto l = t.trim().toLowerCase();
+                if (l == "off" || l.startsWith ("off")) return 0.0f;
+                return fr (t);
+            });
+        }
+        return pt::frequency (a.withStringFromValueFunction ([] (float v, int) { return hzText (v); }), lo, hi, def);
+    }
+    if (u == "ms")
+        return pt::milliseconds (a.withStringFromValueFunction ([] (float v, int) { return msText (v); }), lo, hi, def);
+    if (u == "dB" || u == "dBFS" || u == "dBTP" || u == "dB/oct" || u == "LUFS")
+    {
+        const int dec = u == "dB/oct" ? 2 : 1;
+        return pt::decibels (a.withStringFromValueFunction ([=] (float v, int)
+        {
+            return (signedRange && v > 0.0f ? juce::String ("+") : juce::String()) + juce::String (v, dec) + " " + u;
+        }), lo, hi, def);
+    }
+    if (u == ":1")
+        return pt::multiplier (a.withStringFromValueFunction ([] (float v, int) { return juce::String (v, 1) + ":1"; }), lo, hi, def);
+    if (u == "oct")
+        return pt::multiplier (a.withStringFromValueFunction ([] (float v, int) { return juce::String (v, 2) + " oct"; }), lo, hi, def);
+    // Unit-less 0..1 / 0..2 amounts are percentages (WIDTH 0..200 %, COMP MIX, RMS / PEAK, TONE AMOUNT); the Qs are plain numbers.
+    if (id == "bell1Q" || id == "bell2Q")
+        return pt::multiplier (a.withStringFromValueFunction ([] (float v, int) { return juce::String (v, 2); }), lo, hi, def);
+    return pt::percent (a.withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v * 100.0f)) + " %"; }), lo, hi, def);
+}
 } // namespace
 
 double Def::defaultValue() const
@@ -188,6 +244,13 @@ const std::vector<Def>& definitions()
     return defs;
 }
 
+const Def* findDef (const juce::String& id)
+{
+    for (const auto& d : definitions())
+        if (d.id == id) return &d;
+    return nullptr;
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -209,7 +272,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
                 juce::NormalisableRange<float> range (d.minimum, d.maximum);
                 if (d.midpoint > d.minimum && d.midpoint < d.maximum) range.setSkewForCentre (d.midpoint);
                 layout.add (std::make_unique<juce::AudioParameterFloat> (pid, d.name, range, juce::jlimit (d.minimum, d.maximum, def),
-                                                                         juce::AudioParameterFloatAttributes().withLabel (d.unit)));
+                                                                         textFor (d, def)));
                 break;
             }
         }

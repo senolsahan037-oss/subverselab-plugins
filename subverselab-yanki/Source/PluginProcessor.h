@@ -8,7 +8,7 @@
 #endif
 
 // The engine: a verbatim copy of prototypes/YANKI/Source/YankiEngine.h,
-// md5 e3385268130e64043b5497dd8b5f3736 (render --selftest re-checks the md5).
+// md5 608b9d2317a63ab7939f7b64b3c2814e (render --selftest re-checks the md5).
 // The plugin never edits it; the warnings JUCE's stricter set would raise in
 // it are silenced here, at the include, not in the file.
 JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wfloat-equal", "-Wshadow", "-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local",
@@ -116,6 +116,9 @@ public:
     void applyPreset (int index);
     /** -1 = none (the plug-in's own opening state). */
     int currentPreset() const { return presetIndex.load(); }
+    /** Double-click value (plain, not normalised) of a parameter: the active preset's value if it sets that parameter, else the current
+        MOOD's recalled value (TIME, TONE, WEAR, MIX, SPREAD, FEEDBACK, HEADS), else the parameter default. Message thread. */
+    float resetValueFor (const juce::String& paramId) const;
     /** True once a parameter of the current preset has moved. */
     bool presetEdited() const;
 

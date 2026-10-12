@@ -174,7 +174,7 @@ void GenerationDial::pick (float x)
     for (int i = 1; i < 5; ++i)
         if (std::abs (x - xOf (i)) < std::abs (x - xOf (best))) best = i;
     if (auto* p = proc.apvts.getParameter ("generation"))
-        p->setValueNotifyingHost (p->convertTo0to1 ((float) best));
+        p->setValueNotifyingHost (p->convertTo0to1 ((float) best));   // inside the gesture mouseDown / mouseUp open
     repaint();
 }
 
@@ -568,6 +568,8 @@ KasetEditor::KasetEditor (KasetProcessor& p)
 #endif
 {
     setLookAndFeel (&lnf);
+    setWantsKeyboardFocus (true);
+    addMouseListener (this, true);
     mark = juce::ImageCache::getFromMemory (BinaryData::mark_cream_png, BinaryData::mark_cream_pngSize);
     wordmark = juce::ImageCache::getFromMemory (BinaryData::wordmark_cream_png, BinaryData::wordmark_cream_pngSize);
 
@@ -579,8 +581,7 @@ KasetEditor::KasetEditor (KasetProcessor& p)
         auto b = std::make_unique<SelectorButton> (KasetProcessor::tapeNames[i]);
         b->onClick = [this, i]
         {
-            if (auto* param = proc.apvts.getParameter ("tape"))
-                param->setValueNotifyingHost (param->convertTo0to1 ((float) i));
+            svl::setParamAsGesture (proc.apvts.getParameter ("tape"), (float) i);   // one click = one undo step
         };
         addAndMakeVisible (*b);
         tapeButtons.push_back (std::move (b));
@@ -588,8 +589,7 @@ KasetEditor::KasetEditor (KasetProcessor& p)
 
     auto setPlay = [this] (bool on)
     {
-        if (auto* param = proc.apvts.getParameter ("play"))
-            param->setValueNotifyingHost (on ? 1.0f : 0.0f);
+        svl::setParamAsGesture (proc.apvts.getParameter ("play"), on ? 1.0f : 0.0f);   // one click = one undo step
     };
     playKey.onClick = [setPlay] { setPlay (true); };
     stopKey.onClick = [setPlay] { setPlay (false); };
@@ -597,6 +597,12 @@ KasetEditor::KasetEditor (KasetProcessor& p)
     autoAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "autoGain", autoKey);
     for (auto* k : { &playKey, &stopKey, &autoKey })
         addAndMakeVisible (*k);
+
+    // TRACK: a latching selector in the tape selector's language, under it. One click = one undo step (the attachment opens and closes the gesture).
+    trackKey.setClickingTogglesState (true);
+    trackKey.setTooltip ("TRACK: one low-latency head for recording through KASET. MIX (off): the full five-head transport.");
+    trackAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "track", trackKey);
+    addAndMakeVisible (trackKey);
 
     const std::pair<const char*, const char*> ids[] {
         { "input", "INPUT" }, { "drive", "SATURATION" }, { "wow", "WOW" }, { "flutter", "FLUTTER" },
@@ -629,6 +635,24 @@ KasetEditor::KasetEditor (KasetProcessor& p)
     licenseOverlay.setVisible (! proc.license.isLicensed());
 #endif
     startTimerHz (30);
+}
+
+bool KasetEditor::keyPressed (const juce::KeyPress& key)
+{
+#if SVL_LICENSING
+    if (licenseOverlay.isVisible())
+        return false;
+#endif
+    return svl::handleUndoKey (proc.undo, key);
+}
+
+void KasetEditor::mouseDown (const juce::MouseEvent& e)
+{
+#if SVL_LICENSING
+    if (licenseOverlay.isVisible())
+        return;
+#endif
+    svl::takeFocusOnClick (*this, e);
 }
 
 KasetEditor::~KasetEditor()
@@ -786,6 +810,18 @@ void KasetEditor::paint (juce::Graphics& g)
     bracket ((float) playKey.getX(), (float) stopKey.getRight(), 80.0f, "SIGNAL PATH");
     bracket ((float) autoKey.getX(), (float) autoKey.getRight(), 80.0f, "LEVEL");
     bracket ((float) tapeButtons.front()->getX(), (float) tapeButtons.back()->getRight(), 80.0f, "TAPE SELECTOR");
+    // TRACK latency window: what the host is told, in samples (66 / 72 with TRACK on at 44.1 / 48 kHz, 660 / 720 off).
+    {
+        const auto win = juce::Rectangle<float> (908.0f, 144.0f, 66.0f, 22.0f);
+        g.setColour (juce::Colour (0xff020d0c));
+        g.fillRoundedRectangle (win, 3.0f);
+        g.setColour (Theme::vfdOff);
+        g.drawRoundedRectangle (win.reduced (0.5f), 3.0f, 1.0f);
+        g.setColour (trackKey.getToggleState() ? Theme::vfd : Theme::vfd.withAlpha (0.45f));
+        tracked (g, juce::String (proc.getLatencySamples()) + " SMP", Theme::mono (9.0f), win, juce::Justification::centred, 0.1f);
+        g.setColour (Theme::ink.withAlpha (0.85f));
+        tracked (g, "LATENCY", Theme::legend (8.0f), { 982.0f, 144.0f, 62.0f, 22.0f }, juce::Justification::centredLeft, 0.24f);
+    }
     // Knob row: the machined knobs shared with Kubbe.
     const std::tuple<int, int, const char*> groups[] { { 0, 1, "RECORD" }, { 2, 3, "TRANSPORT" }, { 4, 5, "TAPE" }, { 6, 7, "OUTPUT" } };
     for (auto [a, z, name] : groups)
@@ -840,6 +876,7 @@ void KasetEditor::resized()
     dial.setBounds (318, 76, 480, 92);
     for (int i = 0; i < (int) tapeButtons.size(); ++i)
         tapeButtons[(size_t) i]->setBounds (832 + i * 72, 92, 66, 40);
+    trackKey.setBounds (832, 138, 66, 34);
 
     // Knob row.
     const int size = 62, cell = 112, gap = 20, cy = 262;
@@ -900,4 +937,9 @@ void KasetEditor::timerCallback()
         deckB.repaint();
     }
     dial.repaint();
+    if (proc.getLatencySamples() != lastLatency)
+    {
+        lastLatency = proc.getLatencySamples();
+        repaint (900, 138, 150, 40);
+    }
 }

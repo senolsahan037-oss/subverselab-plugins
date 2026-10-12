@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "SvlUndo.h"
 #if SVL_LICENSING
 #include "LicenseConfig.h"
 #endif
@@ -23,7 +24,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 20.0; }
+    double getTailLengthSeconds() const override { return 30.0; }   // Cistern at DECAY x3 has an RT60 of about 18 s
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -42,6 +43,7 @@ public:
     svrb::Controls controlsFor (double bpm) const;
 
     juce::AudioProcessorValueTreeState apvts;
+    svl::ParamUndo undo { *this };   // Cmd+Z / Cmd+Shift+Z: editor edits only, never host automation (SvlUndo.h)
 #if SVL_LICENSING
     svl::License license { kubbeLicenseConfig() };   // no licence: audio passes through untouched
 #endif
@@ -56,6 +58,7 @@ private:
 
     juce::AudioBuffer<float> dry, wet, fadeWet, silence;
     juce::SmoothedValue<float> mixSmooth;
+    juce::SmoothedValue<float> duckSmooth;   // DUCK is read once per block; applied as it came it is a 24 dB x env staircase at the block rate (controlproof, check 3)
     float duckEnv = 0.0f, duckAttack = 0.0f, duckRelease = 0.0f;
     double sampleRate = 44100.0;
 

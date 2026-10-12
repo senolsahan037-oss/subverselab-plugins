@@ -18,6 +18,8 @@
 #include "../Source/plugin/PluginProcessor.h"
 #include "../Source/engine/Preset.h"
 #include "../Source/dsp/Filters.h"
+#include "../Source/plugin/Params.h"
+#include "SvlParamTextTests.h"
 
 using namespace mihenk;
 
@@ -402,6 +404,47 @@ int checks()
         const int whole = part.getNumSamples() / RtChain::blockSize * RtChain::blockSize;   // the last partial block is still in the framing buffer
         check (got == whole && inPk > 0.1 && outPk > 0.1 && lim > 0.1, "One frame per processed sample (" + juce::String (got) + " of " + juce::String (whole) + "), IN peak " + juce::String (gainToDb (inPk), 1)
                                                                             + " dBFS, OUT peak " + juce::String (gainToDb (outPk), 1) + " dBFS, limiter GR up to " + juce::String (lim, 1) + " dB");
+    }
+    {
+        section ("Host parameter text: units on every real-valued parameter, type-in round trip");
+        MihenkProcessor q;
+        q.setStandaloneModeForTesting (false);
+        std::vector<juce::String> ids;
+        for (const auto& d : params::definitions())
+            if (d.kind == params::Def::real) ids.push_back (d.id);
+        const auto t = svl::paramtexttest::run (q, ids, {}, {});
+        check (t.fail == 0, juce::String (ids.size()) + " float parameters, " + juce::String (t.pass) + " of " + juce::String (t.pass + t.fail) + " type-in checks passed"
+                                + (t.failures.isEmpty() ? juce::String() : " first failures: " + t.failures.joinIntoString (" | ", 0, 6)));
+        auto val = [&q] (const char* id, const char* text)
+        {
+            auto* r = dynamic_cast<juce::RangedAudioParameter*> (q.getState().getParameter (id));
+            return r->convertFrom0to1 (r->getValueForText (text));
+        };
+        auto txt = [&q] (const char* id, float v)
+        {
+            auto* r = dynamic_cast<juce::RangedAudioParameter*> (q.getState().getParameter (id));
+            return r->getText (r->convertTo0to1 (v), 0);
+        };
+        struct Case { const char* id; const char* text; float want; float tol; };
+        const Case cases[] = {
+            { "lowCutHz", "25", 25.0f, 1e-3f }, { "lowCutHz", "25 Hz", 25.0f, 1e-3f }, { "highShelfHz", "6", 6000.0f, 1e-2f }, { "highShelfHz", "6 kHz", 6000.0f, 1e-2f },
+            { "highShelfHz", "6000 Hz", 6000.0f, 1e-2f }, { "highShelfHz", "6k", 6000.0f, 1e-2f }, { "bell2Hz", "850", 850.0f, 1e-2f }, { "bell2Hz", "99999", 16000.0f, 0.0f },
+            { "monoBelow", "OFF", 0.0f, 0.0f }, { "monoBelow", "off", 0.0f, 0.0f }, { "monoBelow", "120", 120.0f, 1e-3f },
+            { "trim", "-6", -6.0f, 1e-4f }, { "trim", "+3.0 dB", 3.0f, 1e-4f }, { "trim", "-99 dB", -24.0f, 0.0f },
+            { "ratio", "2", 2.0f, 1e-5f }, { "ratio", "2.0:1", 2.0f, 1e-5f }, { "ratio", "99", 8.0f, 0.0f },
+            { "attack", "120 ms", 120.0f, 1e-3f }, { "release", "0.5 s", 500.0f, 1e-2f }, { "width", "150", 1.5f, 1e-5f }, { "width", "150 %", 1.5f, 1e-5f },
+            { "mix", "25", 0.25f, 1e-5f }, { "ceiling", "-1.0 dBTP", -1.0f, 1e-5f }, { "targetLufs", "-14 LUFS", -14.0f, 1e-4f }, { "tilt", "+0.75 dB/oct", 0.75f, 1e-5f } };
+        int bad = 0;
+        juce::String first;
+        for (const auto& c : cases)
+        {
+            const float got = val (c.id, c.text);
+            if (std::abs (got - c.want) > c.tol) { if (++bad == 1) first = juce::String (c.id) + " \"" + c.text + "\" -> " + juce::String (got, 4) + " (wanted " + juce::String (c.want, 4) + ")"; }
+        }
+        check (bad == 0, juce::String ((int) (sizeof (cases) / sizeof (cases[0])) - bad) + " of " + juce::String ((int) (sizeof (cases) / sizeof (cases[0]))) + " literal type-in cases" + (bad ? " first: " + first : juce::String()));
+        const bool units = txt ("trim", 0.0f) == "0.0 dB" && txt ("highShelfHz", 6000.0f) == "6.00 kHz" && txt ("bell2Hz", 850.0f) == "850 Hz" && txt ("ratio", 2.0f) == "2.0:1"
+                           && txt ("monoBelow", 0.0f) == "OFF" && txt ("width", 1.0f) == "100 %" && txt ("targetLufs", -14.0f) == "-14.0 LUFS" && txt ("attack", 25.0f) == "25.0 ms";
+        check (units, "Text with units: trim \"" + txt ("trim", 0.0f) + "\", high shelf \"" + txt ("highShelfHz", 6000.0f) + "\", ratio \"" + txt ("ratio", 2.0f) + "\", mono below \"" + txt ("monoBelow", 0.0f) + "\", width \"" + txt ("width", 1.0f) + "\"");
     }
     p.setPlayHead (nullptr);
     std::printf ("\n%s\n", failures == 0 ? "ALL PASS" : (juce::String (failures) + " FAILED").toRawUTF8());

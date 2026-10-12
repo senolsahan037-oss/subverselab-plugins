@@ -13,6 +13,8 @@
 #include "EngineCli.h"
 #include "../Source/PluginProcessor.h"
 #include "SvlUndoTests.h"
+#include "MonoSafeTests.h"
+#include "SvlParamTextTests.h"
 #include "SvlControlProof.h"
 
 namespace
@@ -376,6 +378,87 @@ bool pluginChecks()
         checks += u.pass + u.fail;
         all &= check ("plugin_undo_redo", u.fail == 0, juce::String (u.pass) + " of " + juce::String (u.pass + u.fail) + " undo checks passed");
     }
+    {   // 17. type-in text of every float parameter (SvlParamTextTests.h, KORO adaptation) plus the audit's cases as literals
+        auto p = fresh (48000.0);
+        const auto t = svl::paramtexttest::run (*p, { "double", "width", "tone", "harmony", "color", "output", "level1", "level2", "level3",
+                                                      "pan1", "pan2", "pan3", "glide", "timing" },
+                                                { { "color", 0.09f } }, { "color", "pan1", "pan2", "pan3" });
+        checks += t.pass + t.fail;
+        all &= check ("plugin_typein_all_float_params", t.fail == 0, juce::String (t.pass) + " of " + juce::String (t.pass + t.fail) + " type-in checks passed"
+                      + (t.failures.isEmpty() ? juce::String() : " first failures: " + t.failures.joinIntoString (" | ", 0, 6)));
+
+        auto val = [&p] (const char* id, const char* text)
+        {
+            auto* r = dynamic_cast<juce::RangedAudioParameter*> (p->apvts.getParameter (id));
+            return r->convertFrom0to1 (r->getValueForText (text));
+        };
+        struct Case { const char* id; const char* text; float want; float tol; };
+        const Case cases[] = {
+            { "double", "OFF", 0.0f, 0.0f }, { "double", "off", 0.0f, 0.0f }, { "double", "7", 7.0f, 1e-5f }, { "double", "10", 10.0f, 0.0f }, { "double", "99", 10.0f, 0.0f },
+            { "width", "3.8", 3.8f, 1e-5f }, { "width", "10", 10.0f, 0.0f },
+            { "harmony", "OFF", 0.0f, 0.0f }, { "harmony", "6", 6.0f, 1e-5f },
+            { "tone", "3000", 0.0f, 1e-4f }, { "tone", "16 kHz", 1.0f, 1e-4f }, { "tone", "16000 Hz", 1.0f, 1e-4f },
+            { "tone", "6928", 0.5f, 5e-4f }, { "tone", "6928 Hz", 0.5f, 5e-4f }, { "tone", "6.9 kHz", 0.4985f, 3e-3f }, { "tone", "6.928k", 0.5f, 5e-4f }, { "tone", "6", 0.4143f, 3e-3f },
+            { "color", "LOW 3RD", 0.0f, 0.0f }, { "color", "high 3rd", 1.0f / 3.0f, 1e-6f }, { "color", "5TH", 2.0f / 3.0f, 1e-6f }, { "color", "oct", 1.0f, 0.0f },
+            { "color", "LOW 3RD > HIGH 3RD", 1.0f / 6.0f, 1e-6f }, { "color", "5TH > OCT", 5.0f / 6.0f, 1e-6f }, { "color", "0.5", 0.5f, 1e-6f },
+            { "output", "-6", -6.0f, 1e-5f }, { "output", "+3.5 dB", 3.5f, 1e-5f }, { "output", "-40", -12.0f, 0.0f },
+            { "level1", "7.5", 7.5f, 1e-5f }, { "level3", "10", 10.0f, 0.0f },
+            { "pan1", "C", 0.0f, 0.0f }, { "pan2", "L 50", -0.5f, 1e-6f }, { "pan3", "R 100", 1.0f, 0.0f }, { "pan1", "-50", -0.5f, 1e-6f }, { "pan1", "25", 0.25f, 1e-6f }, { "pan2", "l30", -0.3f, 1e-6f },
+            { "glide", "60", 60.0f, 1e-4f }, { "glide", "60 ms", 60.0f, 1e-4f }, { "timing", "12 ms", 12.0f, 1e-4f }, { "timing", "0.01 s", 10.0f, 1e-4f }, { "timing", "99", 30.0f, 0.0f },
+        };
+        int bad = 0; juce::String first;
+        for (const auto& c : cases)
+        {
+            const float got = val (c.id, c.text);
+            if (! (std::abs (got - c.want) <= c.tol)) { if (++bad == 1) first = juce::String (c.id) + " \"" + c.text + "\" gave " + juce::String (got) + " want " + juce::String (c.want); }
+        }
+        all &= check ("plugin_typein_literals", bad == 0, juce::String ((int) (sizeof (cases) / sizeof (cases[0])) - bad) + " of " + juce::String ((int) (sizeof (cases) / sizeof (cases[0]))) + " literal cases" + (bad ? " first failure: " + first : juce::String()));
+    }
+    {   // 18. MONO SAFE ON (HARMONY off, DOUBLE 10, WIDTH 10, pink noise): the mono sum is the latency-aligned mono input
+        double sideEng = 0.0;
+        const double eng = svl::monosafetest::monoSumResidualDb (&sideEng);
+        all &= check ("engine_mono_safe_mono_sum", eng < -90.0 && sideEng > -25.0,
+                      "mono_sum_minus_input=" + juce::String (eng, 2) + " dB re input mono (limit -90), side=" + juce::String (sideEng, 2) + " dB re input mono (must be > -25: the doubles are really there)");
+        auto p = std::make_unique<KoroProcessor>();
+        setParam (*p, "monoSafe", 1.0f); setParam (*p, "harmony", 0.0f); setParam (*p, "double", 10.0f); setParam (*p, "width", 10.0f);
+        p->prepareToPlay (48000.0, 512);
+        const size_t n = 48000 * 4;
+        const auto a = svl::monosafetest::pinkNoise (n, 5u), b = svl::monosafetest::pinkNoise (n, 77u);
+        std::vector<float> L (n), R (n);
+        for (size_t i = 0; i < n; ++i) { L[i] = a[i]; R[i] = 0.5f * b[i] + 0.5f * a[i]; }
+        const auto y = run (*p, L, R, 512);
+        const int D = p->getLatencySamples();
+        double ref = 0.0, err = 0.0, side = 0.0;
+        for (size_t i = (size_t) D + 24000; i < n; ++i)   // after the 50 ms parameter smoothing and the voice fades have settled
+        {
+            const double m = 0.5 * ((double) L[i - (size_t) D] + R[i - (size_t) D]);
+            const double o = 0.5 * ((double) y[2 * i] + y[2 * i + 1]);
+            ref += m * m; err += (o - m) * (o - m);
+            const double sd = 0.5 * ((double) y[2 * i] - y[2 * i + 1]);
+            side += sd * sd;
+        }
+        const double plug = 10.0 * std::log10 (err / ref + 1.0e-30), plugSide = 10.0 * std::log10 (side / ref + 1.0e-30);
+        all &= check ("plugin_mono_safe_mono_sum", plug < -90.0 && plugSide > -25.0,
+                      "mono_sum_minus_input=" + juce::String (plug, 2) + " dB (limit -90), side=" + juce::String (plugSide, 2) + " dB, latency=" + juce::String (D));
+    }
+    {   // 19. MONO SAFE OFF: bit-identical to the engine as it was before the MONO SAFE change
+        const uint64_t h = svl::monosafetest::offHash();
+        constexpr uint64_t kOffHashBefore = 2942288761602688333ull;   // taken from the pre-change engine, same compiler and flags
+        all &= check ("engine_mono_safe_off_bit_identical", h == kOffHashBefore,
+                      "fnv1a=" + juce::String ((juce::int64) h) + " before_change=" + juce::String ((juce::int64) kOffHashBefore));
+    }
+    {   // 20. the editor dims LEVEL 2/3 and PAN 2/3 from this: 3 harmony voices only in the CHOIR mood
+        auto p = std::make_unique<KoroProcessor>();
+        juce::String d; bool ok = true;
+        for (int m = 0; m < 6; ++m)
+        {
+            p->applyMood (m);
+            const int vc = p->moodHarmonyVoices();
+            ok &= (vc == (m == 5 ? 3 : 1));
+            d << KoroProcessor::moodNames[m] << "=" << vc << " ";
+        }
+        all &= check ("plugin_mood_harmony_voices", ok, d + "(want CHOIR=3, others 1)");
+    }
     return all;
 }
 
@@ -491,6 +574,11 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI init;
     for (int i = 1; i < argc; ++i)
         if (juce::String (argv[i]).startsWith ("--controlproof")) return runControlProof (argc, argv);
+    if (argc == 2 && juce::String (argv[1]) == "--print-offhash")
+    {
+        std::printf ("offHash=%llu\n", (unsigned long long) svl::monosafetest::offHash());
+        return 0;
+    }
     if (argc == 2 && juce::String (argv[1]) == "--selftest")
     {
         std::printf ("== ENGINE selftest (tools/engine_render.cpp, verbatim; engine md5 %s) ==\n", KORO_ENGINE_MD5);

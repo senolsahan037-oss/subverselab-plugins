@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SvlParamText.h"
 
 const juce::StringArray KoroProcessor::moodNames { "TIGHT DOUBLE", "ARABESK CHOIR", "BACKING STACK", "THIRD", "FIFTH", "CHOIR" };
 const juce::StringArray KoroProcessor::keyNames { "AUTO", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -56,6 +57,60 @@ juce::String colourText (float v)
     const int a = juce::jlimit (0, 2, (int) std::floor (x));
     return juce::String (names[a]) + " > " + names[a + 1];
 }
+
+/** COLOR type-in: a detent name ("LOW 3RD", "high3rd", "5th", "oct"), an in-between "A > B" (the middle of the two), or a bare 0..1. */
+float colourFromText (const juce::String& text, float fallback)
+{
+    auto key = [] (juce::String t) { return t.toLowerCase().removeCharacters (" _-"); };
+    auto detent = [&key] (const juce::String& t, float& out)
+    {
+        const auto k = key (t);
+        if (k == "low3rd" || k == "low" || k == "lowthird")                    { out = 0.0f;        return true; }
+        if (k == "high3rd" || k == "high" || k == "highthird")                 { out = 1.0f / 3.0f; return true; }
+        if (k == "5th" || k == "fifth")                            { out = 2.0f / 3.0f; return true; }
+        if (k == "oct" || k == "octave")                                       { out = 1.0f;        return true; }
+        return false;
+    };
+    float a = 0.0f, b = 0.0f;
+    const int gt = text.indexOfChar ('>');
+    if (gt > 0 && detent (text.substring (0, gt), a) && detent (text.substring (gt + 1), b))
+        return juce::jlimit (0.0f, 1.0f, 0.5f * (a + b));
+    if (detent (text, a))
+        return a;
+    double v; juce::String rest;
+    if (! svl::paramtext::readNumber (text, v, rest)) return fallback;
+    return juce::jlimit (0.0f, 1.0f, (float) v);
+}
+
+/** 0..10 knobs: "5.6", "OFF" (where the display shows it) -> value; clamped. */
+float tenthsFromText (const juce::String& text, float fallback, bool hasOff)
+{
+    if (hasOff && text.trim().equalsIgnoreCase ("off")) return 0.0f;
+    double v; juce::String rest;
+    if (! svl::paramtext::readNumber (text, v, rest)) return fallback;
+    return juce::jlimit (0.0f, 10.0f, (float) v);
+}
+
+/** TONE: Hz ("6928", "6928 Hz"), kHz ("6.9 kHz", "6k"); a bare number below 100 is kHz. Returns the 0..1 knob value. */
+float toneFromText (const juce::String& text, float fallback)
+{
+    double v; juce::String rest;
+    if (! svl::paramtext::readNumber (text, v, rest)) return fallback;
+    double hz = rest.startsWith ("k") ? v * 1000.0 : rest.startsWith ("h") ? v : (v < 100.0 ? v * 1000.0 : v);
+    hz = juce::jlimit (3000.0, 16000.0, hz);
+    return juce::jlimit (0.0f, 1.0f, (float) (std::log (hz / 3000.0) / std::log (16.0 / 3.0)));
+}
+
+/** PAN: "C", "L 50", "R 100", "l50", or a bare signed number -100..100 (negative = left). Returns -1..1. */
+float panFromText (const juce::String& text, float fallback)
+{
+    const auto t = text.trim().toLowerCase();
+    if (t == "c" || t == "centre" || t == "center") return 0.0f;
+    double v; juce::String rest;
+    if (! svl::paramtext::readNumber (t, v, rest)) return fallback;
+    if (t.startsWithChar ('l') && v > 0.0) v = -v;
+    return juce::jlimit (-1.0f, 1.0f, (float) (v / 100.0));
+}
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout KoroProcessor::createLayout()
@@ -64,26 +119,37 @@ juce::AudioProcessorValueTreeState::ParameterLayout KoroProcessor::createLayout(
     const MoodFace d = faceOf (moodControls (0));   // defaults = TIGHT DOUBLE
     AudioProcessorValueTreeState::ParameterLayout l;
 
-    auto tenths = [] (const char* offText)
+    // Type-in (family batch 2026-10-12): every float parameter reads what its display prints, and the bare number in display units.
+    auto tenths = [] (const char* offText, float fallback)
     {
+        const bool hasOff = offText != nullptr;
         return AudioParameterFloatAttributes().withStringFromValueFunction ([offText] (float v, int)
-                   { return v <= 0.0f && offText != nullptr ? String (offText) : String (v, 1); });
+                   { return v <= 0.0f && offText != nullptr ? String (offText) : String (v, 1); })
+               .withValueFromStringFunction ([hasOff, fallback] (const String& t) { return tenthsFromText (t, fallback, hasOff); });
     };
-    auto ms = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; });
+    auto ms = [] (float lo, float hi)
+    {
+        return svl::paramtext::milliseconds (AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; }),
+                                             lo, hi, 0.0f);
+    };
     auto pan = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
-                   { const int p = roundToInt (v * 100.0f); return p == 0 ? String ("C") : (p < 0 ? "L " : "R ") + String (std::abs (p)); });
+                   { const int p = roundToInt (v * 100.0f); return p == 0 ? String ("C") : (p < 0 ? "L " : "R ") + String (std::abs (p)); })
+               .withValueFromStringFunction ([] (const String& t) { return panFromText (t, 0.0f); });
 
     // Front.
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "double", 1 }, "Double", NormalisableRange<float> (0.0f, 10.0f), d.dbl, tenths ("OFF")));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "width", 1 }, "Width", NormalisableRange<float> (0.0f, 10.0f), d.width, tenths (nullptr)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "double", 1 }, "Double", NormalisableRange<float> (0.0f, 10.0f), d.dbl, tenths ("OFF", d.dbl)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "width", 1 }, "Width", NormalisableRange<float> (0.0f, 10.0f), d.width, tenths (nullptr, d.width)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "tone", 1 }, "Tone", NormalisableRange<float> (0.0f, 1.0f), d.tone,
                                                   AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
-                                                      { return String (roundToInt (3000.0 * std::pow (16.0 / 3.0, (double) v))) + " Hz"; })));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "harmony", 1 }, "Harmony", NormalisableRange<float> (0.0f, 10.0f), d.harmony, tenths ("OFF")));
+                                                      { return String (roundToInt (3000.0 * std::pow (16.0 / 3.0, (double) v))) + " Hz"; })
+                                                      .withValueFromStringFunction ([def = d.tone] (const String& t) { return toneFromText (t, def); })));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "harmony", 1 }, "Harmony", NormalisableRange<float> (0.0f, 10.0f), d.harmony, tenths ("OFF", d.harmony)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "color", 1 }, "Color", NormalisableRange<float> (0.0f, 1.0f), d.color,
-                                                  AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return colourText (v); })));
+                                                  AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return colourText (v); })
+                                                      .withValueFromStringFunction ([def = d.color] (const String& t) { return colourFromText (t, def); })));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "output", 1 }, "Output", NormalisableRange<float> (-12.0f, 12.0f), 0.0f,
-                                                  AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
+                                                  svl::paramtext::decibels (AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; }),
+                                                                            -12.0f, 12.0f, 0.0f)));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "lock", 1 }, "Lock", false));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "bypass", 1 }, "Bypass", false));
     // MOOD writes other parameters when it is pressed, so it is a META parameter (auval checks this).
@@ -91,11 +157,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout KoroProcessor::createLayout(
 
     // Rear plate.
     for (int v = 0; v < 3; ++v)
-        l.add (std::make_unique<AudioParameterFloat> (ParameterID { kLevelIds[v], 1 }, "Level " + String (v + 1), NormalisableRange<float> (0.0f, 10.0f), d.level[v], tenths (nullptr)));
+        l.add (std::make_unique<AudioParameterFloat> (ParameterID { kLevelIds[v], 1 }, "Level " + String (v + 1), NormalisableRange<float> (0.0f, 10.0f), d.level[v], tenths (nullptr, d.level[v])));
     for (int v = 0; v < 3; ++v)
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { kPanIds[v], 1 }, "Pan " + String (v + 1), NormalisableRange<float> (-1.0f, 1.0f), d.pan[v], pan));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "glide", 1 }, "Glide", NormalisableRange<float> (0.0f, 120.0f), d.glide, ms));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "timing", 1 }, "Timing", NormalisableRange<float> (0.0f, 30.0f), d.timing, ms));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "glide", 1 }, "Glide", NormalisableRange<float> (0.0f, 120.0f), d.glide, ms (0.0f, 120.0f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "timing", 1 }, "Timing", NormalisableRange<float> (0.0f, 30.0f), d.timing, ms (0.0f, 30.0f)));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "monoSafe", 1 }, "Mono Safe", d.monoSafe));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "keyOverride", 1 }, "Key Override", keyNames, 0));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "scaleOverride", 1 }, "Scale Override", scaleOverrideNames, 0));

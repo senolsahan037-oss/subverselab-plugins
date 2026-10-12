@@ -15,6 +15,10 @@
     loses a little more top, adds its own hiss and its own speed errors, the
     way a dubbed cassette on a Turkish market stall did.
 
+    TRACK (a switch on the panel) is the low-latency mode: the five trips share ONE read head centred at 1.5 ms instead of five heads at 3 ms
+    plus a pad (66 samples at 44.1 kHz instead of 660). Their wow and flutter are summed into that head, and the WOW depth is capped so the
+    head never leaves its room. The MIX path (switch off) is the code above, untouched.
+
     Deterministic: every "random" movement comes from a seeded generator, so
     the same input and settings give the same output, bit for bit.
 */
@@ -132,8 +136,13 @@ public:
         driftLp.setLowpass (0.35f, sr);
         hissLp.setLowpass (7500.0f, sr);
         hissHp.setLowpass (900.0f, sr);
+        // prepare() starts a new run: the filters must not carry what the previous run left in them (controlproof: 1 s of silence after a
+        // chord on the same instance began with a decaying copy of the chord, up to -5 dBFS at full settings). A fresh instance already holds zeros.
+        preEmph.reset(); deEmph.reset(); headBump.reset(); lowLoss.reset(); gap1.reset(); gap2.reset();
+        driftLp.z = hissLp.z = hissHp.z = 0.0f;
         dropEnv = 1.0f;
         dropLeft = 0;
+        depthInit = 0;
     }
 
     void setTop (float hz)
@@ -167,8 +176,15 @@ public:
 
         // Depth in seconds of head travel: 0.35 % wow and 0.12 % flutter at full, per pass.
         const float later = pass < 3 ? 1.0f : 0.6f;   // past the second dub, speed errors stop piling up
-        const float wowSec = later * c.wow * 0.0035f / (2.0f * kPi * wowRate);
-        const float flutSec = later * c.flutter * 0.0012f / (2.0f * kPi * flutterRate);
+        // The depths come from controls that a host moves once per block; used as they arrive, every step is a jump of the read head
+        // (an audible click on sustained material at large blocks: controlproof, WOW ramp at block 512). A 20 ms glide per sample; a constant setting
+        // stays bit-identical because the glide starts on the first value it sees and adds exactly 0 once there.
+        if (depthInit == 0) { wowDepth = c.wow; flutDepth = c.flutter; depthInit = 1; }
+        const float glide = 1.0f - std::exp (-1.0f / (0.02f * sr));
+        wowDepth += (c.wow - wowDepth) * glide;
+        flutDepth += (c.flutter - flutDepth) * glide;
+        const float wowSec = later * wowDepth * 0.0035f / (2.0f * kPi * wowRate);
+        const float flutSec = later * flutDepth * 0.0012f / (2.0f * kPi * flutterRate);
         const float d = baseDelay
                       + sr * (wowSec * (std::sin (2.0f * kPi * wowPhase) + 6.0f * drift)
                               + flutSec * std::sin (2.0f * kPi * flutterPhase));
@@ -200,6 +216,75 @@ public:
         return y;
     }
 
+    // ---- TRACK mode (low latency) ------------------------------------------------------------------------------------------
+    // The five trips of a dub no longer each have their own moving head. Every trip still runs its record/playback chain, wow and flutter
+    // oscillators, dropouts and hiss exactly as in process(), but its head movement is only ADDED to `offset`; the engine reads ONE head
+    // for all trips (KasetEngine::processTrack). process() above is not touched by any of this: TRACK off stays bit-exact.
+
+    /** Full-depth head travel of this trip in samples (wow, with room for the slow drift on top; flutter), for the engine's WOW cap. */
+    float wowUnitSamples() const { return (pass < 3 ? 1.0f : 0.6f) * sr * 0.0035f / (2.0f * kPi * wowRate) * kDriftAllowance; }
+    float flutUnitSamples() const { return (pass < 3 ? 1.0f : 0.6f) * sr * 0.0012f / (2.0f * kPi * flutterRate); }
+    /** The flutter depth this trip is really using now (the glided one). */
+    float flutterDepthNow (const Controls& c) const { return depthInit != 0 ? flutDepth : c.flutter; }
+    /** Empties the head's delay line (entering MIX from TRACK: it must not replay audio from long ago). */
+    void clearDelay() { std::fill (delay.begin(), delay.end(), 0.0f); w = 0; }
+
+    /** process() without the read head: same chain, same random draws in the same order, same dropouts and hiss. The head movement of this
+        trip (samples, around zero) is added to `offset`. `wowCap` limits the WOW depth used (0..1). */
+    float processTrack (float x, const Controls& c, float wowCap, float& offset)
+    {
+        float y = preEmph.process (x);
+        const float headroom = c.tape == TapeType::normal ? 1.0f : c.tape == TapeType::chrome ? 0.85f : 0.72f;
+        const float drive = (0.5f + 1.9f * c.drive) * (pass < 3 ? 1.0f : 0.7f) * headroom;
+        const float bias = 0.08f;
+        y = (std::tanh (drive * y + bias) - std::tanh (bias)) / drive;
+        y = deEmph.process (y);
+        y = lowLoss.process (headBump.process (y));
+        y = gap2.process (gap1.process (y));
+
+        wowPhase += wowRate / sr;       if (wowPhase >= 1.0f) wowPhase -= 1.0f;
+        flutterPhase += flutterRate / sr; if (flutterPhase >= 1.0f) flutterPhase -= 1.0f;
+        const float drift = driftLp.lp (rng.bipolar());
+
+        const float later = pass < 3 ? 1.0f : 0.6f;
+        if (depthInit == 0) { wowDepth = c.wow; flutDepth = c.flutter; depthInit = 1; }
+        const float glide = 1.0f - std::exp (-1.0f / (0.02f * sr));
+        wowDepth += (c.wow - wowDepth) * glide;
+        flutDepth += (c.flutter - flutDepth) * glide;
+        const float wowUsed = std::min (wowDepth, wowCap);
+        const float wowSec = later * wowUsed * 0.0035f / (2.0f * kPi * wowRate);
+        const float flutSec = later * flutDepth * 0.0012f / (2.0f * kPi * flutterRate);
+        offset += sr * (wowSec * (std::sin (2.0f * kPi * wowPhase) + 6.0f * drift)
+                        + flutSec * std::sin (2.0f * kPi * flutterPhase));
+
+        if (dropLeft > 0)
+        {
+            --dropLeft;
+            dropEnv += (dropDepth - dropEnv) * 0.004f;
+        }
+        else
+        {
+            dropEnv += (1.0f - dropEnv) * 0.002f;
+            const float chancePerSec = c.wear * c.wear * 1.6f;
+            if (rng.next() < chancePerSec / sr)
+            {
+                dropLeft = (int) ((0.02f + 0.07f * rng.next()) * sr);
+                dropDepth = 1.0f - (0.25f + 0.55f * rng.next()) * c.wear;
+            }
+        }
+        y *= dropEnv;
+
+        const float n = hissLp.lp (noise.bipolar());
+        const float shaped = n - hissHp.lp (n);
+        const float hissScale = c.tape == TapeType::normal ? 1.0f : c.tape == TapeType::chrome ? 0.63f : 0.5f;
+        y += shaped * c.hiss * 0.0035f * hissScale;
+        return y;
+    }
+
+    /** Headroom factor for the slow random drift on top of the wow sine (drift is a 0.35 Hz low-pass of white noise: measured peaks stay
+        far under 0.05; 6 * 0.05 = 0.3 of the sine's depth). */
+    static constexpr float kDriftAllowance = 1.3f;
+
 private:
     float readCubic (float d) const
     {
@@ -222,6 +307,7 @@ private:
     OnePole driftLp, hissLp, hissHp;
     float dropEnv = 1.0f, dropDepth = 1.0f;
     int dropLeft = 0;
+    float wowDepth = 0.0f, flutDepth = 0.0f; int depthInit = 0;
 };
 
 class KasetEngine
@@ -247,6 +333,24 @@ public:
         passDelay = (int) std::round (0.003f * sr);
         for (auto& p : pad) p.assign ((size_t) (kMaxGen * passDelay) + 4, 0.0f);
         pw = 0;
+
+        // TRACK mode: ONE head centred at 1.5 ms, no pad. Its room is [kHeadMin, 2 * centre - kHeadMin]; the cubic reader needs
+        // d >= 2, so kHeadMin = 3 keeps one sample of margin at the near end, and the line is longer than the far end by more than the reader's reach.
+        trackCentre = (int) std::round (0.0015f * sr);
+        trackRoom = std::max (1.0f, (float) trackCentre - kHeadMin);
+        for (auto& l : trackLine) l.assign ((size_t) (2 * trackCentre) + 16, 0.0f);
+        tlw = 0;
+        // Worst-case head travel at full WOW and full FLUTTER, per generation (sum over the trips that run).
+        float ww = 0.0f, ff = 0.0f;
+        for (int g = 0; g < kMaxGen; ++g)
+        {
+            ww += passes[0][g].wowUnitSamples();
+            ff += passes[0][g].flutUnitSamples();
+            trackWowFull[g] = ww;
+            trackFlutFull[g] = ff;
+        }
+        track = false;
+        resetTrackStats();
     }
 
     /** In place, stereo. */
@@ -254,6 +358,11 @@ public:
     {
         if (c.tape != currentTape)
             applyTape (c.tape);
+        if (track)
+        {
+            processTrack (L, R, n, c);
+            return;
+        }
         const int gen = std::clamp (c.generation, 1, kMaxGen);
         const int padSamples = (kMaxGen - gen) * passDelay;
         const int N = (int) pad[0].size();
@@ -286,8 +395,54 @@ public:
         }
     }
 
-    /** Fixed for every generation: five trips' worth of head delay. */
-    int latency() const { return kMaxGen * passDelay; }
+    /** Fixed for every generation: five trips' worth of head delay (MIX), or the single head's centre (TRACK). */
+    int latency() const { return track ? trackCentre : kMaxGen * passDelay; }
+
+    /** The latency of each mode at a sample rate, without an engine at hand (same float arithmetic as prepare()). */
+    static int latencyFor (double sampleRate, bool trackMode)
+    {
+        const float s = (float) sampleRate;
+        return trackMode ? (int) std::round (0.0015f * s) : kMaxGen * (int) std::round (0.003f * s);
+    }
+
+    /** TRACK (true) = one low-latency head; MIX (false) = the five-trip transport, bit-exact with before. Switching empties the lines the
+        new mode is about to read, so nothing from the other mode's past replays. The caller fades the output around the switch. */
+    void setTrack (bool on)
+    {
+        if (on == track)
+            return;
+        track = on;
+        if (on)
+        {
+            for (auto& l : trackLine) std::fill (l.begin(), l.end(), 0.0f);
+            tlw = 0;
+        }
+        else
+        {
+            for (auto& ch : passes) for (auto& p : ch) p.clearDelay();
+            for (auto& pd : pad) std::fill (pd.begin(), pd.end(), 0.0f);
+            pw = 0;
+        }
+        std::fill (azimuth.begin(), azimuth.end(), 0.0f);
+        aw = 0;
+    }
+    bool isTrack() const { return track; }
+
+    /** The largest WOW depth (0..1) TRACK allows for a generation and a flutter depth so the head keeps its room. */
+    float trackWowCap (int gen, float flutterDepth) const
+    {
+        const int g = std::clamp (gen, 1, kMaxGen) - 1;
+        const float avail = trackRoom - flutterDepth * trackFlutFull[g] - 1.0f;   // 1 sample kept free for float rounding
+        return std::clamp (avail / trackWowFull[g], 0.0f, 1.0f);
+    }
+
+    // Head statistics since the last reset, for the tests: where the single head has been (samples of delay) and how often the hard clamp had to act.
+    void resetTrackStats() { headMin = 1.0e9f; headMax = -1.0e9f; clampHits = 0; }
+    float trackHeadMin() const { return headMin; }
+    float trackHeadMax() const { return headMax; }
+    long trackClampHits() const { return clampHits; }
+    float trackHeadLowLimit() const { return kHeadMin; }
+    float trackHeadHighLimit() const { return 2.0f * (float) trackCentre - kHeadMin; }
 
 private:
     void applyTape (TapeType t)
@@ -304,11 +459,76 @@ private:
             }
     }
 
+    /** TRACK: every trip's chain without its own head, then one head (centre 1.5 ms) moved by the sum of the trips' wow and flutter. */
+    void processTrack (float* L, float* R, int n, const Controls& c)
+    {
+        const int gen = std::clamp (c.generation, 1, kMaxGen);
+        const int N = (int) trackLine[0].size();
+        const float lo = kHeadMin, hi = trackHeadHighLimit();
+        for (int s = 0; s < n; ++s)
+        {
+            float x[2] = { L[s], R[s] };
+            float off[2] = { 0.0f, 0.0f };
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const float cap = trackWowCap (gen, passes[ch][0].flutterDepthNow (c));
+                float y = x[ch];
+                for (int g = 0; g < gen; ++g)
+                    y = passes[ch][g].processTrack (y, c, cap, off[ch]);
+                trackLine[ch][(size_t) tlw] = y;
+            }
+            if (++tlw == N) tlw = 0;
+
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                float d = (float) trackCentre + off[ch];
+                if (d < lo || d > hi) { d = std::clamp (d, lo, hi); ++clampHits; }
+                headMin = std::min (headMin, d);
+                headMax = std::max (headMax, d);
+                x[ch] = readCubicAt (trackLine[ch], tlw, d);
+            }
+
+            // Azimuth error on the right channel, as in MIX.
+            azimuth[(size_t) aw] = x[1];
+            const int M = (int) azimuth.size();
+            const int i = (int) azimuthSamples;
+            const float f = azimuthSamples - (float) i;
+            auto at = [&] (int k) { int q = aw - k; while (q < 0) q += M; return azimuth[(size_t) q]; };
+            const float r = at (i) + f * (at (i + 1) - at (i));
+            if (++aw == M) aw = 0;
+            L[s] = x[0];
+            R[s] = r;
+        }
+    }
+
+    /** Cubic read `d` samples behind the write position `wpos` (the index the NEXT sample goes to), same convention as Pass::readCubic. */
+    static float readCubicAt (const std::vector<float>& line, int wpos, float d)
+    {
+        const int N = (int) line.size();
+        const int i = (int) d;
+        const float f = d - (float) i;
+        auto at = [&] (int k) { int j = wpos - k; while (j < 0) j += N; return line[(size_t) j]; };
+        const float y0 = at (i - 1), y1 = at (i), y2 = at (i + 1), y3 = at (i + 2);
+        const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        return ((c3 * f + c2) * f + c1) * f + y1;
+    }
+
+    static constexpr float kHeadMin = 3.0f;
+
     float sr = 44100.0f;
     Pass passes[2][kMaxGen];
     TapeType currentTape = TapeType::normal;
     std::vector<float> azimuth, pad[2];
     int aw = 0, pw = 0, passDelay = 132;
     float azimuthSamples = 0.0f;
+
+    // TRACK
+    bool track = false;
+    int trackCentre = 66, tlw = 0;
+    float trackRoom = 63.0f;
+    float trackWowFull[kMaxGen] {}, trackFlutFull[kMaxGen] {};
+    std::vector<float> trackLine[2];
+    float headMin = 1.0e9f, headMax = -1.0e9f;
+    long clampHits = 0;
 };
 } // namespace kaset

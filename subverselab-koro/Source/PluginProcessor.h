@@ -59,6 +59,8 @@ public:
     /** The engine controls the parameters ask for (targets, unsmoothed). */
     cifte::Controls targetControls() const;
     int latencySamples() const { return latency; }
+    /** Harmony voices of the active MOOD (1..3). LEVEL 2/3 and PAN 2/3 act only when this is 3 (CHOIR). */
+    int moodHarmonyVoices() const { return juce::jlimit (1, 3, moods[juce::jlimit (0, 5, (int) param ("mood"))].harmonyVoices); }
 
     juce::AudioProcessorValueTreeState apvts;
     svl::ParamUndo undo { *this };   // Cmd+Z / Cmd+Shift+Z: editor edits only, never host automation (SvlUndo.h)

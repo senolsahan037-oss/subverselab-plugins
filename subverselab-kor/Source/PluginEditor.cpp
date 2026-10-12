@@ -7,6 +7,7 @@ constexpr float kPi = juce::MathConstants<float>::pi;
 constexpr float kStart = 0.0f;            // 12 o'clock (JUCE angles: 0 = 12 o'clock, clockwise)
 constexpr float kSpan = 2.0f * kPi;       // a full turn: 0 % and 100 % meet at 12 o'clock (owner, 8 Oct: 360 degrees)
 constexpr float kDragPx = 220.0f;         // 0 .. 100 % over 220 px
+constexpr float kMarkH = 13.0f;           // height of the flat SubverseLab mark at 6 o'clock (px)
 const char* const kIds[4] { "low", "mid", "high", "mix" };
 const char* const kLabels[3] { "LOW", "MID", "HIGH" };
 const char* const kPushNames[3] { "FREE", "LINK", "GANG" };
@@ -188,6 +189,10 @@ KorEditor::KorEditor (KorAudioProcessor& p)
     for (int b = 0; b < 3; ++b)
     {
         buildCurvedText (labelPath[b], kLabels[b], ringMid (b));
+        // The pointer rests at 12 o'clock at both 0 % and 100 %, so the label is moved just left of that spot (owner,
+        // 10 Oct: the bar covered "HIGH" at 100 %). Its right end keeps 6 px clear of the pointer's centre line.
+        labelPath[b].applyTransform (juce::AffineTransform::rotation (-(0.5f * labelPath[b].getBounds().getWidth() + 6.0f) / ringMid (b),
+                                                                    kCx, kCy));
         // The position pointer (owner, 8 Oct): a raised bar of black steel across the ring (2 px short of both edges),
         // a cream inlay along its middle, two 1 px side faces that catch or lose the light as it turns.
         // Built pointing at 12 o'clock and rotated in paint().
@@ -209,6 +214,12 @@ KorEditor::KorEditor (KorAudioProcessor& p)
     // The model line on the bezel, centred at 12 o'clock, as on the other units (MODEL KR-77, HV-72, TK-79 ...).
     const juce::String dot (juce::CharPointer_UTF8 ("\xc2\xb7"));
     buildCurvedText (modelLine, "ALEV  " + dot + "  MODEL AL-81  " + dot + "  3-BAND SATURATOR", kBezelMid, 8.5f, 2.6f);
+    // The SubverseLab wordmark, set along the foot of the bezel like the model line (owner, 10 Oct), with the flat mark
+    // in the gap at 6 o'clock: "SUBVERSE" to its left, "LAB" to its right.
+    {
+        const float markW = mark.isValid() ? kMarkH * (float) mark.getWidth() / (float) mark.getHeight() : 0.0f;
+        buildCurvedTextBottom (wordPath, "SUBVERSELAB", kBezelMid, 11.0f, 2.4f, 8, 0.5f * markW + 4.0f);
+    }
     // Bezel legends: the pushers' names under each pusher, DRY and WET at the ends of the fader slot.
     for (int i = 0; i < 3; ++i)
     {
@@ -422,6 +433,37 @@ void KorEditor::buildCurvedText (juce::Path& dest, const juce::String& text, flo
     }
 }
 
+void KorEditor::buildCurvedTextBottom (juce::Path& dest, const juce::String& text, float rMid, float em, float tracking,
+                                       int gapAfter, float gapHalf) const
+{
+    // Letter-spaced caps set along the foot of a ring, reading left to right and upright (the cap side faces the centre),
+    // centred at 6 o'clock. The first gapAfter letters end gapHalf left of 6 o'clock and the rest start gapHalf right of
+    // it, leaving a gap of 2 * gapHalf for the flat mark. The cap height is centred in the band, as in buildCurvedText.
+    dest.clear();
+    const auto font = Theme::legendEm (em);
+    const float capH = 0.72f * em;
+    const float rBase = rMid + 0.5f * capH;                   // baseline radius: the cap runs inwards from it
+    const int n = text.length();
+    float leftW = tracking * (float) juce::jmax (0, gapAfter - 1);
+    for (int i = 0; i < gapAfter && i < n; ++i) leftW += juce::GlyphArrangement::getStringWidth (font, juce::String::charToString (text[i]));
+    float s = -gapHalf - leftW;                               // arc position (screen right = +) of the current letter's left edge
+    for (int i = 0; i < n; ++i)
+    {
+        if (i == gapAfter) s = gapHalf;
+        const auto ch = juce::String::charToString (text[i]);
+        const float w = juce::GlyphArrangement::getStringWidth (font, ch);
+        const float theta = juce::MathConstants<float>::pi - (s + 0.5f * w) / rMid;   // JUCE angle: pi = 6 o'clock, screen right = smaller angle
+        juce::GlyphArrangement ga;
+        ga.addLineOfText (font, ch, 0.0f, 0.0f);
+        juce::Path gp;
+        ga.createPath (gp);
+        // Rotated by theta + pi so the glyph's up points to the centre and its baseline sits at radius rBase.
+        dest.addPath (gp, juce::AffineTransform::translation (-0.5f * w, rBase).rotated (theta + juce::MathConstants<float>::pi)
+                                                             .translated (kCx, kCy));
+        s += w + tracking;
+    }
+}
+
 void KorEditor::rebuildCaches (float scale)
 {
     cacheScale = scale;
@@ -458,17 +500,19 @@ void KorEditor::rebuildCaches (float scale)
         g.fillPath (modelLine, juce::AffineTransform::translation (0.0f, 0.7f));
         g.setColour (Theme::gold);
         g.fillPath (modelLine);
-        if (wordmark.isValid() && mark.isValid())
+        // The flat mark stays in the centre of the foot; the wordmark is set as gold text around it, with the model
+        // line's 0.7 px shadow.
+        if (mark.isValid())
         {
-            const float wordH = 9.0f, markH = 13.0f, gap = 5.0f;
-            const float ww = wordH * (float) wordmark.getWidth() / (float) wordmark.getHeight();
-            const float mw = markH * (float) mark.getWidth() / (float) mark.getHeight();
-            const float y = kCy + kBezelMid, x0 = kCx - 0.5f * (mw + gap + ww);
+            const float mw = kMarkH * (float) mark.getWidth() / (float) mark.getHeight();
             g.setOpacity (0.9f);
-            g.drawImage (mark, { x0, y - 0.5f * markH, mw, markH }, juce::RectanglePlacement::stretchToFit);
-            g.drawImage (wordmark, { x0 + mw + gap, y - 0.5f * wordH, ww, wordH }, juce::RectanglePlacement::stretchToFit);
+            g.drawImage (mark, { kCx - 0.5f * mw, kCy + kBezelMid - 0.5f * kMarkH, mw, kMarkH }, juce::RectanglePlacement::stretchToFit);
             g.setOpacity (1.0f);
         }
+        g.setColour (juce::Colours::black.withAlpha (0.55f));
+        g.fillPath (wordPath, juce::AffineTransform::translation (0.0f, 0.7f));
+        g.setColour (Theme::gold);
+        g.fillPath (wordPath);
 
         // The fader slot: a groove cut into the bezel on the left, its outer lip lit, five scale ticks outside it,
         // DRY at the bottom end and WET at the top.

@@ -99,6 +99,11 @@ public:
     bool knobRangeForTesting (const juce::String& label, double& mn, double& mx, double& scale) const;
     /** Tests: a click on the value text of a knob (what a stepped knob turns into "next step"). */
     void clickKnobValueForTesting (const juce::String& label);
+    /** Tests: every knob by index (count, label, parameter id, travel scale, the old fixed double-click value, the value a double-click goes to now). */
+    int knobCountForTesting() const noexcept { return (int) knobs.size(); }
+    bool knobDoubleClickInfoForTesting (int index, juce::String& label, juce::String& paramId, double& scale, double& fixedDef, double& target, bool& stepped) const;
+    /** Tests: a double-click on the knob (the visible one with that label), as the knob's mouse-down does it. */
+    void doubleClickKnobForTesting (const juce::String& label);
 
     static constexpr int panelWidth = 1480, panelHeight = 890;
 

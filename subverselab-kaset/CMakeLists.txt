@@ -19,7 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # audio through untouched (no demo mode). 1.0.x shipped with this OFF. Build with
 # -DSVL_LICENSING=OFF only for a plugin that must carry no licence checks, network
 # calls or licence files at all.
-option(SVL_LICENSING "Build the Lemon Squeezy / SVL licence-activation gate into the plugin" ON)
+option(SVL_LICENSING "Build the Lemon Squeezy / SVL licence-activation gate into the plugin" OFF)   # 1.1.0 ships ungated like 1.0.2 (2026-10-12)
 
 # JUCE is fetched by CMake. To build offline against a checkout already on
 # disk, pass -DFETCHCONTENT_SOURCE_DIR_JUCE=/path/to/JUCE.
@@ -31,12 +31,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# -DSVL_COPY_PLUGINS=OFF builds the bundles without installing them into ~/Library/Audio/Plug-Ins (default ON = unchanged).
+option(SVL_COPY_PLUGINS "Copy the built plug-ins into the user plug-in folders after the build (macOS)" ON)
+
 # AU is macOS-only; Windows builds VST3 + Standalone. COPY_PLUGIN_AFTER_BUILD
 # is also macOS-only so CI on Windows doesn't try to copy into system plugin
 # folders it doesn't have permission for.
 if(APPLE)
     set(SVL_KASET_FORMATS Standalone VST3 AU)
-    set(SVL_KASET_COPY_AFTER_BUILD TRUE)
+    set(SVL_KASET_COPY_AFTER_BUILD ${SVL_COPY_PLUGINS})
 else()
     set(SVL_KASET_FORMATS Standalone VST3)
     set(SVL_KASET_COPY_AFTER_BUILD FALSE)
@@ -46,8 +49,8 @@ juce_add_plugin(Kaset
     COMPANY_NAME "SubverseLab"
     PLUGIN_MANUFACTURER_CODE Svlb
     PLUGIN_CODE Kast
-    PLUGIN_NAME "SubverseLab Kaset"
-    PRODUCT_NAME "SubverseLab Kaset"
+    PLUGIN_NAME "KASET"
+    PRODUCT_NAME "KASET"
     BUNDLE_ID com.subverselab.kaset
     VERSION "1.1.0"
     FORMATS ${SVL_KASET_FORMATS}
@@ -100,7 +103,7 @@ target_link_libraries(Kaset
 # Plugin code built into the console tools below, with the macros the
 # plugin wrapper would otherwise define.
 set(KASET_TOOL_DEFS ${KASET_DEFS}
-    JucePlugin_Name="SubverseLab Kaset"
+    JucePlugin_Name="KASET"
     JucePlugin_IsSynth=0 JucePlugin_WantsMidiInput=0
     JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0
     JUCE_MODAL_LOOPS_PERMITTED=1)   # the selftest pumps the message loop for the background licence re-check
@@ -121,3 +124,7 @@ juce_generate_juce_header(ui_snapshot)
 target_sources(ui_snapshot PRIVATE tests/ui_snapshot.cpp ${KASET_SOURCES})
 target_compile_definitions(ui_snapshot PRIVATE ${KASET_TOOL_DEFS})
 target_link_libraries(ui_snapshot PRIVATE ${KASET_TOOL_LIBS})
+
+# TRACK off must be bit-exact with the 1.1.0 engine: the baseline copy of the engine against the new one (tests/regress/). Plain C++, no JUCE.
+add_executable(track_regress tools/track_regress.cpp)
+target_compile_features(track_regress PRIVATE cxx_std_17)

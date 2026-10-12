@@ -106,8 +106,11 @@ public:
     explicit RearPanel (HavaProcessor&);
     void paint (juce::Graphics&) override;
     void resized() override;
+    /** SHEEN is 0: TWANG, TENSION, DRIP and LOW CUT have no effect, so they are drawn dimmed. */
+    void setSpringIdle (bool idle);
 
     HavaProcessor& proc;
+    bool springIdle = false;
     FrontPanel::Knob twang, tension, drip, lowCut;
     KeyButton frontKey { "FRONT", 8.2f, 1.6f };
     juce::Image mark, wordmark;

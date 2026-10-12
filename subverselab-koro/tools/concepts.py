@@ -815,9 +815,9 @@ def rear():
     bracket(f, 820, 1156, 286, "DOUBLE")
     toggle(f, 910, 342, False, None, s=0.8)
     f.lt(910, 390, "MONO SAFE", 9, 2.0)
-    f.lt(1072, 332, "VOICE DELAYS", 7, 1.0, "fine", col=MUTED)
-    f.lt(1072, 344, "UNDER 12 MS FOR", 7, 1.0, "fine", col=MUTED)
-    f.lt(1072, 356, "SAFER MONO SUMS", 7, 1.0, "fine", col=MUTED)
+    f.lt(1072, 332, "DOUBLES GO IN", 7, 1.0, "fine", col=MUTED)
+    f.lt(1072, 344, "THE SIDE ONLY:", 7, 1.0, "fine", col=MUTED)
+    f.lt(1072, 356, "MONO = INPUT", 7, 1.0, "fine", col=MUTED)
     return f
 
 

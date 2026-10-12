@@ -1221,6 +1221,7 @@ public:
         {
             const float inL = left[i], inR = right[i];
             float wetL = 0.0f, wetR = 0.0f;
+            float sideSum = 0.0f;   // KORO MONO SAFE: the three doubler voices as one side signal (vm0 - vm1 + vm2)
             if (mixStep != 0.0f) mixCur += mixStep;
             for (int v = 0; v < 3; ++v)
             {
@@ -1234,14 +1235,21 @@ public:
                 if (v < count) { if (vg < 1.0f) vg = std::min (1.0f, vg + fadeStep); }
                 else vg = std::max (0.0f, vg - fadeStep);
                 const float wander = drift[v].process (rng[v].bipolar());
-                const float safe = controls.monoSafe ? 0.18f : 1.0f;
-                const float baseMs = (8.0f + 13.0f * float (v)) * (1.0f - 0.72f * std::max (0.0f, std::min (1.0f, controls.tight))) * safe;
-                const float depthMs = 12.0f * std::max (0.0f, std::min (1.0f, controls.spread)) * safe;
+                // KORO plug-in change (MONO SAFE redesign): MONO SAFE no longer shortens the delays (the old x0.18 put the comb notches
+                // lower and wider and made the mono sum worse). With MONO SAFE off these are the original expressions, bit-identical.
+                const float baseMs = (8.0f + 13.0f * float (v)) * (1.0f - 0.72f * std::max (0.0f, std::min (1.0f, controls.tight)));
+                const float depthMs = 12.0f * std::max (0.0f, std::min (1.0f, controls.spread));
                 const float delaySamples = std::max (1.0f, (baseMs + depthMs * wander) * 0.001f * sr);
                 delay[v][0][size_t (writePos[v])] = inL;
                 delay[v][1][size_t (writePos[v])] = inR;
                 const float dl = read (delay[v][0], delaySamples, writePos[v]);
                 const float dr = read (delay[v][1], delaySamples, writePos[v]);
+                if (controls.monoSafe)
+                {   // each voice from the delayed MONO input; it leaves only as +S / -S, so L + R is exactly the input's
+                    const float vm = tone[v][0].process (tilt[v][0].process (0.5f * (dl + dr))) * (std::pow (10.0f, (-1.0f - float (v)) / 20.0f) * 0.92f) * vg;
+                    sideSum += (v == 1 ? -vm : vm);
+                    continue;
+                }
                 const float pl = (v == 0 ? 0.5f + 0.5f * controls.width : v == 1 ? 0.5f - 0.5f * controls.width : 0.5f);
                 const float pr = (v == 0 ? 0.5f - 0.5f * controls.width : v == 1 ? 0.5f + 0.5f * controls.width : 0.5f);
                 const float level = std::pow (10.0f, (-1.0f - float (v)) / 20.0f) * 0.92f;
@@ -1254,6 +1262,13 @@ public:
             ++writePos[0]; ++writePos[1]; ++writePos[2];
             for (int v = 0; v < 3; ++v) if (writePos[v] >= int (delay[v][0].size())) writePos[v] = 0;
             const float mx = mixStep != 0.0f ? mixCur : mix;
+            if (controls.monoSafe)
+            {   // mid stays the input (the lead is not reduced by MIX), the doubles sit in the side: (L + R) / 2 = (inL + inR) / 2
+                const float S = mx * (0.3f + 0.7f * controls.width) * sideSum;
+                left[i] = inL + S;
+                right[i] = inR - S;
+                continue;
+            }
             left[i] = inL * (1.0f - mx) + wetL * mx;
             right[i] = inR * (1.0f - mx) + wetR * mx;
         }

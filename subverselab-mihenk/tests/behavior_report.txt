@@ -1,5 +1,5 @@
 MIHENK behavior_check  -  virtual-user report
-Generated 5 Oct 2026 22:30, run time 220.81 s. Plug-in mode (VST3/AU path), non-realtime kernels unless stated.
+Generated 12 Oct 2026 21:40, run time 223.31 s. Plug-in mode (VST3/AU path), non-realtime kernels unless stated.
 Result: 141 PASS, 0 FAIL, 21 INFO
 This tool finds and reports. It fixes nothing; engine code is untouched.
 Not covered: the editor/GUI, a real DAW's PDC and automation timing, interactive controls.
@@ -105,18 +105,18 @@ PASS [2.e3] un-bypassing from the host: old audio must not play again
 INFO [2.d0_40] standalone app test setup
       measured: 40 s stereo file at 44.1 kHz, started processed: yes
 PASS [2.d1_40] standalone: time from the BYPASS key to the audible switch (40 s file)
-      measured: 23.8007 ms (key to render applied 24.0271 ms)
+      measured: 18.6689 ms (key to render applied 19.018 ms)
       limit:    <= 100 ms
 PASS [2.d2_40] standalone: time from BYPASS OFF to the processed sound returning (40 s file)
-      measured: 0.00466667 ms
+      measured: 0.0108333 ms
       limit:    <= 100 ms
 INFO [2.d0_180] standalone app test setup
       measured: 180 s stereo file at 44.1 kHz, started processed: yes
 PASS [2.d1_180] standalone: time from the BYPASS key to the audible switch (180 s file)
-      measured: 23.7816 ms (key to render applied 24.0074 ms)
+      measured: 20.9359 ms (key to render applied 21.3473 ms)
       limit:    <= 100 ms
 PASS [2.d2_180] standalone: time from BYPASS OFF to the processed sound returning (180 s file)
-      measured: 0.004875 ms
+      measured: 0.01075 ms
       limit:    <= 100 ms
 
 ==== Scenario 3 ====

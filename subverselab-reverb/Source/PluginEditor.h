@@ -93,6 +93,8 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;   // Cmd+Z / Cmd+Shift+Z
+    void mouseDown (const juce::MouseEvent&) override;  // takes the keyboard focus (knobs too, via addMouseListener)
 
 private:
     void timerCallback() override;

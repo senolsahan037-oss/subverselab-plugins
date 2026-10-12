@@ -960,11 +960,28 @@ RearPanel::Plate::Plate (KoroProcessor& p, std::function<void()> showFront)
     }
 
     addAndMakeVisible (monoSafe);
-    monoSafe.setTooltip ("MONO SAFE keeps the doubler's voice delays under 12 ms");
+    monoSafe.setTooltip ("MONO SAFE: the doubles go into the side signal only, so the mono sum equals the input");
     monoSafeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "monoSafe", monoSafe);
     frontKey.onClick = std::move (showFront);
     addAndMakeVisible (frontKey);
     setSize (1200, 440);
+    refreshVoiceDim();
+}
+
+void RearPanel::Plate::refreshVoiceDim()
+{
+    const bool threeVoices = proc.moodHarmonyVoices() >= 3;
+    bool changed = false;
+    for (auto& k : knobs)
+        if (k->id == "level2" || k->id == "level3" || k->id == "pan2" || k->id == "pan3")
+        {
+            if (k->slider.isEnabled() == threeVoices) continue;
+            k->slider.setEnabled (threeVoices);   // the existing disabled look: knob and its scale at 0.4 alpha
+            const auto pname = proc.apvts.getParameter (k->id)->getName (64);
+            k->slider.setTooltip (threeVoices ? pname : pname + ": acts only with 3 harmony voices (the CHOIR mood)");
+            changed = true;
+        }
+    if (changed) repaint();
 }
 
 void RearPanel::Plate::resized()
@@ -1000,9 +1017,9 @@ void RearPanel::Plate::paint (juce::Graphics& g)
 
     toggleLegends (g, 910.0f, 342.0f, 0.8f, {}, {});
     silk (g, "MONO SAFE", Theme::legendEm (9.0f), 910.0f, 390.0f, 'm', 2.0f, Theme::ink);
-    silk (g, "VOICE DELAYS", Theme::fineEm (7.0f), 1072.0f, 332.0f, 'm', 1.0f, Theme::muted);
-    silk (g, "UNDER 12 MS FOR", Theme::fineEm (7.0f), 1072.0f, 344.0f, 'm', 1.0f, Theme::muted);
-    silk (g, "SAFER MONO SUMS", Theme::fineEm (7.0f), 1072.0f, 356.0f, 'm', 1.0f, Theme::muted);
+    silk (g, "DOUBLES GO IN", Theme::fineEm (7.0f), 1072.0f, 332.0f, 'm', 1.0f, Theme::muted);
+    silk (g, "THE SIDE ONLY:", Theme::fineEm (7.0f), 1072.0f, 344.0f, 'm', 1.0f, Theme::muted);
+    silk (g, "MONO = INPUT", Theme::fineEm (7.0f), 1072.0f, 356.0f, 'm', 1.0f, Theme::muted);
 }
 
 RearPanel::RearPanel (KoroProcessor& p, std::function<void()> showFront)
@@ -1117,4 +1134,5 @@ void KoroEditor::timerCallback()
     }
 #endif
     front.tick();
+    rear.tick();
 }

@@ -9,6 +9,9 @@
 */
 #include <JuceHeader.h>
 #include "../Source/PluginProcessor.h"
+#include "SvlUndoTests.h"
+#include "SvlParamTextTests.h"
+#include "SvlControlProof.h"
 
 namespace
 {
@@ -380,14 +383,91 @@ int selftest()
     }
 #endif
 
+    {   // Cmd+Z / Cmd+Shift+Z (SvlUndoTests.h). KUBBE has no preset / mood recall, so the "recall" is a Group around several writes.
+        const auto u = svl::undotest::run<KubbeProcessor> ("KUBBE", [] { return std::make_unique<KubbeProcessor>(); },
+                                                           { { "mix", 0.62f }, { "width", 1.3f }, { "duck", 0.4f } },
+                                                           [] (KubbeProcessor& p)
+                                                           {
+                                                               svl::ParamUndo::Group oneStep (p.undo, "Test recall");
+                                                               set (p, "place", 2.0f);
+                                                               set (p, "distance", 0.8f);
+                                                               set (p, "lowCut", 180.0f);
+                                                               set (p, "freeze", 1.0f);
+                                                           });
+        check (u.fail == 0, "undo / redo (SvlUndoTests.h): " + juce::String (u.pass) + " of " + juce::String (u.pass + u.fail) + " undo checks passed");
+    }
+
+    {   // Type-in text of every float parameter (SvlParamTextTests.h), plus the issues found by the 2026-10-12 audit as literal cases.
+        KubbeProcessor proc;
+        const auto t = svl::paramtexttest::run (proc, { "mix", "decay", "predelay", "distance", "lowCut", "highCut", "width", "duck" });
+        for (auto& f : t.failures) std::printf ("  paramtext: %s\n", f.toRawUTF8());
+        check (t.fail == 0, "type-in text: " + juce::String (t.pass) + " of " + juce::String (t.pass + t.fail) + " checks passed (8 float parameters)");
+        auto txt = [&] (const char* id, const char* s) { auto* q = proc.apvts.getParameter (id); return q->convertFrom0to1 (q->getValueForText (s)); };
+        check (std::abs (txt ("mix", "25 %") - 0.25f) < 0.005f && std::abs (txt ("mix", "25") - 0.25f) < 0.005f, "type-in: Mix \"25 %\" and \"25\" are 25 %");
+        check (std::abs (txt ("width", "38 %") - 0.38f) < 0.005f && std::abs (txt ("width", "150") - 1.5f) < 0.005f, "type-in: Width \"38 %\" is 38 %, \"150\" is 150 %");
+        check (std::abs (txt ("decay", "x1.80") - 1.8f) < 0.005f && std::abs (txt ("decay", "1.8") - 1.8f) < 0.005f, "type-in: Decay \"x1.80\" and \"1.8\" are x1.80");
+        check (std::abs (txt ("highCut", "6.0 kHz") - 6000.0f) < 1.0f && std::abs (txt ("highCut", "6") - 6000.0f) < 1.0f && std::abs (txt ("highCut", "6000 Hz") - 6000.0f) < 1.0f,
+               "type-in: High Cut \"6.0 kHz\", \"6\", \"6000 Hz\" are 6 kHz");
+        check (std::abs (txt ("lowCut", "200") - 200.0f) < 1.0f && std::abs (txt ("lowCut", "0.2 kHz") - 200.0f) < 1.0f, "type-in: Low Cut \"200\" and \"0.2 kHz\" are 200 Hz");
+        check (std::abs (txt ("predelay", "120") - 120.0f) < 0.5f && std::abs (txt ("predelay", "0.12 s") - 120.0f) < 0.5f && txt ("predelay", "9999 ms") == 250.0f, "type-in: Pre-delay \"120\", \"0.12 s\" are 120 ms, 9999 clamps to 250");
+        check (std::abs (txt ("duck", "50 %") - 0.5f) < 0.005f && txt ("duck", "500") == 1.0f, "type-in: Duck \"50 %\" is 50 %, 500 clamps to 100 %");
+    }
+
     std::printf ("\n%s\n", failures == 0 ? "ALL PASS" : (juce::String (failures) + " FAILED").toRawUTF8());
     return failures == 0 ? 0 : 1;
 }
 } // namespace
 
+// ---- --controlproof: every knob in every variation (SvlControlProof.h), through the real processor ----------------
+int runControlProof (int argc, char** argv)
+{
+    namespace cp = svl::controlproof;
+    using cp::feat::outRmsDb; using cp::feat::wetRmsDb; using cp::feat::bandDb; using cp::feat::stereoWidthDb; using cp::feat::outWindowDb;
+    cp::Config c;
+    c.name = "KUBBE";
+    c.make = [] { return std::make_unique<KubbeProcessor>(); };
+    c.afterCreate = [] (juce::AudioProcessor& p)
+    {
+#if SVL_LICENSING
+        static_cast<KubbeProcessor&> (p).license.setLicensedForTesting (true);   // as every test in this file does: without a licence the processor passes the dry signal
+#else
+        juce::ignoreUnused (p);
+#endif
+    };
+    c.tailSeconds = 10.0;         // getTailLengthSeconds() = 20 s; 10 s is tested (see STATUS.md)
+    c.latencyForce = { { "mix", 0.0f } };
+    c.designedGainDb = [] (const cp::StateView&) { return 6.0; };   // equal-power dry / wet: the two can add by up to +3 dB, plus the reverb's own build-up on sustained material
+    c.selfSustains = [] (const cp::StateView& s) { return s.on ("freeze"); };   // FREEZE holds the tail on purpose
+    using Force = std::vector<std::pair<juce::String, float>>;
+    // every declaration: wet only (MIX 100 %), no duck, no freeze, unless the declaration says otherwise
+    auto D = [] (const char* id, int dir, cp::Feature f, double tol, const char* fname, const char* note, Force force = {}, int mat = cp::kDrums)
+    {
+        cp::Direction d; d.id = id; d.dir = dir; d.feature = f; d.tol = tol; d.featureName = fname; d.note = note; d.material = mat;
+        d.force = { { "mix", 1.0f }, { "duck", 0.0f }, { "freeze", 0.0f } }; for (auto& x : force) d.force.push_back (x);
+        return d;
+    };
+    c.directions = {
+        D ("place", 0, nullptr, 0, "", "three spaces (Hammam / Cistern / Valley), no ordering"),
+        D ("mix", +1, wetRmsDb(), 0.25, "wet part = output - input (rms dB)", "equal-power blend, 0 is the dry signal exactly", { { "mix", 0.0f } }),
+        D ("decay", +1, outRmsDb(), 0.25, "output rms on drums, MIX 100 % (dB)", "DECAY x0.25..x3: a longer tail holds more energy"),
+        D ("predelay", -1, outWindowDb (0.02, 0.04), 0.25, "output rms 20-60 ms on drums (the first kick starts at 20 ms), MIX 100 % (dB)", "later onset of the wet signal, so less of it arrives in the 40 ms after the kick", { { "predelaySync", 0.0f } }),
+        D ("predelaySync", -1, outWindowDb (0.02, 0.04), 0.25, "output rms 20-60 ms on drums (the first kick starts at 20 ms), MIX 100 % (dB)", "choices ms, 1/64 .. 1/4 note are ascending delays (31 ms .. 500 ms at 120 bpm)"),
+        D ("distance", 2, outRmsDb(), 0, "output rms on drums, MIX 100 % (dB)", "the brief gives no direction (further = ?)"),
+        D ("lowCut", -1, bandDb (20.0, 150.0), 0.25, "output band 20-150 Hz power on pink, MIX 100 % (dB)", "LOW CUT filters the wet: less energy below the cutoff", {}, cp::kPink),
+        D ("highCut", +1, bandDb (4000.0, 16000.0), 0.25, "output band 4-16 kHz power on pink, MIX 100 % (dB)", "HIGH CUT opens the wet's top", {}, cp::kPink),
+        D ("width", +1, stereoWidthDb(), 0.25, "side / mid power of the output on pink, MIX 100 % (dB)", "WIDTH 0..150 %", {}, cp::kPink),
+        D ("duck", -1, wetRmsDb(), 0.25, "wet part = output - input (rms dB), MIX 50 %", "DUCK steps the tail back while the source plays", { { "mix", 0.5f } }),
+        D ("freeze", 0, nullptr, 0, "", "holds the tail; sustains by design"),
+        D ("echoSync", 0, nullptr, 0, "", "switch: tempo-synced echo taps"),
+    };
+    return cp::main (c, argc, argv);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    for (int i = 1; i < argc; ++i)
+        if (juce::String (argv[i]).startsWith ("--controlproof")) return runControlProof (argc, argv);
     if (argc >= 2 && juce::String (argv[1]) == "--selftest")
         return selftest();
     if (argc < 4)

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -75,10 +76,13 @@ public:
         sr_ = sr;
         // Tape: the classic 2 s loop length (the original moods run exactly this
         // modulus, bit-identical); long divisions (e.g. 1/2 note: head 3 at 3x)
-        // switch to a 6.2 s loop once (the tape is cleared at the switch).
+        // switch to a 6.2 s loop (and back to 2 s when the time shortens again).
+        // The switch keeps what is on the tape (ensureTape); only a tape that has
+        // not recorded anything yet starts empty, as before.
         shortLen_ = static_cast<size_t>(std::ceil(sr_ * 2.0)) + 8U;
         longLen_ = static_cast<size_t>(std::ceil(sr_ * 6.2)) + 8U;
         buffer_.assign(longLen_, 0.0f);
+        scratch_.assign(longLen_, 0.0f);
         tapeLen_ = shortLen_;
         hist_.assign(2U * (static_cast<size_t>(std::ceil(sr_ * 2.0)) + 8U), 0.0f);
         const size_t lim = static_cast<size_t>(std::ceil((kDetectSec + kAttackSec) * sr_)) + 4U;
@@ -800,8 +804,21 @@ private:
     double syncedTime(const Controls& c) const { return syncMs(c); }
 
     void ensureTape(double needSamples) {
-        const size_t want = needSamples + 16.0 > static_cast<double>(shortLen_) ? longLen_ : shortLen_;
-        if (want != tapeLen_) { tapeLen_ = want; std::fill(buffer_.begin(), buffer_.end(), 0.0f); writePos_ = 0; }
+        // 50 ms of hysteresis on the way back to the short tape, so a TIME that hovers at the limit cannot re-lay the tape every sample.
+        const double shortCap = static_cast<double>(shortLen_) - (tapeLen_ == longLen_ ? 0.05 * sr_ : 0.0);
+        const size_t want = needSamples + 16.0 > shortCap ? longLen_ : shortLen_;
+        if (want == tapeLen_) return;
+        if (sample_ == 0) { tapeLen_ = want; std::fill(buffer_.begin(), buffer_.end(), 0.0f); writePos_ = 0; return; }   // nothing recorded yet: as before
+        // A live change of TIME (a preset, a sync division, the TIME knob) can need the other tape length. The echo that is already on the tape
+        // must keep ringing: take the newest min(old, new) samples in time order, put them at the start of the new ring, and continue writing
+        // right after them. Every head then reads the same samples at the same distance as one sample earlier (distances beyond what was kept
+        // read silence, which is what a tape that has not been recorded that far yet holds). No allocation: scratch_ was sized in prepare().
+        const size_t keep = std::min(tapeLen_, want);
+        for (size_t k = 0; k < keep; ++k) scratch_[k] = buffer_[(writePos_ + tapeLen_ - keep + k) % tapeLen_];
+        std::fill(buffer_.begin(), buffer_.end(), 0.0f);
+        std::copy(scratch_.begin(), scratch_.begin() + static_cast<std::ptrdiff_t>(keep), buffer_.begin());
+        tapeLen_ = want;
+        writePos_ = keep % tapeLen_;
     }
 
     float readCubic(double delay) const {
@@ -809,6 +826,7 @@ private:
         const double size = static_cast<double>(tapeLen_);
         double wrapped = std::fmod(pos, size);
         if (wrapped < 0.0) wrapped += size;
+        if (wrapped >= size) wrapped -= size;   // 2026-10-12: -tiny + size rounds to size -> buffer_[tapeLen_] was read one past the end
         const size_t i1 = static_cast<size_t>(wrapped);
         const double f = wrapped - static_cast<double>(i1);
         const size_t im1 = (i1 + tapeLen_ - 1U) % tapeLen_;
@@ -819,7 +837,7 @@ private:
     }
 
     double sr_ = 48000.0;
-    std::vector<float> buffer_;
+    std::vector<float> buffer_, scratch_;   // scratch_: the tape being re-laid when its length changes
     size_t shortLen_ = 1, longLen_ = 1, tapeLen_ = 1;
     size_t writePos_ = 0;
     uint64_t sample_ = 0;

@@ -20,6 +20,7 @@
 */
 #include <JuceHeader.h>
 #include "../Source/PluginProcessor.h"
+#include "../Source/PluginEditor.h"
 JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wsign-conversion")   // the prototype's md5.h, used as is
 #include "md5.h"
 JUCE_END_IGNORE_WARNINGS_GCC_LIKE
@@ -27,6 +28,7 @@ JUCE_END_IGNORE_WARNINGS_GCC_LIKE
 #include "../Source/RingModel.h"
 #include "SvlUndoTests.h"
 #include "SvlControlProof.h"
+#include "SvlParamTextTests.h"
 #include <fstream>
 #include <sstream>
 
@@ -34,7 +36,7 @@ int yanki_engine_main (int argc, char** argv);   // tests/engine_render.cpp (pro
 
 namespace
 {
-constexpr const char* kEngineMd5 = "e3385268130e64043b5497dd8b5f3736";
+constexpr const char* kEngineMd5 = "608b9d2317a63ab7939f7b64b3c2814e";
 
 struct FakeHost : juce::AudioPlayHead
 {
@@ -600,6 +602,85 @@ void spreadChecks()
     check ("spread_100_keeps_dry_and_wet", ok, detail + "worst dry shift " + juce::String (worstDry, 2) + " dB, worst wet change " + juce::String (worstWet, 2) + " dB, worst mono loss " + juce::String (worstMono, 2) + " dB");
 }
 
+/** Stationary noise for `noiseSec`, then silence up to `totalSec`: the tape is full of signal when the input stops. */
+juce::AudioBuffer<float> noiseThenSilence (double sr, double noiseSec, double totalSec, float amp)
+{
+    juce::AudioBuffer<float> b (2, (int) (sr * totalSec));
+    b.clear();
+    uint32_t seed = 4242u;
+    for (int i = 0; i < (int) (sr * noiseSec); ++i)
+        for (int c = 0; c < 2; ++c)
+        {
+            seed = seed * 1664525u + 1013904223u;
+            b.setSample (c, i, amp * ((float) (seed >> 8) / 16777216.0f * 2.0f - 1.0f));
+        }
+    return b;
+}
+
+/** A live change of TIME (a sync division, a preset) must not cut the echo that is on the tape. The old engine cleared the tape whenever the new
+    time needed the other tape length (3 x TIME past 2 s: 1/2 note at 120 bpm, 1/4 note at 75 bpm), so the tail died within about 1 ms (the tone
+    filter's time constant). Written for the November family update, not run when it was written; see STATUS.md "PENDING BUILD". */
+void tailChecks()
+{
+    const double sr = 48000.0;
+    const double t0 = 4.0;                                   // the input stops, and the change happens, here (a multiple of 512 samples at 48 kHz)
+    const int t0Sample = (int) (t0 * sr);
+    const auto noiseIn = noiseThenSilence (sr, t0, 8.0, 0.3f);
+
+    // 1. SYNC only: the new division needs the other tape length. Tail energy 5-205 ms after the change, against a run that had the new division
+    //    from the start (same stationary noise on the tape, so the two must agree; a cleared tape reads silence).
+    struct Pair { double bpm; int from, to; const char* what; };
+    const Pair pairs[] = {
+        { 120.0, 1, 5, "1/8 -> 1/2 at 120 bpm (250 -> 1000 ms, short -> long tape)" },
+        { 120.0, 5, 1, "1/2 -> 1/8 at 120 bpm (1000 -> 250 ms, long -> short tape)" },
+        {  75.0, 2, 3, "1/8. -> 1/4 at 75 bpm (600 -> 800 ms, short -> long tape)" },
+        {  75.0, 3, 2, "1/4 -> 1/8. at 75 bpm (800 -> 600 ms, long -> short tape)" },
+    };
+    for (const auto& q : pairs)
+    {
+        const auto changed = run (noiseIn, sr, [q] (YankiProcessor& p) { set (p, yankiIds::timeSync, (float) q.from); }, 512, true, q.bpm,
+                                  [q, t0Sample] (YankiProcessor& p, FakeHost&, int pos) { if (pos == t0Sample) set (p, yankiIds::timeSync, (float) q.to); });
+        const auto steady = run (noiseIn, sr, [q] (YankiProcessor& p) { set (p, yankiIds::timeSync, (float) q.to); }, 512, true, q.bpm);
+        const double a = rmsDb (changed, sr, t0 + 0.005, t0 + 0.205), b = rmsDb (steady, sr, t0 + 0.005, t0 + 0.205);
+        check ("tail_kept_sync_" + juce::String (q.from) + "_" + juce::String (q.to) + "_" + juce::String ((int) q.bpm),
+               finiteBounded (changed) && a >= b - 3.0 && b > -60.0,
+               juce::String (q.what) + ": tail 5-205 ms after the change " + juce::String (a, 2) + " dB, steady new division " + juce::String (b, 2) + " dB (need >= -3 dB)");
+    }
+
+    // 2. A real preset change (applyPreset: MOOD, SYNC, FEEDBACK, MIX, TONE ... together), tail against the new preset running from the start.
+    //    The presets differ in MIX and FEEDBACK, so the new preset's own level is the reference; the old engine gave silence here for the pairs
+    //    that cross the tape length.
+    struct PresetPair { double bpm; int from, to; };
+    const PresetPair presetPairs[] = { { 120.0, 2, 6 }, { 120.0, 6, 2 }, { 120.0, 4, 6 }, { 120.0, 6, 4 }, { 75.0, 2, 4 }, { 75.0, 4, 2 }, { 75.0, 3, 4 }, { 75.0, 4, 3 } };
+    for (const auto& q : presetPairs)
+    {
+        const auto changed = run (noiseIn, sr, [q] (YankiProcessor& p) { p.applyPreset (q.from); }, 512, true, q.bpm,
+                                  [q, t0Sample] (YankiProcessor& p, FakeHost&, int pos) { if (pos == t0Sample) p.applyPreset (q.to); });
+        const auto steady = run (noiseIn, sr, [q] (YankiProcessor& p) { p.applyPreset (q.to); }, 512, true, q.bpm);
+        const double a = rmsDb (changed, sr, t0 + 0.005, t0 + 0.205), b = rmsDb (steady, sr, t0 + 0.005, t0 + 0.205);
+        check ("tail_kept_preset_" + juce::String (q.from) + "_" + juce::String (q.to) + "_" + juce::String ((int) q.bpm),
+               finiteBounded (changed) && a >= b - 3.0 && b > -60.0,
+               juce::String (YankiProcessor::kPresets[q.from].name) + " -> " + YankiProcessor::kPresets[q.to].name + " at " + juce::String (q.bpm, 0) + " bpm: tail 5-205 ms after the change "
+                   + juce::String (a, 2) + " dB, new preset from the start " + juce::String (b, 2) + " dB (need >= -3 dB)");
+    }
+
+    // 3. No click at the tape re-lay: a steady sine through the same sync changes. The echo's pitch glides with the TIME glide (by design, 250 ms),
+    //    so the bound is 3x the larger of the two steady runs' largest step; a mis-ordered re-lay would be a phase jump of about 10x.
+    for (const auto& q : { Pair { 75.0, 2, 3, "" }, Pair { 75.0, 3, 2, "" }, Pair { 120.0, 1, 5, "" }, Pair { 120.0, 5, 1, "" } })
+    {
+        const auto tone = sine (sr, 8.0, 0.3f);
+        const auto changed = run (tone, sr, [q] (YankiProcessor& p) { set (p, yankiIds::timeSync, (float) q.from); }, 512, true, q.bpm,
+                                  [q, t0Sample] (YankiProcessor& p, FakeHost&, int pos) { if (pos == t0Sample) set (p, yankiIds::timeSync, (float) q.to); });
+        const auto fromRun = run (tone, sr, [q] (YankiProcessor& p) { set (p, yankiIds::timeSync, (float) q.from); }, 512, true, q.bpm);
+        const auto toRun = run (tone, sr, [q] (YankiProcessor& p) { set (p, yankiIds::timeSync, (float) q.to); }, 512, true, q.bpm);
+        const double own = std::max (maxStep (fromRun, sr, t0 - 0.5, t0 + 1.5), maxStep (toRun, sr, t0 - 0.5, t0 + 1.5));
+        const double step = maxStep (changed, sr, t0 - 0.5, t0 + 1.5);
+        check ("tape_relay_no_click_" + juce::String (q.from) + "_" + juce::String (q.to) + "_" + juce::String ((int) q.bpm), finiteBounded (changed) && step <= 3.0 * own,
+               "sine, sync " + juce::String (q.from) + " -> " + juce::String (q.to) + " at " + juce::String (q.bpm, 0) + " bpm: largest step " + juce::String (step, 5)
+                   + " against the steady runs' " + juce::String (own, 5) + " (limit 3x)");
+    }
+}
+
 void undoChecks()   // Cmd+Z / Cmd+Shift+Z (SvlUndoTests.h; counted into the plugin-level totals)
 {
     const auto u = svl::undotest::run<YankiProcessor> ("YANKI", [] { return std::make_unique<YankiProcessor>(); },
@@ -608,6 +689,188 @@ void undoChecks()   // Cmd+Z / Cmd+Shift+Z (SvlUndoTests.h; counted into the plu
     passed += u.pass;
     failed += u.fail;
     check ("undo_redo", u.fail == 0, juce::String (u.pass) + " of " + juce::String (u.pass + u.fail) + " undo checks passed");
+}
+
+void typeInChecks()   // family batch 2026-10-12: host type-in text of every float parameter, plus the audit's cases as literals
+{
+    YankiProcessor p;
+    const auto t = svl::paramtexttest::run (p, { yankiIds::timeMs, yankiIds::feedback, yankiIds::capDb, yankiIds::tone, yankiIds::wear, yankiIds::mix,
+                                                 yankiIds::output, yankiIds::darken, yankiIds::fineMs, yankiIds::spread },
+                                            {}, { yankiIds::feedback });   // FEEDBACK: a bare number is "% of hold" even where the text says "Swell"
+    passed += t.pass;
+    failed += t.fail;
+    check ("typein_all_float_params", t.fail == 0, juce::String (t.pass) + " of " + juce::String (t.pass + t.fail) + " type-in checks passed"
+           + (t.failures.isEmpty() ? juce::String() : " first failures: " + t.failures.joinIntoString (" | ", 0, 6)));
+
+    auto val = [&p] (const char* id, const char* text)
+    {
+        auto* r = dynamic_cast<juce::RangedAudioParameter*> (p.apvts.getParameter (id));
+        return r->convertFrom0to1 (r->getValueForText (text));
+    };
+    struct Case { const char* id; const char* text; float want; float tol; };
+    const float H = 0.7f;
+    const Case cases[] = {
+        { yankiIds::feedback, "50 % of hold", 0.35f, 1e-5f },        // the audit's runaway case: this used to give Swell 100 %
+        { yankiIds::feedback, "50 % OF HOLD", 0.35f, 1e-5f }, { yankiIds::feedback, "34 % of hold", 0.34f * H, 1e-5f }, { yankiIds::feedback, "100 % of hold", H, 1e-5f },
+        { yankiIds::feedback, "Swell 50 %", H + 0.15f, 1e-5f }, { yankiIds::feedback, "swell 50", H + 0.15f, 1e-5f }, { yankiIds::feedback, "Swell 100 %", 1.0f, 1e-5f },
+        { yankiIds::feedback, "Swell 0 %", H, 1e-5f }, { yankiIds::feedback, "HOLD", H, 1e-5f }, { yankiIds::feedback, "hold", H, 1e-5f },
+        { yankiIds::feedback, "50", 0.35f, 1e-5f }, { yankiIds::feedback, "34", 0.34f * H, 1e-5f }, { yankiIds::feedback, "0", 0.0f, 0.0f }, { yankiIds::feedback, "100", H, 1e-5f },
+        { yankiIds::feedback, "250", H, 1e-5f }, { yankiIds::feedback, "-5", 0.0f, 0.0f }, { yankiIds::feedback, "Swell 400 %", 1.0f, 1e-5f },
+        { yankiIds::timeMs, "250", 250.0f, 1e-3f }, { yankiIds::timeMs, "250.0 ms", 250.0f, 1e-3f }, { yankiIds::timeMs, "0.3 s", 300.0f, 1e-3f },
+        { yankiIds::timeMs, "20", 50.0f, 0.0f }, { yankiIds::timeMs, "1000 ms", 700.0f, 0.0f },
+        { yankiIds::capDb, "-6", -6.0f, 1e-4f }, { yankiIds::capDb, "+3.0 dB", 3.0f, 1e-4f }, { yankiIds::capDb, "99", 12.0f, 0.0f },
+        { yankiIds::tone, "2.75 kHz", 2750.0f, 0.5f }, { yankiIds::tone, "2750", 2750.0f, 0.5f }, { yankiIds::tone, "2.75", 2750.0f, 0.5f },
+        { yankiIds::tone, "6000 Hz", 6000.0f, 0.5f }, { yankiIds::tone, "6", 6000.0f, 0.5f }, { yankiIds::tone, "6k", 6000.0f, 0.5f },
+        { yankiIds::tone, "1.00 kHz", 1000.0f, 0.5f }, { yankiIds::tone, "500", 1000.0f, 0.0f }, { yankiIds::tone, "20000", 8000.0f, 0.0f },
+        { yankiIds::wear, "2.5", 0.25f, 1e-5f }, { yankiIds::wear, "10", 1.0f, 0.0f }, { yankiIds::wear, "99", 1.0f, 0.0f }, { yankiIds::wear, "0", 0.0f, 0.0f },
+        { yankiIds::darken, "2.5", 0.25f, 1e-5f }, { yankiIds::darken, "7.5", 0.75f, 1e-5f }, { yankiIds::darken, "10", 1.0f, 0.0f },
+        { yankiIds::mix, "25 %", 0.25f, 1e-5f }, { yankiIds::mix, "25", 0.25f, 1e-5f }, { yankiIds::mix, "100", 1.0f, 0.0f }, { yankiIds::mix, "250 %", 1.0f, 0.0f },
+        { yankiIds::output, "-6", -6.0f, 1e-4f }, { yankiIds::output, "+3.5 dB", 3.5f, 1e-4f }, { yankiIds::output, "-40", -12.0f, 0.0f },
+        { yankiIds::fineMs, "-2.5", -2.5f, 1e-4f }, { yankiIds::fineMs, "+5.0 ms", 5.0f, 1e-4f }, { yankiIds::fineMs, "0.001 s", 1.0f, 1e-4f },
+        { yankiIds::spread, "40 %", 0.4f, 1e-5f }, { yankiIds::spread, "40", 0.4f, 1e-5f }, { yankiIds::spread, "100 %", 1.0f, 0.0f },
+    };
+    int bad = 0;
+    juce::String first;
+    for (const auto& c : cases)
+    {
+        const float got = val (c.id, c.text);
+        if (! (std::abs (got - c.want) <= c.tol)) { if (++bad == 1) first = juce::String (c.id) + " \"" + c.text + "\" gave " + juce::String (got, 5) + " want " + juce::String (c.want, 5); }
+    }
+    const int n = (int) (sizeof (cases) / sizeof (cases[0]));
+    check ("typein_literals", bad == 0, juce::String (n - bad) + " of " + juce::String (n) + " literal cases" + (bad ? " first failure: " + first : juce::String()));
+}
+
+// Double-click: the processor's one reset function, then the real knobs and echo-field handles driven through it.
+void resetChecks()
+{
+    constexpr const char* floats[] { yankiIds::timeMs, yankiIds::feedback, yankiIds::capDb, yankiIds::tone, yankiIds::wear, yankiIds::mix,
+                                     yankiIds::output, yankiIds::darken, yankiIds::fineMs, yankiIds::spread };
+    auto def = [] (YankiProcessor& q, const char* id)
+    {
+        auto* r = dynamic_cast<juce::RangedAudioParameter*> (q.apvts.getParameter (id));
+        return r->convertFrom0to1 (r->getDefaultValue());
+    };
+    auto value = [] (YankiProcessor& q, const char* id)
+    {
+        auto* r = dynamic_cast<juce::RangedAudioParameter*> (q.apvts.getParameter (id));
+        return r->convertFrom0to1 (r->getValue());
+    };
+    {   // 1. no preset, MOOD Echo: every parameter resets to its default (the plug-in's own opening state is ECHO)
+        YankiProcessor q;
+        int bad = 0;
+        juce::String first;
+        for (auto* id : floats)
+            if (std::abs (q.resetValueFor (id) - def (q, id)) > 1.0e-4f) { if (++bad == 1) first = id; }
+        check ("reset_no_preset_is_default", bad == 0, juce::String (bad) + " parameters differ from the default" + (bad ? ", first " + first : juce::String()));
+    }
+    {   // 2. owner 2026-10-12: after any preset or MOOD recall, every control still resets to its parameter default
+        int bad = 0;
+        juce::String first;
+        for (int i = 0; i < YankiProcessor::kNumPresets + 7; ++i)
+        {
+            YankiProcessor q;
+            if (i < YankiProcessor::kNumPresets) q.applyPreset (i);
+            else { set (q, yankiIds::mood, (float) (i - YankiProcessor::kNumPresets)); juce::MessageManager::getInstance()->runDispatchLoopUntil (50); }
+            for (auto* id : floats)
+                if (std::abs (q.resetValueFor (id) - def (q, id)) > 1.0e-4f && ++bad == 1)
+                    first = juce::String (i) + " " + id + " reset " + juce::String (q.resetValueFor (id), 4) + " want " + juce::String (def (q, id), 4);
+        }
+        check ("reset_is_default_after_preset_and_mood", bad == 0, "10 presets + 7 moods" + (bad ? " first failure: " + first : juce::String(", every control resets to its default")));
+    }
+    {   // 4. the real editor: every KnobBase and the three echo-field handles, double-clicked
+        YankiProcessor q;
+        std::unique_ptr<juce::AudioProcessorEditor> ed (q.createEditor());
+        ed->setSize (YankiEditor::kW, YankiEditor::kH);
+        dynamic_cast<YankiEditor*> (ed.get())->snapshotRefresh();
+        std::vector<KnobBase*> knobs;
+        EchoField* field = nullptr;
+        std::function<void (juce::Component&)> walk = [&] (juce::Component& comp)
+        {
+            for (auto* ch : comp.getChildren())
+            {
+                if (auto* k = dynamic_cast<KnobBase*> (ch)) knobs.push_back (k);
+                if (auto* f = dynamic_cast<EchoField*> (ch)) field = f;
+                walk (*ch);
+            }
+        };
+        walk (*ed);
+        auto dbl = [] (juce::Component& comp, juce::Point<int> pos)
+        {
+            const juce::MouseEvent e (juce::Desktop::getInstance().getMainMouseSource(), pos.toFloat(), juce::ModifierKeys(), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      &comp, &comp, juce::Time::getCurrentTime(), pos.toFloat(), juce::Time::getCurrentTime(), 2, false);
+            comp.mouseDoubleClick (e);
+        };
+        const char* knobIds[] { yankiIds::mix, yankiIds::timeSync, yankiIds::timeMs, yankiIds::feedback, yankiIds::tone, yankiIds::wear, yankiIds::spread,
+                                yankiIds::output, yankiIds::riseCurve, yankiIds::capOn, yankiIds::capDb, yankiIds::darken, yankiIds::fineMs };
+        int bad = 0;
+        juce::String first;
+        for (int stage = 0; stage < 12; ++stage)   // stage 0: no preset; 1..10: preset stage-1; 11: no preset, MOOD Yesilcam
+        {
+            YankiProcessor pr;
+            std::unique_ptr<juce::AudioProcessorEditor> e2 (pr.createEditor());
+            e2->setSize (YankiEditor::kW, YankiEditor::kH);
+            std::vector<KnobBase*> ks;
+            std::function<void (juce::Component&)> w2 = [&] (juce::Component& comp)
+            {
+                for (auto* ch : comp.getChildren()) { if (auto* k = dynamic_cast<KnobBase*> (ch)) ks.push_back (k); w2 (*ch); }
+            };
+            w2 (*e2);
+            if (stage >= 1 && stage <= 10) pr.applyPreset (stage - 1);
+            if (stage == 11) { set (pr, yankiIds::mood, 5.0f); juce::MessageManager::getInstance()->runDispatchLoopUntil (50); }
+            // knock every knob-driven parameter off any reset value
+            set (pr, yankiIds::mix, 0.77f);  set (pr, yankiIds::timeSync, 5.0f);  set (pr, yankiIds::timeMs, 611.0f);  set (pr, yankiIds::feedback, 0.93f);
+            set (pr, yankiIds::tone, 7777.0f);  set (pr, yankiIds::wear, 0.91f);  set (pr, yankiIds::spread, 0.83f);  set (pr, yankiIds::output, 7.0f);
+            set (pr, yankiIds::riseCurve, 2.0f);  set (pr, yankiIds::capOn, 1.0f);  set (pr, yankiIds::capDb, -9.0f);  set (pr, yankiIds::darken, 0.6f);
+            set (pr, yankiIds::fineMs, 6.0f);
+            // the expected values are read BEFORE the clicks (a reset must not depend on order)
+            std::map<juce::String, float> want;
+            for (auto* id : knobIds) want[id] = pr.resetValueFor (id);
+            for (auto* k : ks) dbl (*k, k->getLocalBounds().getCentre());
+            for (auto* id : knobIds)
+            {
+                const float got = value (pr, id);
+                const float tol = std::string (id) == yankiIds::tone ? 0.5f : 1.0e-3f;
+                if (std::abs (got - want[id]) > tol && ++bad == 1) first = "stage " + juce::String (stage) + " " + id + " is " + juce::String (got, 4) + " want " + juce::String (want[id], 4);
+            }
+            if (stage == 0 && ks.size() != 13 - 1) { ++bad; first = "found " + juce::String ((int) ks.size()) + " knobs, expected 12 (CAP is one knob over two parameters)"; }
+        }
+        (void) knobs;
+        check ("reset_every_knob_double_click", bad == 0, "12 start states (none, 10 presets, MOOD Yesilcam) x 12 knobs" + (bad ? " first failure: " + first : juce::String(", all at the reset value")));
+
+        // echo field: scan the field with double-clicks; a hit on a handle resets the one parameter it drags
+        for (int sync : { (int) YankiProcessor::kSyncFree, 3 })
+        {
+            int hitTime = 0, hitFb = 0, hitSpread = 0, wrongTime = 0;
+            if (field == nullptr) { check ("reset_echo_field_handles", false, "no EchoField in the editor"); break; }
+            q.applyPreset (6);   // "Half note long": sync 1/2, mood Echo
+            set (q, yankiIds::timeSync, (float) sync);
+            auto arm = [&]
+            {
+                set (q, yankiIds::timeMs, 611.0f);  set (q, yankiIds::feedback, 0.93f);  set (q, yankiIds::spread, 0.83f);
+                set (q, yankiIds::timeSync, (float) sync);
+            };
+            arm();
+            const float wantTime = q.resetValueFor (yankiIds::timeMs), wantSync = q.resetValueFor (yankiIds::timeSync), wantFb = q.resetValueFor (yankiIds::feedback),
+                        wantSpread = q.resetValueFor (yankiIds::spread);
+            for (int y = 0; y < field->getHeight(); y += 3)
+                for (int x = 0; x < field->getWidth(); x += 3)
+                {
+                    dbl (*field, { x, y });
+                    const bool tMs = std::abs (value (q, yankiIds::timeMs) - 611.0f) > 0.01f, tSync = (int) std::lround (value (q, yankiIds::timeSync)) != sync;
+                    const bool fb = std::abs (value (q, yankiIds::feedback) - 0.93f) > 1.0e-4f, sp = std::abs (value (q, yankiIds::spread) - 0.83f) > 1.0e-4f;
+                    if (tMs || tSync) { ++hitTime; if (sync == YankiProcessor::kSyncFree ? (tSync || std::abs (value (q, yankiIds::timeMs) - wantTime) > 0.01f)
+                                                                                        : (tMs || (int) std::lround (value (q, yankiIds::timeSync)) != (int) wantSync)) ++wrongTime; }
+                    if (fb) { ++hitFb; if (std::abs (value (q, yankiIds::feedback) - wantFb) > 1.0e-4f) ++wrongTime; }
+                    if (sp) { ++hitSpread; if (std::abs (value (q, yankiIds::spread) - wantSpread) > 1.0e-4f) ++wrongTime; }
+                    if (tMs || tSync || fb || sp) arm();
+                }
+            check (sync == YankiProcessor::kSyncFree ? "reset_echo_field_time_free" : "reset_echo_field_time_synced",
+                   hitTime > 0 && hitFb > 0 && hitSpread > 0 && wrongTime == 0,
+                   juce::String ("sync ") + (sync == YankiProcessor::kSyncFree ? "FREE" : "1/4") + ": handle hits time " + juce::String (hitTime) + ", feedback " + juce::String (hitFb)
+                       + ", spread " + juce::String (hitSpread) + "; wrong resets " + juce::String (wrongTime)
+                       + (sync == YankiProcessor::kSyncFree ? " (TIME FREE handle resets TIME_MS and leaves TIME_SYNC on FREE)" : " (synced TIME handle resets TIME_SYNC, TIME_MS untouched)"));
+        }
+    }
 }
 
 int selftest()
@@ -782,7 +1045,10 @@ int selftest()
     v2Checks();
     spreadChecks();
     headsChecks();
+    tailChecks();
     undoChecks();
+    typeInChecks();
+    resetChecks();
 
     std::cout << (failed == 0 ? "ALL PASS" : "SELFTEST FAILED") << " (" << passed << " plugin-level checks passed, " << failed << " failed; engine selftest "
               << (engineRc == 0 ? "ALL PASS" : "FAILED") << ")\n";
@@ -804,10 +1070,23 @@ int renderFile (int argc, char** argv)
     const double sr = reader->sampleRate;
     double bpm = 120.0;
     std::vector<std::pair<const char*, float>> sets;
+    std::vector<std::pair<double, int>> timeline;   // --timeline "t_s:preset[:mix],...": applyPreset() live at the block holding t_s (optional absolute MIX)
+    std::vector<float> timelineMix;
+    float mixScale = 1.0f;                          // --mixscale: scales each timeline preset's MIX
     for (int i = 3; i + 1 < argc; i += 2)
     {
         const juce::String k (argv[i]), v (argv[i + 1]);
-        if (k == "--mood") sets.push_back ({ yankiIds::mood, v.getFloatValue() });
+        if (k == "--timeline")
+        {
+            for (auto& tok : juce::StringArray::fromTokens (v, ",", ""))
+            {
+                const auto parts = juce::StringArray::fromTokens (tok, ":", "");
+                timeline.push_back ({ parts[0].getDoubleValue(), parts[1].getIntValue() });
+                timelineMix.push_back (parts.size() > 2 ? parts[2].getFloatValue() : -1.0f);
+            }
+        }
+        else if (k == "--mixscale") mixScale = v.getFloatValue();
+        else if (k == "--mood") sets.push_back ({ yankiIds::mood, v.getFloatValue() });
         else if (k == "--bpm") bpm = v.getDoubleValue();
         else if (k == "--sync") sets.push_back ({ yankiIds::timeSync, v.getFloatValue() });
         else if (k == "--feedback") sets.push_back ({ yankiIds::feedback, v.getFloatValue() });
@@ -834,7 +1113,19 @@ int renderFile (int argc, char** argv)
         // MOOD first: its recall writes the other controls, the options then override them.
         for (auto& [id, val] : sets) if (juce::String (id) == yankiIds::mood) set (p, id, val);
         for (auto& [id, val] : sets) if (juce::String (id) != yankiIds::mood) set (p, id, val);
-    }, 512, true, bpm);
+    }, 512, true, bpm, [&] (YankiProcessor& p, FakeHost&, int pos)
+    {
+        static size_t next = 0;
+        while (next < timeline.size() && (double) pos >= timeline[next].first * sr)
+        {
+            const int idx = timeline[next].second;
+            p.applyPreset (idx);
+            if (timelineMix[next] >= 0.0f) set (p, yankiIds::mix, timelineMix[next]);
+            else if (mixScale != 1.0f) set (p, yankiIds::mix, YankiProcessor::kPresets[idx].mix * mixScale);
+            std::cout << "t=" << (double) pos / sr << " s: preset " << idx << " (" << YankiProcessor::kPresets[idx].name << ")\n";
+            ++next;
+        }
+    });
     juce::File f { juce::String (argv[2]) };
     f.deleteFile();
     juce::WavAudioFormat wav;
@@ -987,6 +1278,8 @@ int main (int argc, char** argv)
         spreadChecks();
         headsChecks();
         undoChecks();
+        typeInChecks();
+        resetChecks();
         std::cout << (failed == 0 ? "REGRESS PASS" : "REGRESS FAIL") << " (" << passed << " passed, " << failed << " failed)\n";
         return failed == 0 ? 0 : 1;
     }

@@ -142,6 +142,7 @@ public:
     RearPanel (KoroProcessor&, std::function<void()> showFront);
     void paint (juce::Graphics&) override;
     void resized() override;
+    void tick() { plate.refreshVoiceDim(); }
 
 private:
     /** The 1200 x 440 plate of the concept, scaled into the 1600 x 640 face. */
@@ -151,6 +152,8 @@ private:
         Plate (KoroProcessor&, std::function<void()> showFront);
         void paint (juce::Graphics&) override;
         void resized() override;
+        /** LEVEL 2/3 and PAN 2/3 only act with 3 harmony voices (the CHOIR mood): dimmed otherwise (the panel's disabled look). */
+        void refreshVoiceDim();
 
     private:
         KoroProcessor& proc;
@@ -185,6 +188,7 @@ private:
 
     KoroProcessor& proc;
     KoroLookAndFeel lnf;
+    juce::TooltipWindow tooltipWindow { this, 700 };   // the knobs and keys set tooltips; without this window none is ever shown
     FrontPanel front;
     RearPanel rear;
 

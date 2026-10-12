@@ -214,6 +214,34 @@ struct Biquad
     }
 };
 
+/** Per-sample linear glide to a target. A target that does not change is a no-op, so the
+    path of a value depends only on when the target moved, never on the host block size.
+    At rest it returns the exact target (no arithmetic), so a constant setting is bit-identical
+    to a value applied directly. */
+struct Glide
+{
+    float cur = 0.0f, target = 0.0f, step = 0.0f;
+    bool moving = false;
+    void jump (float v) { cur = target = v; step = 0.0f; moving = false; }
+    /** n: glide length in samples; cap > 0 limits the speed (units per sample). */
+    void set (float t, float n, float cap = 0.0f)
+    {
+        if (t == target) return;
+        target = t;
+        step = (t - cur) / n;
+        if (cap > 0.0f) step = std::fmax (-cap, std::fmin (cap, step));
+        moving = cur != t;
+    }
+    /** One sample on; true when the value changed (including the sample it lands on). */
+    bool advance()
+    {
+        if (! moving) return false;
+        cur += step;
+        if ((step > 0.0f && cur >= target) || (step <= 0.0f && cur <= target)) { cur = target; moving = false; }
+        return true;
+    }
+};
+
 /** What the plugin can change while playing. Everything else is the Character. */
 struct Controls
 {
@@ -277,12 +305,14 @@ public:
         lfoInc = c->modHz / sr;
 
         applied.decay = applied.distance = applied.lowCutHz = applied.highCutHz = -1.0f;   // force the first update
+        snap = true;
         update (Controls());
         reset();
     }
 
     void reset()
     {
+        snap = true;   // the next update() lands on its values at once instead of gliding from old ones
         pre.clear();
         for (int k = 0; k < 2; ++k)
         {
@@ -315,17 +345,30 @@ public:
                 damp[i].a = (gMid - gHi) / (gMid + gHi);   // one-pole: DC gain 1, Nyquist gain gHi/gMid
             }
         }
-        if (ctl.lowCutHz != applied.lowCutHz)
-            for (auto& f : wetLo) f.set (true, ctl.lowCutHz, sr);
-        if (ctl.highCutHz != applied.highCutHz)
-            for (auto& f : wetHi) f.set (false, ctl.highCutHz, sr);
-        if (ctl.distance != applied.distance)
+        // PRE-DELAY, LOW CUT, HIGH CUT, DISTANCE and WIDTH arrive once per block. They are glided per sample (50 ms, the same
+        // as MIX) so automation is not a staircase at the block rate; the engine path of a value does not depend on the block size.
+        // PRE-DELAY also has a speed limit (a moving delay is a pitch bend: 0.25 sample per sample = 25 %). A constant value
+        // is applied exactly as before (bit-identical): the first update after prepare() / reset() lands at once.
+        const float glideN = std::fmax (1.0f, 0.05f * sr);
+        if (snap)
         {
-            // Far away: less of the first reflections, more of the room, less air.
-            const float d = ctl.distance;
-            erGain = 1.5f - 1.2f * d;
-            lateGainDist = 0.6f + 0.8f * d;
-            for (auto& f : farLp) f.setLowpass (18000.0f * std::pow (0.25f, d), sr);
+            lowGl.jump (std::log2 (ctl.lowCutHz));
+            highGl.jump (std::log2 (ctl.highCutHz));
+            preGl.jump (ctl.predelayMs);
+            widthGl.jump (ctl.width);
+            distGl.jump (ctl.distance);
+            for (auto& f : wetLo) f.set (true, ctl.lowCutHz, sr);
+            for (auto& f : wetHi) f.set (false, ctl.highCutHz, sr);
+            applyDistance (ctl.distance);
+            snap = false;
+        }
+        else
+        {
+            lowGl.set (std::log2 (ctl.lowCutHz), glideN);
+            highGl.set (std::log2 (ctl.highCutHz), glideN);
+            preGl.set (ctl.predelayMs, glideN, 0.25f * 1000.0f / sr);
+            widthGl.set (ctl.width, glideN);
+            distGl.set (ctl.distance, glideN);
         }
         applied = ctl;
     }
@@ -338,22 +381,28 @@ public:
         const Character& ch = *c;
         const Controls& ctl = applied;
         const float maxD = kMaxDelayMs * 0.001f * sr - 4.0f;
-        const float preD = std::fmin ((ch.predelayMs + ctl.predelayMs) * 0.001f * sr, maxD * 0.5f);
         const float inGain = ctl.freeze ? 0.0f : 1.0f;
 
-        float echoD[6], echoG[6];
+        float echoD[6], echoG[6], echoMs[6];
         for (int e = 0; e < ch.numEchoes; ++e)
         {
             // Decay reaches the echoes too: shorter decay, the far slopes fade sooner.
             echoG[e] = std::pow (ch.echoes[(size_t) e].gain, 1.0f / ctl.decay);
-            const float msAt = ctl.bpm > 0.0f ? kEchoBeats[e] * 60000.0f / ctl.bpm : ch.echoes[(size_t) e].ms;
-            echoD[e] = std::fmin (preD + msAt * 0.001f * sr + 1.0f, maxD);
+            echoMs[e] = ctl.bpm > 0.0f ? kEchoBeats[e] * 60000.0f / ctl.bpm : ch.echoes[(size_t) e].ms;
         }
-        const float lateGain = ch.lateLevel * 0.35f * lateGainDist;
-        const float wMid = 1.0f, wSide = ctl.width;
+        const float wMid = 1.0f;
+        float preD = 0.0f, wSide = 1.0f, lateGain = 0.0f;
 
         for (int s = 0; s < n; ++s)
         {
+            if (lowGl.advance ())  { const float hz = lowGl.moving ? std::exp2 (lowGl.cur) : applied.lowCutHz;   for (auto& f : wetLo) f.set (true, hz, sr); }
+            if (highGl.advance ()) { const float hz = highGl.moving ? std::exp2 (highGl.cur) : applied.highCutHz; for (auto& f : wetHi) f.set (false, hz, sr); }
+            if (distGl.advance ()) applyDistance (distGl.cur);
+            preGl.advance(); widthGl.advance();
+            preD = std::fmin ((ch.predelayMs + preGl.cur) * 0.001f * sr, maxD * 0.5f);
+            wSide = widthGl.cur;
+            lateGain = ch.lateLevel * 0.35f * lateGainDist;
+            for (int e = 0; e < ch.numEchoes; ++e) echoD[e] = std::fmin (preD + echoMs[e] * 0.001f * sr + 1.0f, maxD);
             float x[2] = { inL[s] * inGain, inR[s] * inGain };
             for (int k = 0; k < 2; ++k)
                 x[k] = highCut[k].lp (lowCut[k].hp (x[k]));
@@ -449,9 +498,19 @@ public:
 private:
     int ms (float m) const { return (int) std::lround (m * 0.001f * sr); }
 
+    void applyDistance (float d)
+    {
+        // Far away: less of the first reflections, more of the room, less air.
+        erGain = 1.5f - 1.2f * d;
+        lateGainDist = 0.6f + 0.8f * d;
+        for (auto& f : farLp) f.setLowpass (18000.0f * std::pow (0.25f, d), sr);
+    }
+
     float sr = 44100.0f;
     const Character* c = nullptr;
     Controls applied;
+    Glide lowGl, highGl, preGl, widthGl, distGl;   // lowGl / highGl glide log2 (Hz)
+    bool snap = true;
     float erGain = 1.0f, lateGainDist = 1.0f;
 
     Delay pre;

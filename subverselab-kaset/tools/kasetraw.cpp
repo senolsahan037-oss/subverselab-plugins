@@ -1,4 +1,4 @@
-// kasetraw <in.f32> <out.f32> <sr> <generation> <wow> <flutter> <drive> <hiss> <wear> [tape 0-2]
+// kasetraw <in.f32> <out.f32> <sr> <generation> <wow> <flutter> <drive> <hiss> <wear> [tape 0-2] [track 0/1]
 // Stereo interleaved float32 in and out.
 #include "../Source/KasetEngine.h"
 #include <cstdio>
@@ -23,6 +23,7 @@ int main (int argc, char** argv)
     if (argc > 10) c.tape = (kaset::TapeType) std::atoi (argv[10]);
     static kaset::KasetEngine eng;
     eng.prepare (std::atof (argv[3]));
+    if (argc > 11) eng.setTrack (std::atoi (argv[11]) != 0);   // TRACK: one low-latency head (66 samples at 44.1 k); latency() below follows
     for (int p = 0; p < n; p += 512) eng.process (&l[p], &r[p], std::min (512, n - p), c);
     // Remove the transport latency so the demo lines up with the dry file.
     const int lat = eng.latency();

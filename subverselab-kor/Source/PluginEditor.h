@@ -74,6 +74,9 @@ private:
     int linkMode() const noexcept;
     void rebuildCaches (float scale);
     void buildCurvedText (juce::Path& dest, const juce::String& text, float rMid, float em = 10.0f, float tracking = 2.2f) const;
+    /** Caps set along the foot of a ring (6 o'clock), with a gap of 2 * gapHalf after the first gapAfter letters. */
+    void buildCurvedTextBottom (juce::Path& dest, const juce::String& text, float rMid, float em, float tracking,
+                                int gapAfter, float gapHalf) const;
     void paintEmber (juce::Graphics&);
     void paintPointer (juce::Graphics&, int ring);
     void paintFader (juce::Graphics&);
@@ -93,7 +96,7 @@ private:
     juce::Image coalTex;           // the ember's crust: cracked cells, dark where the crust is thick, clear in the cracks
 
     // Vector parts built once and reused every frame.
-    juce::Path labelPath[3], namePath, bandName[4], modelLine, pushLabel[3], dryLabel, wetLabel;
+    juce::Path labelPath[3], namePath, bandName[4], modelLine, wordPath, pushLabel[3], dryLabel, wetLabel;
     juce::Path pointer[3], pointerInlay[3], pointerSide[3][2];
     juce::ColourGradient emberGrad[3], coalGrad, rimGrad;
 

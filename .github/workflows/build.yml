@@ -15,11 +15,11 @@ jobs:
           - name: Kubbe
             dir: subverselab-reverb
             artifact: KUBBE-windows-vst3
-            vst3_name: "SubverseLab Kubbe.vst3"
+            vst3_name: "KUBBE.vst3"
           - name: Kaset
             dir: subverselab-kaset
             artifact: KASET-windows-vst3
-            vst3_name: "SubverseLab Kaset.vst3"
+            vst3_name: "KASET.vst3"
           # KORO / YANKI / HAVA / TUTKAL: 1.0.0, licensing OFF (account-bound download). Their test tools differ from
           # KUBBE/KASET: `tools` is the extra build targets, `check` the test command (run from the project dir),
           # `panel_dir` makes the snapshot step write a folder of PNGs (ui_snapshot <dir>) instead of one file.

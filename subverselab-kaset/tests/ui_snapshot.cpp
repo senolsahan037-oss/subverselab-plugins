@@ -1,7 +1,7 @@
 /*  Draws the editor into a PNG without a screen, so the layout can be checked
     without Screen Recording permission.
 
-        ui_snapshot <out.png> [generation 0-4] [tape 0-2] [level] [tape in 0/1]
+        ui_snapshot <out.png> [generation 0-4] [tape 0-2] [level] [tape in 0/1] [track 0/1]
 */
 #include <JuceHeader.h>
 #include "../Source/PluginProcessor.h"
@@ -26,6 +26,7 @@ int main (int argc, char** argv)
     if (argc > 2) set ("generation", (float) std::atof (argv[2]));
     if (argc > 3) set ("tape", (float) std::atof (argv[3]));
     if (argc > 5) set ("play", (float) std::atof (argv[5]));
+    if (argc > 6) set ("track", (float) std::atof (argv[6]));
     // Pretend audio has been playing, so the meters, reels and counter show life.
     const float level = argc > 4 ? (float) std::atof (argv[4]) : 0.12f;
     processor.uiLevel[0] = level; processor.uiLevel[1] = level * 0.85f;

@@ -123,7 +123,19 @@ int main (int argc, char** argv)
 
     auto mix = synth (fs, 30.0, 0.3, 1);
     juce::String name = "demo_mix.wav";
-    if (v10 && variant != "v10-batch")
+    // Demo hook (env, unset = unchanged behaviour): MIHENK_WAV = 48 kHz stereo file used as the input instead of the synthetic mix.
+    bool realWav = false;
+    if (const char* w = std::getenv ("MIHENK_WAV"))
+    {
+        juce::AudioFormatManager fm; fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> rd (fm.createReaderFor (juce::File (w)));
+        if (rd == nullptr) { std::printf ("cannot read %s\n", w); return 2; }
+        juce::AudioBuffer<float> b (2, (int) rd->lengthInSamples);
+        rd->read (&b, 0, (int) rd->lengthInSamples, 0, true, true);
+        if (rd->numChannels == 1) b.copyFrom (1, 0, b, 0, 0, b.getNumSamples());
+        mix = b; name = juce::File (w).getFileName(); realWav = true;
+    }
+    if (v10 && variant != "v10-batch" && ! realWav)
     {
         // A loud production: limited to about -9 LUFS at -0.3 dBTP before it reaches MIHENK.
         MasterSettings h;

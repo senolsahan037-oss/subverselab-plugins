@@ -84,6 +84,8 @@ int main (int argc, char** argv)
         auto& editor = *static_cast<HavaEditor*> (ed.get());
         editor.setSize (HavaEditor::kW, HavaEditor::kH);
         ok = snap (editor, dir.getChildFile ("front_master_air.png"), scale) && ok;
+        editor.showRear (true);   // SHEEN is 0 in MASTER AIR: the four spring knobs are drawn dimmed
+        ok = snap (editor, dir.getChildFile ("rear_sheen0.png"), scale) && ok;
     }
     if (argc > 3 && juce::String (argv[3]) == "--moods")   // one shot per MOOD: ui_snapshot <dir> <scale> --moods
     {

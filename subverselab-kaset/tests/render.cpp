@@ -2,13 +2,16 @@
     path a DAW does.
 
         render --selftest
-            Latency, generation, auto gain, bypass and determinism checks.
+            Latency, generation, auto gain, bypass and determinism checks, and the TRACK switch.
             Exit code 0 only if every check passes.
 
         render <in.wav> <out.wav> [generation 0-4] [tape 0-2] [mix]
 */
 #include <JuceHeader.h>
 #include "../Source/PluginProcessor.h"
+#include "SvlUndoTests.h"
+#include "SvlParamTextTests.h"
+#include "SvlControlProof.h"
 
 namespace
 {
@@ -69,6 +72,58 @@ int peakAt (const juce::AudioBuffer<float>& b)
     for (int i = 0; i < b.getNumSamples(); ++i)
         if (std::abs (b.getSample (0, i)) > std::abs (b.getSample (0, best))) best = i;
     return best;
+}
+
+/** run() with the TRACK switch flipped at block boundaries: events are { sample position, value }, applied at the first block that starts at or after it. */
+juce::AudioBuffer<float> runSwitching (const juce::AudioBuffer<float>& input, double sr, Setup setup,
+                                       std::vector<std::pair<int, float>> events, int block = 512)
+{
+    KasetProcessor proc;
+#if SVL_LICENSING
+    proc.license.setLicensedForTesting (true);
+#endif
+    setup (proc);
+    proc.setRateAndBufferSizeDetails (sr, block);
+    proc.prepareToPlay (sr, block);
+    juce::AudioBuffer<float> buf (input);
+    juce::MidiBuffer midi;
+    size_t next = 0;
+    for (int pos = 0; pos < buf.getNumSamples(); pos += block)
+    {
+        while (next < events.size() && pos >= events[next].first)
+            set (proc, "track", events[next++].second);
+        const int n = juce::jmin (block, buf.getNumSamples() - pos);
+        juce::AudioBuffer<float> view (buf.getArrayOfWritePointers(), buf.getNumChannels(), pos, n);
+        proc.processBlock (view, midi);
+    }
+    return buf;
+}
+
+/** Largest sample-to-sample step of channel 0 in [from, to). */
+float maxStep (const juce::AudioBuffer<float>& b, int from, int to)
+{
+    float m = 0.0f;
+    for (int i = juce::jmax (1, from); i < to; ++i)
+        m = juce::jmax (m, std::abs (b.getSample (0, i) - b.getSample (0, i - 1)));
+    return m;
+}
+
+juce::AudioBuffer<float> sine (int samples, double sr, float hz, float amp)
+{
+    juce::AudioBuffer<float> b (2, samples);
+    for (int c = 0; c < 2; ++c)
+        for (int i = 0; i < samples; ++i)
+            b.setSample (c, i, amp * (float) std::sin (2.0 * juce::MathConstants<double>::pi * hz * (double) i / sr));
+    return b;
+}
+
+bool sameBits (const juce::AudioBuffer<float>& a, const juce::AudioBuffer<float>& b)
+{
+    if (a.getNumSamples() != b.getNumSamples()) return false;
+    for (int c = 0; c < 2; ++c)
+        for (int i = 0; i < a.getNumSamples(); ++i)
+            if (std::memcmp (a.getReadPointer (c) + i, b.getReadPointer (c) + i, sizeof (float)) != 0) return false;
+    return true;
 }
 
 int failures = 0;
@@ -182,6 +237,177 @@ int selftest()
                 finite &= std::isfinite (a.getSample (ch, i));
             }
         check (same && finite, "4th dub, full wear: identical across runs and block sizes 512 / 97, all finite");
+    }
+
+
+    // ---- TRACK (low-latency) switch ----------------------------------------------------------------------------------------------
+    // Written for the November family update; see STATUS.md "PENDING BUILD". Latency numbers are the spec's: 66 / 72 samples with TRACK on and
+    // 660 / 720 off at 44.1 / 48 kHz.
+    {
+        // 1. Reported latency per mode, set before prepare, and updated when the switch flips afterwards.
+        for (auto [rate, onExpect, offExpect] : std::initializer_list<std::tuple<double, int, int>> { { 44100.0, 66, 660 }, { 48000.0, 72, 720 } })
+        {
+            auto latOf = [rate = rate] (bool trackOn, bool flipAfterPrepare)
+            {
+                KasetProcessor p;
+                if (! flipAfterPrepare) set (p, "track", trackOn ? 1.0f : 0.0f);
+                p.setRateAndBufferSizeDetails (rate, 512);
+                p.prepareToPlay (rate, 512);
+                if (flipAfterPrepare) set (p, "track", trackOn ? 1.0f : 0.0f);
+                return p.getLatencySamples();
+            };
+            check (latOf (true, false) == onExpect && latOf (false, false) == offExpect,
+                   "TRACK latency at " + juce::String (rate, 0) + " Hz: on " + juce::String (latOf (true, false)) + " (want " + juce::String (onExpect) + "), off "
+                   + juce::String (latOf (false, false)) + " (want " + juce::String (offExpect) + ")");
+            check (latOf (true, true) == onExpect && latOf (false, true) == offExpect,
+                   "TRACK latency follows the switch after prepareToPlay at " + juce::String (rate, 0) + " Hz: " + juce::String (latOf (true, true)) + " / "
+                   + juce::String (latOf (false, true)));
+        }
+
+        // 2. The click really lands at the reported latency in TRACK (wet path, MIX 100 %), at three rates.
+        for (double rate : { 44100.0, 48000.0, 96000.0 })
+        {
+            juce::AudioBuffer<float> click (2, (int) rate);
+            click.clear();
+            click.setSample (0, 1000, 0.8f);
+            click.setSample (1, 1000, 0.8f);
+            auto out = run (click, rate, [] (KasetProcessor& p) {
+                set (p, "track", 1.0f); set (p, "generation", 4.0f); set (p, "wow", 0.0f); set (p, "flutter", 0.0f); set (p, "hiss", 0.0f); set (p, "wear", 0.0f); set (p, "autoGain", 0.0f); });
+            const int expect = kaset::KasetEngine::latencyFor (rate, true);
+            const int off = peakAt (out) - 1000 - expect;
+            // The head itself sits at the reported centre (1st dub below: 2 / 2 / 5 samples = one trip's filter delay). What is left at the 4th dub is the group delay
+            // of the five trips' gap filters (two low-passes per trip), which is a property of the tone, not of the head, and is the same in MIX.
+            // Measured on the biquads at 1 kHz (5 trips): 146 / 159 / 208 us at 44.1 / 48 / 96 kHz = 6.4 / 7.6 / 20 samples (the second pole's corner is
+            // 1.7 x the first and is clamped at 0.47 x sr at 44.1 / 48 kHz, so it is less delayed there). So the tolerance is a TIME: 0.25 ms.
+            const int tol = (int) std::ceil (0.00025 * rate);
+            check (std::abs (off) <= tol, "TRACK, 4th dub, " + juce::String (rate, 0) + " Hz: the click lands " + juce::String (off) + " samples from the reported " + juce::String (expect)
+                   + " (limit " + juce::String (tol) + " = 0.25 ms)");
+        }
+
+        // 2b. The head itself: with one trip (1st dub) the click lands within 0.08 ms of the reported latency at every rate (one trip's own gap-filter delay: 2 / 2 / 5 samples = 45 / 42 / 52 us).
+        for (double rate : { 44100.0, 48000.0, 96000.0 })
+        {
+            juce::AudioBuffer<float> click (2, (int) rate);
+            click.clear();
+            click.setSample (0, 1000, 0.8f);
+            click.setSample (1, 1000, 0.8f);
+            auto out = run (click, rate, [] (KasetProcessor& p) {
+                set (p, "track", 1.0f); set (p, "generation", 0.0f); set (p, "wow", 0.0f); set (p, "flutter", 0.0f); set (p, "hiss", 0.0f); set (p, "wear", 0.0f); set (p, "autoGain", 0.0f); });
+            const int expect = kaset::KasetEngine::latencyFor (rate, true);
+            const int off = peakAt (out) - 1000 - expect;
+            check (std::abs (off) <= (int) std::ceil (0.00008 * rate), "TRACK, 1st dub, " + juce::String (rate, 0) + " Hz: the head sits where it is reported (click " + juce::String (off) + " samples from " + juce::String (expect) + ")");
+        }
+
+        // 3. TRACK stays finite and bounded at WOW max, GEN max, FLUTTER max, every other control at its worst, at 44.1 / 48 / 96 kHz.
+        for (double rate : { 44100.0, 48000.0, 96000.0 })
+        {
+            auto in = noise ((int) (4.0 * rate), 0.5f);
+            auto out = run (in, rate, [] (KasetProcessor& p) {
+                set (p, "track", 1.0f); set (p, "generation", 4.0f); set (p, "tape", 2.0f); set (p, "wow", 1.0f); set (p, "flutter", 1.0f); set (p, "drive", 1.0f);
+                set (p, "hiss", 1.0f); set (p, "wear", 1.0f); set (p, "input", 12.0f); set (p, "output", 12.0f); });
+            bool finite = true;
+            float peak = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < out.getNumSamples(); ++i)
+                {
+                    finite &= std::isfinite (out.getSample (c, i));
+                    peak = juce::jmax (peak, std::abs (out.getSample (c, i)));
+                }
+            check (finite && peak < 50.0f, "TRACK finite at WOW / FLUTTER / GEN / everything max, " + juce::String (rate, 0) + " Hz (peak " + juce::String (peak, 2) + ")");
+        }
+
+        // 4. Head bounds: the single head never leaves [3, 2 * centre - 3] (the cubic reader needs >= 2), and the WOW cap alone keeps it there:
+        //    the hard clamp must not have had to act. Engine level, 20 s of noise per case; the WOW caps are printed for STATUS.md.
+        for (double rate : { 44100.0, 48000.0, 96000.0 })
+        {
+            bool inside = true, noClamp = true, finite = true;
+            float lowest = 1.0e9f, highest = -1.0e9f;
+            juce::String caps;
+            for (int gen = 1; gen <= 5; ++gen)
+                for (float wow : { 0.5f, 1.0f })
+                {
+                    kaset::KasetEngine eng;
+                    eng.prepare (rate);
+                    eng.setTrack (true);
+                    kaset::Controls c;
+                    c.generation = gen; c.wow = wow; c.flutter = 1.0f; c.wear = 1.0f; c.hiss = 1.0f;
+                    if (wow == 1.0f) caps << "G" << gen << " " << juce::String (eng.trackWowCap (gen, 1.0f), 3) << "  ";
+                    auto in = noise ((int) (20.0 * rate), 0.4f);
+                    for (int pos = 0; pos < in.getNumSamples(); pos += 512)
+                    {
+                        const int n = juce::jmin (512, in.getNumSamples() - pos);
+                        eng.process (in.getWritePointer (0) + pos, in.getWritePointer (1) + pos, n, c);
+                    }
+                    for (int i = 0; i < in.getNumSamples(); ++i) finite &= std::isfinite (in.getSample (0, i)) && std::isfinite (in.getSample (1, i));
+                    inside &= eng.trackHeadMin() >= eng.trackHeadLowLimit() && eng.trackHeadMax() <= eng.trackHeadHighLimit();
+                    noClamp &= eng.trackClampHits() == 0;
+                    lowest = juce::jmin (lowest, eng.trackHeadMin());
+                    highest = juce::jmax (highest, eng.trackHeadMax());
+                }
+            check (inside && noClamp && finite && lowest >= 2.0f,
+                   "TRACK head bounds at " + juce::String (rate, 0) + " Hz, 20 s x 10 cases: head " + juce::String (lowest, 2) + " .. " + juce::String (highest, 2)
+                   + " samples, no clamp hit; WOW cap at FLUTTER max: " + caps);
+        }
+
+        // 5. TRACK off is MIX: a switch that went on and off again before prepare leaves nothing behind (bit-identical to a plain render).
+        {
+            auto in = noise ((int) (2.0 * sr), 0.3f);
+            auto a = run (in, sr, [] (KasetProcessor& p) { set (p, "generation", 3.0f); set (p, "wear", 0.6f); });
+            auto b = run (in, sr, [] (KasetProcessor& p) { set (p, "track", 1.0f); set (p, "track", 0.0f); set (p, "generation", 3.0f); set (p, "wear", 0.6f); });
+            check (sameBits (a, b), "TRACK flipped on and off before prepare: the MIX render is bit-identical to one that never touched it");
+        }
+
+        // 6. Switching in the middle of a signal does not click: the largest step stays within 2x the signal's own, ON and back OFF, wet and half-dry.
+        for (float mixAmt : { 1.0f, 0.5f })
+        {
+            auto in = sine ((int) (3.0 * sr), sr, 440.0f, 0.4f);
+            auto setup = [mixAmt] (KasetProcessor& p) {
+                set (p, "wow", 0.0f); set (p, "flutter", 0.0f); set (p, "hiss", 0.0f); set (p, "wear", 0.0f); set (p, "autoGain", 0.0f); set (p, "mix", mixAmt); };
+            auto mixOnly = run (in, sr, setup);
+            auto trackOnly = run (in, sr, [setup] (KasetProcessor& p) { setup (p); set (p, "track", 1.0f); });
+            const int from = (int) (0.5 * sr), to = (int) (3.0 * sr);
+            const float own = juce::jmax (maxStep (mixOnly, from, to), maxStep (trackOnly, from, to));
+            auto sw = runSwitching (in, sr, setup, { { (int) (1.0 * sr), 1.0f }, { (int) (2.0 * sr), 0.0f } });
+            const float step = maxStep (sw, from, to);
+            bool finite = true;
+            for (int i = 0; i < sw.getNumSamples(); ++i) finite &= std::isfinite (sw.getSample (0, i));
+            check (finite && step <= 2.0f * own, "TRACK switched on at 1 s and off at 2 s in a 440 Hz sine, MIX " + juce::String (mixAmt * 100.0f, 0) + " %: largest step "
+                   + juce::String (step, 5) + " against the signal's own " + juce::String (own, 5) + " (limit 2x)");
+        }
+
+        // 7. The fade is a short dip, not a hole: the signal is back at full level 100 ms after the switch.
+        {
+            auto in = sine ((int) (3.0 * sr), sr, 440.0f, 0.4f);
+            auto setup = [] (KasetProcessor& p) { set (p, "wow", 0.0f); set (p, "flutter", 0.0f); set (p, "hiss", 0.0f); set (p, "wear", 0.0f); set (p, "autoGain", 0.0f); };
+            auto steady = run (in, sr, [setup] (KasetProcessor& p) { setup (p); set (p, "track", 1.0f); });
+            auto sw = runSwitching (in, sr, setup, { { (int) (1.0 * sr), 1.0f } });
+            const int a = (int) (1.1 * sr), b = (int) (1.5 * sr);
+            check (std::abs (rmsDb (sw, a, b) - rmsDb (steady, a, b)) < 0.5,
+                   "TRACK switch: 100 ms after the switch the level is within 0.5 dB of a render that started in TRACK (" + juce::String (rmsDb (sw, a, b) - rmsDb (steady, a, b), 3) + " dB)");
+        }
+
+        // 8. Saved with the session, not automatable, undoable.
+        {
+            KasetProcessor a;
+            check (a.apvts.getParameter ("track") != nullptr && ! a.apvts.getParameter ("track")->isAutomatable(), "TRACK is a parameter and is not automatable");
+            set (a, "track", 1.0f);
+            juce::MemoryBlock data;
+            a.getStateInformation (data);
+            KasetProcessor b;
+            b.setStateInformation (data.getData(), (int) data.getSize());
+            b.setRateAndBufferSizeDetails (44100.0, 512);
+            b.prepareToPlay (44100.0, 512);
+            check (b.apvts.getRawParameterValue ("track")->load() > 0.5f && b.getLatencySamples() == 66, "TRACK is saved in the session state and comes back on, with latency 66 at 44.1 kHz");
+
+            KasetProcessor u;
+            svl::setParamAsGesture (u.apvts.getParameter ("track"), 1.0f);
+            const bool on = u.apvts.getRawParameterValue ("track")->load() > 0.5f;
+            const bool undone = u.undo.undo();
+            const bool off = u.apvts.getRawParameterValue ("track")->load() < 0.5f;
+            const bool redone = u.undo.redo();
+            const bool backOn = u.apvts.getRawParameterValue ("track")->load() > 0.5f;
+            check (on && undone && off && redone && backOn, "TRACK: one click = one undo step; undo turns it off, redo turns it on");
+        }
     }
 
 
@@ -353,14 +579,97 @@ int selftest()
     }
 #endif
 
+    {   // Cmd+Z / Cmd+Shift+Z (SvlUndoTests.h). KASET has no preset / mood recall, so the "recall" is a Group around several writes.
+        const auto u = svl::undotest::run<KasetProcessor> ("KASET", [] { return std::make_unique<KasetProcessor>(); },
+                                                           { { "input", 4.5f }, { "wow", 0.8f }, { "hiss", 0.1f }, { "track", 1.0f } },
+                                                           [] (KasetProcessor& p)
+                                                           {
+                                                               svl::ParamUndo::Group oneStep (p.undo, "Test recall");
+                                                               set (p, "generation", 4.0f);
+                                                               set (p, "tape", 1.0f);
+                                                               set (p, "drive", 0.2f);
+                                                               set (p, "wear", 0.7f);
+                                                           });
+        check (u.fail == 0, "undo / redo (SvlUndoTests.h): " + juce::String (u.pass) + " of " + juce::String (u.pass + u.fail) + " undo checks passed");
+    }
+
+    {   // Type-in text of every float parameter (SvlParamTextTests.h), plus the issues found by the 2026-10-12 audit as literal cases.
+        KasetProcessor proc;
+        const auto t = svl::paramtexttest::run (proc, { "input", "drive", "wow", "flutter", "hiss", "wear", "mix", "output" });
+        for (auto& f : t.failures) std::printf ("  paramtext: %s\n", f.toRawUTF8());
+        check (t.fail == 0, "type-in text: " + juce::String (t.pass) + " of " + juce::String (t.pass + t.fail) + " checks passed (8 float parameters)");
+        auto txt = [&] (const char* id, const char* s) { auto* q = proc.apvts.getParameter (id); return q->convertFrom0to1 (q->getValueForText (s)); };
+        check (std::abs (txt ("mix", "25 %") - 0.25f) < 0.005f && std::abs (txt ("mix", "25") - 0.25f) < 0.005f, "type-in: Mix \"25 %\" and \"25\" are 25 %");
+        check (std::abs (txt ("drive", "40 %") - 0.4f) < 0.005f && std::abs (txt ("wear", "75%") - 0.75f) < 0.005f && txt ("hiss", "500") == 1.0f, "type-in: Saturation \"40 %\", Wear \"75%\", Hiss 500 clamps to 100 %");
+        check (std::abs (txt ("input", "+3.0 dB") - 3.0f) < 0.005f && std::abs (txt ("input", "-6") - (-6.0f)) < 0.005f && txt ("output", "99") == 12.0f, "type-in: Input \"+3.0 dB\" and \"-6\" are dB, Output 99 clamps to +12");
+    }
+
     std::printf ("\n%s\n", failures == 0 ? "ALL PASS" : (juce::String (failures) + " FAILED").toRawUTF8());
     return failures == 0 ? 0 : 1;
 }
 } // namespace
 
+// ---- --controlproof: every knob in every variation (SvlControlProof.h), through the real processor ----------------
+int runControlProof (int argc, char** argv)
+{
+    namespace cp = svl::controlproof;
+    using cp::feat::outRmsDb; using cp::feat::wetRmsDb; using cp::feat::bandRatioDb; using cp::feat::brightnessDb; using cp::feat::devFromMinDb;
+    cp::Config c;
+    c.name = "KASET";
+    c.make = [] { return std::make_unique<KasetProcessor>(); };
+    c.afterCreate = [] (juce::AudioProcessor& p)
+    {
+#if SVL_LICENSING
+        static_cast<KasetProcessor&> (p).license.setLicensedForTesting (true);   // as every test in this file does: without a licence the processor passes the dry signal
+#else
+        juce::ignoreUnused (p);
+#endif
+    };
+    c.tailSeconds = 0.3;          // getTailLengthSeconds() = 0.05 s, plus 15 ms of latency and a margin
+    c.automationForce = { { "autoGain", 0.0f } };   // check 3 only: AUTO GAIN follows the loudness over 1.5 s, so a fast INPUT sweep makes a level excursion that is not a click
+    c.latencyForce = { { "mix", 0.0f } };
+    c.latencyVariants = { { { "mix", 0.0f }, { "track", 1.0f } } };   // TRACK reports 66 / 72 / 132 samples: the impulse must come back exactly that late   // the dry path is the latency-aligned one: the impulse must come back exactly `latency` samples late
+    c.designedGainDb = [] (const cp::StateView& s) { return (double) juce::jmax (0.0f, s.raw ("input")) + (double) juce::jmax (0.0f, s.raw ("output")) + 6.0; };   // INPUT and OUTPUT up to +12 dB each; tape saturation and auto gain
+    // HISS is noise by design: "about -62 dB at full per pass" (KasetEngine.h), up to 5 passes; the silence-in peak must stay under -35 dBFS then, and under -90 dBFS with HISS 0
+    c.noiseFloorDb = [] (const cp::StateView& s) { return s.raw ("hiss") > 0.0f ? -35.0 : -90.0; };
+    c.selfSustains = [] (const cp::StateView& s) { return s.raw ("hiss") > 0.0f; };
+    using Force = std::vector<std::pair<juce::String, float>>;
+    // every declaration: tape in (play 1), mix 100 %, auto gain off (it follows the loudness over 1.5 s and would hide a level knob)
+    auto D = [] (const char* id, int dir, cp::Feature f, double tol, const char* fname, const char* note, Force force = {}, int mat = cp::kDrums)
+    {
+        cp::Direction d; d.id = id; d.dir = dir; d.feature = f; d.tol = tol; d.featureName = fname; d.note = note; d.material = mat;
+        d.force = { { "play", 1.0f }, { "mix", 1.0f }, { "autoGain", 0.0f } };
+        if (juce::String (id) != "output") d.force.push_back ({ "output", 0.5f });   // OUTPUT 0 dB: it scales the dry path too, so it would swamp a wet-part measurement
+        for (auto& x : force) d.force.push_back (x);
+        return d;
+    };
+    const Force clean = { { "hiss", 0.0f }, { "wow", 0.0f }, { "flutter", 0.0f }, { "wear", 0.0f } };
+    auto with = [&] (Force extra) { Force r = clean; for (auto& x : extra) r.push_back (x); return r; };
+    c.directions = {
+        D ("generation", -1, brightnessDb (4000.0), 0.25, "output power above 4 kHz re total (dB) on pink, HISS / WOW / FLUTTER / WEAR 0", "each dub 'loses a little more top' (KasetEngine.h header)", clean, cp::kPink),
+        D ("generation", +1, outRmsDb(), 0.25, "output rms on silence (dB), HISS full", "each dub 'adds its own hiss' (KasetEngine.h header)", { { "hiss", 1.0f } }, cp::kSilence),
+        D ("tape", 0, nullptr, 0, "", "three tape types, no ordering"),
+        D ("input", +1, outRmsDb(), 0.25, "output rms (dB)", "level into the tape"),
+        D ("drive", +1, bandRatioDb (400.0, 3000.0, 150.0, 400.0), 0.25, "harmonic band 0.4-3 kHz over the chord band 0.15-0.4 kHz (dB), HISS / WOW / FLUTTER / WEAR 0", "SATURATION = how hard the tape is hit: more harmonics against the fundamentals (a plain band power is not used: the saturator is divided by the drive, so the level falls at hot input)", clean, cp::kChord),
+        D ("wow", +1, devFromMinDb(), 0.25, "rms of (output - the WOW 0 render) on the chord, FLUTTER / WEAR 0", "WOW = slow speed drift", with ({ { "flutter", 0.0f }, { "wear", 0.0f } }), cp::kChord),
+        D ("flutter", +1, devFromMinDb(), 0.25, "rms of (output - the FLUTTER 0 render) on the chord, WOW / WEAR 0", "FLUTTER = fast speed wobble", with ({ { "wow", 0.0f }, { "wear", 0.0f } }), cp::kChord),
+        D ("hiss", +1, outRmsDb(), 0.25, "output rms on silence (dB)", "HISS = noise added on the way out", {}, cp::kSilence),
+        D ("wear", +1, devFromMinDb(), 0.25, "rms of (output - the WEAR 0 render) on the chord, WOW / FLUTTER 0, values under -60 dB not judged", "WEAR = dropouts and worn oxide", with ({ { "wow", 0.0f }, { "flutter", 0.0f } }), cp::kChord),
+        D ("mix", +1, wetRmsDb(), 0.25, "wet part = output - latency-aligned input (rms dB)", "0 is the latency-aligned dry signal"),
+        D ("output", +1, outRmsDb(), 0.25, "output rms (dB)", "output gain"),
+        D ("autoGain", 0, nullptr, 0, "", "switch: follows the loudness over 1.5 s, so a 1 s render cannot show it"),
+        D ("play", 0, nullptr, 0, "", "tape in / bypass switch"),
+        D ("track", 0, nullptr, 0, "", "switch: one low-latency head (66 samples at 44.1 kHz) instead of 660; the output dips for about 20 ms when it flips, so no ramp or direction applies"),
+    };
+    for (auto& d : c.directions) if (d.id == "wear") d.floorValue = -60.0;
+    return cp::main (c, argc, argv);
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    for (int i = 1; i < argc; ++i)
+        if (juce::String (argv[i]).startsWith ("--controlproof")) return runControlProof (argc, argv);
     if (argc >= 2 && juce::String (argv[1]) == "--selftest")
         return selftest();
     if (argc < 3)

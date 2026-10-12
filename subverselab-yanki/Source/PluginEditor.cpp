@@ -198,9 +198,7 @@ void KnobBase::mouseUp (const juce::MouseEvent&) { end(); }
 
 void KnobBase::mouseDoubleClick (const juce::MouseEvent&)
 {
-    begin();
-    setU (defaultU());
-    end();
+    resetToDefault();
     refresh();
 }
 
@@ -228,6 +226,20 @@ ParamKnob::ParamKnob (juce::RangedAudioParameter& p, juce::Point<float> centre, 
 {
 }
 
+void ParamKnob::resetToDefault()
+{
+    const auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (&param);
+    if (resetProc == nullptr || withId == nullptr)
+    {
+        KnobBase::resetToDefault();
+        return;
+    }
+    const float plain = resetProc->resetValueFor (withId->paramID);
+    param.beginChangeGesture();
+    param.setValueNotifyingHost (param.convertTo0to1 (plain));
+    param.endChangeGesture();
+}
+
 void ParamKnob::paintPanel (juce::Graphics& g)
 {
     if (pointer)
@@ -243,6 +255,21 @@ void ParamKnob::paintPanel (juce::Graphics& g)
 CapKnob::CapKnob (juce::RangedAudioParameter& onParam, juce::RangedAudioParameter& dbParam, juce::Point<float> centre, float radius)
     : KnobBase (centre, radius, radius * 1.08f, radius * 0.5f), on (onParam), db (dbParam)
 {
+}
+
+void CapKnob::resetToDefault()
+{
+    if (resetProc == nullptr)
+    {
+        KnobBase::resetToDefault();
+        return;
+    }
+    const bool capOn = resetProc->resetValueFor (yankiIds::capOn) > 0.5f;
+    const float capDb = resetProc->resetValueFor (yankiIds::capDb);
+    begin();
+    db.setValueNotifyingHost (db.convertTo0to1 (capDb));   // also with CAP off: the hidden dB goes back too
+    on.setValueNotifyingHost (capOn ? 1.0f : 0.0f);
+    end();
 }
 
 float CapKnob::getU() const
@@ -575,10 +602,13 @@ void EchoField::mouseDoubleClick (const juce::MouseEvent& e)
     const auto h = handleAt (toFace (e));
     if (h == none)
         return;
-    const char* id = h == handleTime ? yankiIds::timeSync : h == handleFeedback ? yankiIds::feedback : yankiIds::spread;
+    // TIME handle: it drags TIME (Free) while the outer ring is on FREE, else TIME SYNC; the double-click resets the one it drags.
+    const bool freeTime = h == handleTime && juce::roundToInt (raw (proc, yankiIds::timeSync)) == YankiProcessor::kSyncFree;
+    const char* id = h == handleTime ? (freeTime ? yankiIds::timeMs : yankiIds::timeSync)
+                                     : h == handleFeedback ? yankiIds::feedback : yankiIds::spread;
     auto* prm = proc.apvts.getParameter (id);
     prm->beginChangeGesture();
-    prm->setValueNotifyingHost (prm->getDefaultValue());
+    prm->setValueNotifyingHost (prm->convertTo0to1 (proc.resetValueFor (id)));
     prm->endChangeGesture();
 }
 
@@ -778,6 +808,8 @@ YankiEditor::YankiEditor (YankiProcessor& p)
     auto add = [this] (std::unique_ptr<PanelPart> part) -> PanelPart*
     {
         front.addAndMakeVisible (*part);
+        if (auto* knob = dynamic_cast<KnobBase*> (part.get()))
+            knob->setResetSource (&proc);
         parts.push_back (std::move (part));
         return parts.back().get();
     };

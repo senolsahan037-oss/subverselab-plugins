@@ -609,6 +609,8 @@ KubbeEditor::KubbeEditor (KubbeProcessor& p)
 #endif
 {
     setLookAndFeel (&lnf);
+    setWantsKeyboardFocus (true);
+    addMouseListener (this, true);
     mark = juce::ImageCache::getFromMemory (BinaryData::mark_cream_png, BinaryData::mark_cream_pngSize);
     wordmark = juce::ImageCache::getFromMemory (BinaryData::wordmark_cream_png, BinaryData::wordmark_cream_pngSize);
 
@@ -621,8 +623,7 @@ KubbeEditor::KubbeEditor (KubbeProcessor& p)
         auto b = std::make_unique<PlaceButton> (i, proc);
         b->onClick = [this, i]
         {
-            if (auto* param = proc.apvts.getParameter ("place"))
-                param->setValueNotifyingHost (param->convertTo0to1 ((float) i));
+            svl::setParamAsGesture (proc.apvts.getParameter ("place"), (float) i);   // one click = one undo step
         };
         addAndMakeVisible (*b);
         places.push_back (std::move (b));
@@ -666,6 +667,24 @@ KubbeEditor::KubbeEditor (KubbeProcessor& p)
     licenseOverlay.setVisible (! proc.license.isLicensed());
 #endif
     startTimerHz (30);
+}
+
+bool KubbeEditor::keyPressed (const juce::KeyPress& key)
+{
+#if SVL_LICENSING
+    if (licenseOverlay.isVisible())
+        return false;
+#endif
+    return svl::handleUndoKey (proc.undo, key);
+}
+
+void KubbeEditor::mouseDown (const juce::MouseEvent& e)
+{
+#if SVL_LICENSING
+    if (licenseOverlay.isVisible())
+        return;
+#endif
+    svl::takeFocusOnClick (*this, e);
 }
 
 KubbeEditor::~KubbeEditor()

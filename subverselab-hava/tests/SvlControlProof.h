@@ -1234,7 +1234,12 @@ private:
             B.prepare (48000.0, 512);
             B.render (mt.m[m], B.scEnabled() ? &mt.kick : nullptr, 12000, 512, nullptr, 0, nullptr, b);
             const double dAB = maxAbsDiff (a, b);
-            const bool exact = bitIdentical (a, b) || (ulps > 0 && dAB <= 1.0e-6);   // a parameter that came back 1 float-ulp away (skewed range) moves a filter coefficient by that much: -120 dB, same state
+            // A parameter that came back 1 float-ulp away (skewed range) moves a ratio (filter coefficient, gain) by about one ulp, which
+            // a recursive stage can carry into the render a little further. The render tolerance is therefore relative to the render's
+            // own peak (1e-6 x max(1, peak), i.e. 1e-6 at unity and above), not an absolute 1e-6 (owner brief 10 Oct). The failure text
+            // prints the measured difference so the next run shows the real size.
+            const double tolB = 1.0e-6 * std::max (1.0, a.peak());
+            const bool exact = bitIdentical (a, b) || (ulps > 0 && dAB <= tolB);
             if (! bitIdentical (a, b) && exact) ++renderUlp;
             // info 1: restore AFTER prepare (some hosts do)
             B.create (true); B.prepare (48000.0, 512); B.processor().setStateInformation (mb.getData(), (int) mb.getSize());

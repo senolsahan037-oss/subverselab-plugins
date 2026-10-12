@@ -35,8 +35,26 @@ class GenerationDial : public juce::Component
 public:
     explicit GenerationDial (KasetProcessor& p) : proc (p) {}
     void paint (juce::Graphics&) override;
-    void mouseDown (const juce::MouseEvent& e) override { pick (e.position.x); }
+    // One click or one drag = one gesture = one undo step.
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (auto* p = proc.apvts.getParameter ("generation")) p->beginChangeGesture();
+        pick (e.position.x);
+    }
     void mouseDrag (const juce::MouseEvent& e) override { pick (e.position.x); }
+    // Double-click = back to the default (2ND DUB), inside the gesture the second mouseDown opened (so it is one undo step with the click).
+    void mouseDoubleClick (const juce::MouseEvent&) override
+    {
+        if (auto* p = proc.apvts.getParameter ("generation"))
+        {
+            p->setValueNotifyingHost (p->getDefaultValue());
+            repaint();
+        }
+    }
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        if (auto* p = proc.apvts.getParameter ("generation")) p->endChangeGesture();
+    }
 
 private:
     void pick (float x);
@@ -106,6 +124,8 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;   // Cmd+Z / Cmd+Shift+Z
+    void mouseDown (const juce::MouseEvent&) override;  // takes the keyboard focus (knobs too, via addMouseListener)
 
     /** For the snapshot tool: run the UI clock so meters and reels settle. */
     void settleForSnapshot() { for (int i = 0; i < 30; ++i) timerCallback(); }
@@ -131,6 +151,9 @@ private:
     std::vector<std::unique_ptr<SelectorButton>> tapeButtons;
     PianoKey playKey { "TAPE" }, stopKey { "BYPASS" }, autoKey { "AUTO GAIN" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> autoAttachment;
+    SelectorButton trackKey { "TRACK" };   // low-latency head; the window beside it reads the latency in samples
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> trackAttachment;
+    int lastLatency = -1;
     std::vector<std::unique_ptr<Knob>> knobs;
 
     juce::Image panelTexture, mark, wordmark;

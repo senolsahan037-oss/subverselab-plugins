@@ -252,7 +252,7 @@ void KnobSlider::mouseDown (const juce::MouseEvent& e)
     if (! isEnabled()) return;
     if (e.getNumberOfClicks() >= 2 && isDoubleClickReturnEnabled())
     {
-        setValue (getDoubleClickReturnValue(), juce::sendNotificationSync);
+        resetToDefault();
         return;
     }
     dragging = true;

@@ -27,6 +27,8 @@ struct Def
 };
 
 const std::vector<Def>& definitions();
+/** The definition of a parameter id, or nullptr. */
+const Def* findDef (const juce::String& id);
 juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
 /** The settings as the parameters hold them: every parameter-backed value clamped to its range and rounded to float. */

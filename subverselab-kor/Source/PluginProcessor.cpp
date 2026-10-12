@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SvlParamText.h"
 
 namespace
 {
@@ -23,7 +24,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout KorAudioProcessor::createLay
 {
     using namespace juce;
     std::vector<std::unique_ptr<RangedAudioParameter>> p;
-    const auto pct = AudioParameterFloatAttributes().withStringFromValueFunction (pctText);
+    // Type-in: "25", "25 %", "25%" -> 25 % (family batch 2026-10-12; JUCE's default read "25 %" as a raw 25 and clamped to 100 %).
+    const auto pct = svl::paramtext::percent (AudioParameterFloatAttributes().withStringFromValueFunction (pctText), 0.0f, 1.0f, 0.0f);
     const NormalisableRange<float> unit (0.0f, 1.0f, 0.001f);
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "low", 1 }, "LOW", unit, 0.30f, pct));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { "mid", 1 }, "MID", unit, 0.30f, pct));

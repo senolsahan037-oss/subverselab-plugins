@@ -774,6 +774,16 @@ RearPanel::RearPanel (HavaProcessor& p) : proc (p)
     addAndMakeVisible (frontKey);
 }
 
+void RearPanel::setSpringIdle (bool idle)
+{
+    if (idle == springIdle)
+        return;
+    springIdle = idle;
+    for (auto* k : { &twang, &tension, &drip, &lowCut })
+        k->slider.setAlpha (idle ? 0.35f : 1.0f);
+    repaint();
+}
+
 void RearPanel::resized()
 {
     placeKnob (twang.slider, 150.0f, kRearKnobY, kRearKnobR);
@@ -800,11 +810,17 @@ void RearPanel::paint (juce::Graphics& g)
 
     const float r = kRearKnobR, cy = kRearKnobY;
     bracket (g, 44.0f, 760.0f, 110.0f, "SPRING SHEEN");
+    // These four act on the SHEEN spring only. With SHEEN at 0 (e.g. MASTER AIR) they do nothing, so their scales are drawn
+    // dimmed (alpha 0.35; the knobs themselves too, see setSpringIdle). They stay adjustable.
+    if (springIdle) g.beginTransparencyLayer (0.35f);
     knobScale (g, 150.0f, cy, r, "TWANG", "+10 dB AT 1.5 kHz", 10.5f, r * 2.0f);
     knobScale (g, 400.0f, cy, r, "TENSION", "CHIRP LENGTH", 10.5f, r * 2.0f);
     knobScale (g, 650.0f, cy, r, "DRIP", "TRANSIENT DRIP", 10.5f, r * 2.0f);
+    if (springIdle) g.endTransparencyLayer();
     bracket (g, 840.0f, 1156.0f, 110.0f, "SHEEN SEND");
+    if (springIdle) g.beginTransparencyLayer (0.35f);
     knobScale (g, 998.0f, cy, r, "LOW CUT", "Hz", 10.5f, r * 2.0f, "20", "80", "300");
+    if (springIdle) g.endTransparencyLayer();
 
     // Gold dots: where every MOOD puts the control (the parameter defaults).
     const std::pair<float, const char*> dots[] { { 150.0f, "twang" }, { 400.0f, "tension" }, { 650.0f, "drip" }, { 998.0f, "lowCut" } };
@@ -815,10 +831,26 @@ void RearPanel::paint (juce::Graphics& g)
         const auto p = polar (cx, cy, r * 1.2f, -135.0f + 270.0f * v);
         g.fillEllipse (p.x - 2.6f, p.y - 2.6f, 5.2f, 5.2f);
     }
+    lt (g, 600.0f, 378.0f, "TWANG, TENSION, DRIP AND LOW CUT ACT ON THE SHEEN SPRING. WITH SHEEN AT 0 THEY DO NOTHING.", 7.5f, 1.2f, true, Anchor::middle,
+        springIdle ? kGold : kMuted);
     lt (g, 998.0f, 342.0f, "FILTERS THE SHEEN SEND ONLY.", 7.0f, 1.0f, true, Anchor::middle, kMuted);
     lt (g, 998.0f, 354.0f, "THE DRY IS NEVER FILTERED.", 7.0f, 1.0f, true, Anchor::middle, kMuted);
-    lt (g, 600.0f, 396.0f, utf ("\xe2\x97\x8f = DEFAULT, LOADED BY EVERY MOOD (TWANG 7 · TENSION 5.5 · DRIP 5 · LOW CUT 80 Hz)"),
-        7.5f, 1.2f, true, Anchor::middle, kMuted);
+    // The footer reads the same parameter defaults as the dots above (single source: the parameter layout), so it cannot
+    // drift from them again (the old text still said LOW CUT 80 Hz; the default is 300 Hz, DRIP .5 = 5 on the 0-10 scale).
+    {
+        const auto defaultOf = [this] (const char* id)
+        {
+            auto* p = proc.apvts.getParameter (id);
+            return p->convertFrom0to1 (p->getDefaultValue());
+        };
+        const auto dot = utf ("\xc2\xb7");
+        juce::String footer = utf ("\xe2\x97\x8f = DEFAULT, THE STATE THE PLUGIN OPENS IN (AIR FULL)  ");
+        footer << dot << "  TWANG " << juce::String (defaultOf ("twang") * 10.0f, 1)
+               << "  " << dot << "  TENSION " << juce::String (defaultOf ("tension") * 10.0f, 1)
+               << "  " << dot << "  DRIP " << juce::String (defaultOf ("drip") * 10.0f, 1)
+               << "  " << dot << "  LOW CUT " << juce::String (juce::roundToInt (defaultOf ("lowCut"))) << " Hz";
+        lt (g, 600.0f, 396.0f, footer, 7.5f, 1.2f, true, Anchor::middle, kMuted);
+    }
 }
 
 //==============================================================================
@@ -967,6 +999,7 @@ void HavaEditor::tick (double dt)
         front.latencyShown = proc.safeLatency();
         front.repaint (180, 380, 240, 50);
     }
+    rear.setSpringIdle (sheen <= 0.0f);
     const int mood = (int) v ("mood");
     if (mood != lastMood)
     {

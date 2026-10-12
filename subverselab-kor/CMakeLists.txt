@@ -8,7 +8,7 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(Kor VERSION 1.0.0 LANGUAGES C CXX)
+project(Kor VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,7 +44,7 @@ juce_add_plugin(Kor
     PLUGIN_NAME "ALEV"
     PRODUCT_NAME "ALEV"
     BUNDLE_ID com.subverselab.alev
-    VERSION "1.0.0"
+    VERSION "1.0.1"
     FORMATS ${SVL_KOR_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -99,3 +99,25 @@ target_link_libraries(ui_snapshot PRIVATE
     juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats
     juce::juce_gui_basics juce::juce_graphics juce::juce_core
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
+# ui_video: the demo video frames (real audio, real panel, scripted ring moves). Not part of the plug-in.
+juce_add_console_app(ui_video PRODUCT_NAME "ui_video")
+juce_generate_juce_header(ui_video)
+target_sources(ui_video PRIVATE tests/ui_video.cpp ${KOR_SOURCES})
+target_compile_definitions(ui_video PRIVATE ${KOR_TOOL_DEFS})
+target_link_libraries(ui_video PRIVATE
+    KorAssets
+    juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats
+    juce::juce_gui_basics juce::juce_graphics juce::juce_core
+    juce::juce_recommended_config_flags)
+
+# param_text_test: type-in text of every float parameter (tests/SvlParamTextTests.h) plus literal cases. Exit code = failures.
+juce_add_console_app(param_text_test PRODUCT_NAME "param_text_test")
+juce_generate_juce_header(param_text_test)
+target_sources(param_text_test PRIVATE tests/param_text_test.cpp ${KOR_SOURCES})
+target_compile_definitions(param_text_test PRIVATE ${KOR_TOOL_DEFS})
+target_link_libraries(param_text_test PRIVATE
+    KorAssets
+    juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats
+    juce::juce_gui_basics juce::juce_graphics juce::juce_core
+    juce::juce_recommended_config_flags)

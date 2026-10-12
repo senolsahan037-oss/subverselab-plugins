@@ -3,6 +3,7 @@
 #include "../engine/Preset.h"
 #include "ValueParse.h"
 #include "../plugin/PluginProcessor.h"
+#include "../plugin/Params.h"
 
 namespace mihenk
 {
@@ -761,7 +762,20 @@ MainComponent::Knob& MainComponent::addKnob (int module, int col, int row, const
     sl.setRotaryParameters (kStart, kEnd, true);
     sl.setRange (min, max, interval);
     if (mid > min && mid < max) sl.setSkewFactorFromMidPoint (mid);
-    sl.setDoubleClickReturnValue (true, def);
+    sl.setDoubleClickReturnValue (true, def);   // the fallback for a knob with no parameter id
+    // Double-click goes to the PARAMETER's default (the same Def the plug-in's APVTS is built from), converted to the knob's display scale; read at
+    // the click, so a band-aware id follows the selected band. A stepped knob (AIR FREQ) rests in the middle of its zone.
+    {
+        auto* raw = k.get();
+        sl.doubleClickValueFn = [raw, def]
+        {
+            if (raw->paramId == nullptr) return def;
+            const auto* d = params::findDef (raw->paramId());
+            if (d == nullptr) return def;
+            const double v = d->defaultValue();
+            return raw->steps.empty() ? v * raw->scale : (double) juce::jlimit (0, (int) raw->steps.size() - 1, juce::roundToInt (v)) + 0.5;
+        };
+    }
     sl.setPopupDisplayEnabled (false, false, nullptr);
     auto* raw = k.get();
     sl.textFromValueFunction = [raw] (double v) { return raw->format (v); };
@@ -1776,6 +1790,22 @@ bool MainComponent::knobEnabledForTesting (const juce::String& label) const
 {
     auto* k = findKnob (label);
     return k != nullptr && k->slider.isEnabled();
+}
+bool MainComponent::knobDoubleClickInfoForTesting (int index, juce::String& label, juce::String& paramId, double& scale, double& fixedDef, double& target, bool& stepped) const
+{
+    if (index < 0 || index >= (int) knobs.size()) return false;
+    auto& k = *knobs[(size_t) index];
+    label = k.label;
+    paramId = k.paramId != nullptr ? k.paramId() : juce::String();
+    scale = k.scale;
+    fixedDef = k.slider.getDoubleClickReturnValue();
+    target = k.slider.doubleClickValue();
+    stepped = ! k.steps.empty();
+    return true;
+}
+void MainComponent::doubleClickKnobForTesting (const juce::String& label)
+{
+    if (auto* k = const_cast<Knob*> (findKnob (label))) k->slider.resetToDefault();
 }
 bool MainComponent::knobRangeForTesting (const juce::String& label, double& mn, double& mx, double& scale) const
 {

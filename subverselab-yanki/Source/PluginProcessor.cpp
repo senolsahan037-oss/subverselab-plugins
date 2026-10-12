@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SvlParamText.h"
 
 const juce::StringArray YankiProcessor::moodNames { "Echo", "Slapback", "Three Heads", "Dub Spiral", "Worn Loop", "Yesilcam", "Ters" };
 const juce::StringArray YankiProcessor::syncNames { "1/16", "1/8", "1/8 dotted", "1/4", "1/4 dotted", "1/2", "Free" };
@@ -45,6 +46,34 @@ juce::AudioParameterFloatAttributes withText (std::function<juce::String (float)
 {
     return juce::AudioParameterFloatAttributes().withStringFromValueFunction ([f] (float v, int) { return f (v); });
 }
+
+// Type-in text (family batch 2026-10-12): the host's parameter box calls getValueForText(); the JUCE default read the number as a raw value.
+// WEAR and DARKEN show 0..10 for 0..1: "2.5" = 0.25.
+juce::AudioParameterFloatAttributes tenScale (juce::AudioParameterFloatAttributes a, float fallback)
+{
+    return a.withValueFromStringFunction ([fallback] (const juce::String& s)
+    {
+        double v; juce::String rest;
+        if (! svl::paramtext::readNumber (s, v, rest)) return fallback;
+        return juce::jlimit (0.0f, 1.0f, (float) (v / 10.0));
+    });
+}
+
+// FEEDBACK shows "<n> % of hold" below HOLD, "HOLD"/"Swell 0 %" at it and "Swell <n> %" above. The stored value is the engine knob (HOLD = 0.7).
+// "Swell" in the text means the part above HOLD; otherwise the number is a percentage of HOLD (a bare "50" = 50 % of hold, never a swell).
+juce::AudioParameterFloatAttributes feedbackText (juce::AudioParameterFloatAttributes a, float fallback)
+{
+    return a.withValueFromStringFunction ([fallback] (const juce::String& s)
+    {
+        const auto t = s.toLowerCase();
+        const bool swell = t.contains ("swell"), hold = t.contains ("hold");
+        double v; juce::String rest;
+        if (! svl::paramtext::readNumber (s, v, rest))
+            return (swell || hold) ? (float) kKnobHold : fallback;
+        const float f = juce::jlimit (0.0f, 1.0f, (float) (v / 100.0));
+        return swell ? (float) (kKnobHold + f * (1.0 - kKnobHold)) : f * (float) kKnobHold;
+    });
+}
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout YankiProcessor::createLayout()
@@ -54,41 +83,48 @@ juce::AudioProcessorValueTreeState::ParameterLayout YankiProcessor::createLayout
     const auto echo = yanki::moodControls (0);
     auto pct = withText ([] (float v) { return String (roundToInt (v * 100.0f)) + " %"; });
     auto db = withText ([] (float v) { return (v > 0.0f ? "+" : "") + String (v, 1) + " dB"; });
+    namespace pt = svl::paramtext;
 
     // A meta parameter: recalling a MOOD writes TONE, WEAR, MIX, SPREAD, TIME and FEEDBACK.
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::mood, 1 }, "Mood", moodNames, 0,
                                                    AudioParameterChoiceAttributes().withMeta (true)));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::timeSync, 2 }, "Time Sync", syncNames, 1));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::timeMs, 1 }, "Time (Free)", NormalisableRange<float> (50.0f, 700.0f),
-                                                  (float) echo.timeMs, withText ([] (float v) { return String (v, 1) + " ms"; })));
+                                                  (float) echo.timeMs,
+                                                  pt::milliseconds (withText ([] (float v) { return String (v, 1) + " ms"; }), 50.0f, 700.0f, (float) echo.timeMs)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::feedback, 1 }, "Feedback",
                                                   NormalisableRange<float> (0.0f, 1.0f, fbFrom0to1, fbTo0to1),
                                                   naturalFeedbackKnob (0, 1),
-                                                  withText ([] (float k)
+                                                  feedbackText (withText ([] (float k)
                                                   {
                                                       if (k < (float) kKnobHold)
                                                           return String (roundToInt (k / (float) kKnobHold * 100.0f)) + " % of hold";
                                                       return "Swell " + String (roundToInt ((k - (float) kKnobHold) / (float) (1.0 - kKnobHold) * 100.0f)) + " %";
-                                                  })));
+                                                  }), naturalFeedbackKnob (0, 1))));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { yankiIds::capOn, 1 }, "Cap On", false));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::capDb, 1 }, "Cap", NormalisableRange<float> (-12.0f, 12.0f), 0.0f, db));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::capDb, 1 }, "Cap", NormalisableRange<float> (-12.0f, 12.0f), 0.0f,
+                                                  pt::decibels (db, -12.0f, 12.0f, 0.0f)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::tone, 1 }, "Tone", NormalisableRange<float> (1000.0f, 8000.0f), (float) echo.toneHz,
-                                                  withText ([] (float v) { return String (v / 1000.0f, 2) + " kHz"; })));
+                                                  pt::frequency (withText ([] (float v) { return String (v / 1000.0f, 2) + " kHz"; }),
+                                                                 1000.0f, 8000.0f, (float) echo.toneHz)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::wear, 1 }, "Wear", NormalisableRange<float> (0.0f, 1.0f), (float) echo.wear,
-                                                  withText ([] (float v) { return String (v * 10.0f, 1); })));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::mix, 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), (float) echo.mix, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::output, 1 }, "Output", NormalisableRange<float> (-12.0f, 12.0f), 0.0f, db));
+                                                  tenScale (withText ([] (float v) { return String (v * 10.0f, 1); }), (float) echo.wear)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::mix, 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), (float) echo.mix,
+                                                  pt::percent (pct, 0.0f, 1.0f, (float) echo.mix)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::output, 1 }, "Output", NormalisableRange<float> (-12.0f, 12.0f), 0.0f,
+                                                  pt::decibels (db, -12.0f, 12.0f, 0.0f)));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::endMode, 1 }, "End Mode", endNames, 0));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { yankiIds::endTrigger, 1 }, "End Trigger", false));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { yankiIds::freeze, 1 }, "Freeze", false));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { yankiIds::bypass, 1 }, "Bypass", false));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::darken, 1 }, "Darken", NormalisableRange<float> (0.0f, 1.0f), 0.0f,
-                                                  withText ([] (float v) { return String (v * 10.0f, 1); })));
+                                                  tenScale (withText ([] (float v) { return String (v * 10.0f, 1); }), 0.0f)));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::riseCurve, 1 }, "Rise Curve", riseNames, 1));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::lockBars, 1 }, "Tempo Lock", lockNames, 0));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::fineMs, 1 }, "Fine", NormalisableRange<float> (-10.0f, 10.0f), 0.0f,
-                                                  withText ([] (float v) { return (v > 0.0f ? "+" : "") + String (v, 1) + " ms"; })));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::spread, 1 }, "Spread", NormalisableRange<float> (0.0f, 1.0f), (float) echo.width, pct));
+                                                  pt::milliseconds (withText ([] (float v) { return (v > 0.0f ? "+" : "") + String (v, 1) + " ms"; }), -10.0f, 10.0f, 0.0f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { yankiIds::spread, 1 }, "Spread", NormalisableRange<float> (0.0f, 1.0f), (float) echo.width,
+                                                  pt::percent (pct, 0.0f, 1.0f, (float) echo.width)));
     // Appended last (parameter order of saved projects stays): 0 = the MOOD's own heads, so a project saved before it opens as it was.
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { yankiIds::heads, 1 }, "Heads", headsNames, 0));
     return l;
@@ -280,6 +316,15 @@ bool YankiProcessor::presetEdited() const
     return differs (v (pFeedback), q.feedback, 0.004f) || differs (v (pMix), q.mix, 0.004f) || differs (v (pTone), q.tone, 15.0f)
         || differs (v (pWear), q.wear, 0.01f) || differs (v (pSpread), q.spread, 0.01f) || (v (pCapOn) > 0.5f) != q.capOn
         || (q.capOn && differs (v (pCapDb), q.capDb, 0.15f)) || juce::roundToInt (v (pLock)) != q.lockBars || differs (v (pOutput), q.outputDb, 0.15f);
+}
+
+float YankiProcessor::resetValueFor (const juce::String& id) const
+{
+    // Owner 2026-10-12: a double-click returns every control to its factory default (the parameter default), in every plug-in.
+    // 3. the parameter's default
+    if (auto* prm = apvts.getParameter (id))
+        return prm->convertFrom0to1 (prm->getDefaultValue());
+    return 0.0f;
 }
 
 //==============================================================================

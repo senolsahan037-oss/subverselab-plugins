@@ -98,8 +98,7 @@ int main (int argc, char** argv)
                 else if (dynamic_cast<CapKnob*> (c)) ch = 'C';
                 else if (dynamic_cast<Key*> (c)) ch = 'k';
                 else if (dynamic_cast<BypassToggle*> (c)) ch = 'B';
-                else if (dynamic_cast<TapeDisplay*> (c)) ch = 'D';
-                else if (dynamic_cast<Lamp*> (c)) ch = 'L';
+                else if (dynamic_cast<EchoField*> (c)) ch = 'D';   // (was TapeDisplay / Lamp, classes that no longer exist: the target did not compile)
                 line << ch;
             }
             std::cout << line << "\n";

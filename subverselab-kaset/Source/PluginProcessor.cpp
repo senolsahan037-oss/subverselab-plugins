@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "SvlParamText.h"
 
 const juce::StringArray KasetProcessor::generationNames { "MASTER", "1ST DUB", "2ND DUB", "3RD DUB", "4TH DUB" };
 const juce::StringArray KasetProcessor::tapeNames { "NORMAL", "CHROME", "METAL" };
@@ -8,21 +9,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout KasetProcessor::createLayout
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout l;
-    auto pct = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + " %"; });
-    auto dbAttr = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return (v > 0 ? "+" : "") + String (v, 1) + " dB"; });
+    auto pctBase = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + " %"; });
+    auto dbBase = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return (v > 0 ? "+" : "") + String (v, 1) + " dB"; });
+    auto pct = [pctBase] (float def) { return svl::paramtext::percent (pctBase, 0.0f, 1.0f, def); };
+    auto dbAttr = svl::paramtext::decibels (dbBase, -12.0f, 12.0f, 0.0f);
 
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "generation", 1 }, "Generation", generationNames, 2));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "tape", 1 }, "Tape", tapeNames, 0));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "input", 1 }, "Input", NormalisableRange<float> (-12.0f, 12.0f), 0.0f, dbAttr));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "drive", 1 }, "Saturation", NormalisableRange<float> (0.0f, 1.0f), 0.55f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "wow", 1 }, "Wow", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "flutter", 1 }, "Flutter", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "hiss", 1 }, "Hiss", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "wear", 1 }, "Wear", NormalisableRange<float> (0.0f, 1.0f), 0.25f, pct));
-    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "mix", 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), 1.0f, pct));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "drive", 1 }, "Saturation", NormalisableRange<float> (0.0f, 1.0f), 0.55f, pct (0.55f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "wow", 1 }, "Wow", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct (0.5f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "flutter", 1 }, "Flutter", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct (0.5f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "hiss", 1 }, "Hiss", NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct (0.5f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "wear", 1 }, "Wear", NormalisableRange<float> (0.0f, 1.0f), 0.25f, pct (0.25f)));
+    l.add (std::make_unique<AudioParameterFloat> (ParameterID { "mix", 1 }, "Mix", NormalisableRange<float> (0.0f, 1.0f), 1.0f, pct (1.0f)));
     l.add (std::make_unique<AudioParameterFloat> (ParameterID { "output", 1 }, "Output", NormalisableRange<float> (-12.0f, 12.0f), 0.0f, dbAttr));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "autoGain", 1 }, "Auto Gain", true));
     l.add (std::make_unique<AudioParameterBool> (ParameterID { "play", 1 }, "Tape In", true));   // off = BYPASS: the dry signal, latency-aligned
+    // TRACK: one low-latency head (66 samples at 44.1 kHz) instead of the five-trip transport (660). Saved with the session, undoable, but never
+    // automated: a latency change in the middle of playback is a decision for the person at the panel. Off = MIX = the sound of 1.1.0.
+    // Last in the layout so no parameter index moves.
+    l.add (std::make_unique<AudioParameterBool> (ParameterID { "track", 1 }, "Track", false, AudioParameterBoolAttributes().withAutomatable (false)));
     return l;
 }
 
@@ -31,6 +38,31 @@ KasetProcessor::KasetProcessor()
                                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "Kaset", createLayout())
 {
+    apvts.addParameterListener ("track", this);
+}
+
+KasetProcessor::~KasetProcessor()
+{
+    cancelPendingUpdate();
+    apvts.removeParameterListener ("track", this);
+}
+
+void KasetProcessor::parameterChanged (const juce::String&, float newValue)
+{
+    // The host reads the latency on the message thread. Hosts may only pick up a new value after a transport restart.
+    const int lat = kaset::KasetEngine::latencyFor (sampleRate, newValue > 0.5f);
+    if (juce::MessageManager::existsAndIsCurrentThread())
+        setLatencySamples (lat);
+    else
+    {
+        pendingLatency = lat;
+        triggerAsyncUpdate();
+    }
+}
+
+void KasetProcessor::handleAsyncUpdate()
+{
+    setLatencySamples (pendingLatency.load());
 }
 
 bool KasetProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -60,10 +92,16 @@ void KasetProcessor::prepareToPlay (double sr, int block)
 {
     sampleRate = sr;
     engine.prepare (sr);
+    trackApplied = apvts.getRawParameterValue ("track")->load() > 0.5f;   // a session saved in TRACK opens in TRACK, with no fade
+    engine.setTrack (trackApplied);
+    switchPhase = 0;
+    engineSwitchPending = false;
+    fadeLen = juce::jmax (1, juce::roundToInt (0.010 * sr));
+    latNow = engine.latency();
     setLatencySamples (engine.latency());
 
     wet.setSize (2, block);
-    for (auto& d : dryDelay) d.assign ((size_t) engine.latency() + 4, 0.0f);
+    for (auto& d : dryDelay) d.assign ((size_t) kaset::KasetEngine::latencyFor (sr, false) + 4, 0.0f);   // sized for the longer mode; the MIX size is what it was
     dw = 0;
 
     inGain.reset (sr, 0.05);
@@ -111,7 +149,40 @@ void KasetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
     }
 
-    engine.process (wet.getWritePointer (0), wet.getWritePointer (1), n, controls());
+    // TRACK switch. The two modes differ by hundreds of samples of latency, so there is no way to join them without a gap; the output is faded
+    // to silence over 10 ms, the engine switches (its new path starts empty), and the output fades back in over 10 ms once the new path has
+    // been filled once. A short dip instead of a click. In steady state none of this touches the audio: one engine call, no gain.
+    const bool wantTrack = apvts.getRawParameterValue ("track")->load() > 0.5f;
+    if (switchPhase == 0 && wantTrack != trackApplied)
+    {
+        switchPhase = 1;
+        fadeLeft = fadeLen;
+        switchFrom = trackApplied;
+    }
+    bool switchedHere = false;
+    {
+        const auto ctl = controls();
+        int oldPart = n;   // samples of this block that run in the mode the engine is in now
+        if (engineSwitchPending)
+        {
+            engineSwitchPending = false;
+            trackApplied = switchTarget;
+            engine.setTrack (trackApplied);
+            oldPart = 0;
+        }
+        else if (switchPhase == 1 && fadeLeft < n)
+            oldPart = fadeLeft;   // the fade-out ends inside this block, after sample fadeLeft - 1
+        if (oldPart > 0)
+            engine.process (wet.getWritePointer (0), wet.getWritePointer (1), oldPart, ctl);
+        if (oldPart > 0 && oldPart < n)
+        {
+            trackApplied = wantTrack;
+            engine.setTrack (trackApplied);
+            switchedHere = true;
+        }
+        if (oldPart < n)
+            engine.process (wet.getWritePointer (0) + oldPart, wet.getWritePointer (1) + oldPart, n - oldPart, ctl);
+    }
 
     // STOP bypasses the tape, fading over 20 ms; latency stays the same either way.
     // Without a licence the tape stays out: the same latency-aligned dry path as BYPASS.
@@ -121,7 +192,8 @@ void KasetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const float playTarget = (apvts.getRawParameterValue ("play")->load() > 0.5f) ? 1.0f : 0.0f;
 #endif
 
-    const int N = (int) dryDelay[0].size(), lat = engine.latency();
+    const int N = (int) dryDelay[0].size();
+    int lat = latNow;   // the dry tap: it moves to the new mode's latency on the sample after the fade-out ends
     double sum[2] = { 0.0, 0.0 };
     for (int i = 0; i < n; ++i)
     {
@@ -134,6 +206,33 @@ void KasetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             dry[c] = dryDelay[c][(size_t) j];
         }
         if (++dw == N) dw = 0;
+
+        float sg = 1.0f;   // only used while switchPhase != 0
+        if (switchPhase == 1)
+        {
+            --fadeLeft;
+            sg = (float) fadeLeft / (float) fadeLen;
+            if (fadeLeft == 0)
+            {
+                switchTarget = wantTrack;
+                latNow = kaset::KasetEngine::latencyFor (sampleRate, switchTarget);
+                lat = latNow;   // from the next sample on, the dry path is delayed like the new mode
+                fillLeft = switchTarget != switchFrom ? latNow : 0;
+                inCount = 0;
+                engineSwitchPending = ! switchedHere;
+                switchPhase = 3;
+            }
+        }
+        else if (switchPhase == 3)
+        {
+            if (fillLeft > 0) { --fillLeft; sg = 0.0f; }
+            else
+            {
+                ++inCount;
+                sg = (float) inCount / (float) fadeLen;
+                if (inCount >= fadeLen) switchPhase = 0;
+            }
+        }
 
         // Loudness in (what went onto tape, aligned) against loudness out.
         const float wl = wet.getSample (0, i), wr = wet.getSample (1, i);
@@ -151,6 +250,7 @@ void KasetProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         for (int c = 0; c < 2; ++c)
         {
             o[c] = (dry[c] * (1.0f - mix) + wet.getSample (c, i) * autoGain * mix) * og;
+            if (switchPhase != 0) o[c] *= sg;
             sum[c] += (double) o[c] * o[c];
         }
         if (outCh == 1)
@@ -183,7 +283,10 @@ void KasetProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (apvts.state.getType()))
+        {
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            undo.clear();   // the old steps describe a state that is gone
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new KasetProcessor(); }

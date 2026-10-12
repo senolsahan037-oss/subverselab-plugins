@@ -49,14 +49,19 @@ public:
     void refresh() override;
     /** Leave a hole in the hit area (the TIME ring around its inner cap). */
     void setHitHole (float radius) { hole = radius; }
+    /** Double-click goes to YankiProcessor::resetValueFor = the parameter default (owner 2026-10-12). */
+    void setResetSource (const YankiProcessor* p) { resetProc = p; }
 
 protected:
     virtual float getU() const = 0;
     virtual void setU (float) = 0;
     virtual float defaultU() const = 0;
+    /** Double-click: puts the knob on its reset value (begin / end gesture included). */
+    virtual void resetToDefault() { begin(); setU (defaultU()); end(); }
     virtual void begin() = 0;
     virtual void end() = 0;
     virtual float dragPixels() const { return 220.0f; }
+    const YankiProcessor* resetProc = nullptr;
     juce::Point<float> c;
     float r, hitR, hole = 0.0f;
 
@@ -75,6 +80,7 @@ protected:
     float getU() const override { return param.getValue(); }
     void setU (float u) override { param.setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, u)); }
     float defaultU() const override { return param.getDefaultValue(); }
+    void resetToDefault() override;
     void begin() override { param.beginChangeGesture(); }
     void end() override { param.endChangeGesture(); }
     float dragPixels() const override { return pointer ? 36.0f * (float) juce::jmax (1, (int) angles.size() - 1) : 220.0f; }
@@ -95,6 +101,7 @@ protected:
     float getU() const override;
     void setU (float) override;
     float defaultU() const override { return 0.0f; }
+    void resetToDefault() override;
     void begin() override { on.beginChangeGesture(); db.beginChangeGesture(); }
     void end() override { on.endChangeGesture(); db.endChangeGesture(); }
 
