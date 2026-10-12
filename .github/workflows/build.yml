@@ -188,3 +188,66 @@ jobs:
       - name: Run render --selftest
         working-directory: ${{ matrix.dir }}
         run: ./build/render_artefacts/Release/render --selftest
+
+  # ELEK (subverselab-splitter-desktop): VST3 + standalone app, ONNX Runtime 1.18 next to the binaries, the 302 MB model
+  # htdemucs.onnx downloaded from the ELEK_MODEL_URL repository variable (it is over GitHub's file limit, so it is not synced).
+  elek-windows:
+    name: windows (Elek)
+    runs-on: windows-latest
+    if: ${{ vars.ELEK_MODEL_URL != '' }}
+    defaults:
+      run:
+        working-directory: subverselab-splitter-desktop
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: subverselab-splitter-desktop/build/_deps
+          key: ${{ runner.os }}-juce-elek
+
+      - name: ONNX Runtime 1.18.0 (win x64) and the model
+        run: |
+          mkdir -p _deps/onnxruntime Resources
+          curl -fL -o ort.zip "https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-win-x64-1.18.0.zip"
+          7z x -y ort.zip -o_deps > /dev/null
+          cp -r _deps/onnxruntime-win-x64-1.18.0/* _deps/onnxruntime/
+          curl -fL -o Resources/htdemucs.onnx "${{ vars.ELEK_MODEL_URL }}"
+          ls -la Resources/htdemucs.onnx _deps/onnxruntime/lib
+
+      - name: Configure (Release, x64)
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DSVL_LICENSING=OFF
+
+      - name: Build VST3 + standalone + ui_snapshot
+        run: cmake --build build --config Release --target SubverseSplitter_VST3 SubverseSplitter_Standalone test_ui_snapshot elek_host_test --parallel
+
+      - name: Bundle contents (DLL and model must sit next to the plug-in binary)
+        run: ls -la build/SubverseSplitter_artefacts/Release/VST3/ELEK.vst3/Contents/x86_64-win build/SubverseSplitter_artefacts/Release/Standalone
+
+      # Loads ELEK.vst3 as a DAW does and runs one separation (SPLITTER_AUTOTEST). A VST3 that imports onnxruntime.dll directly does
+      # not load in a DAW on Windows; this is the gate for the delay-loaded path. The release is not published unless it passes.
+      - name: Host test (load the VST3, separate 20 s, check the stems)
+        run: |
+          ./build/elek_host_test_artefacts/Release/elek_host_test.exe "$(pwd)/build/SubverseSplitter_artefacts/Release/VST3/ELEK.vst3" 1500 || { echo "---- ELEK.log"; cat "$APPDATA/SubverseLab/ELEK.log" 2>/dev/null || find "$USERPROFILE" -name ELEK.log -path '*SubverseLab*' -exec cat {} \; 2>/dev/null; exit 1; }
+
+      - name: Panel snapshot (empty state)
+        continue-on-error: true
+        run: ./build/test_ui_snapshot_artefacts/Release/test_ui_snapshot.exe --empty "$GITHUB_WORKSPACE/Elek-windows-panel.png"
+
+      - name: Zip VST3 + app
+        run: |
+          cd build/SubverseSplitter_artefacts/Release
+          7z a -r "$GITHUB_WORKSPACE/ELEK-windows.zip" VST3/ELEK.vst3 Standalone/ELEK.exe Standalone/onnxruntime.dll Standalone/htdemucs.onnx
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ELEK-windows
+          path: ELEK-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: Elek-windows-panel
+          path: Elek-windows-panel.png

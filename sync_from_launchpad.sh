@@ -58,11 +58,26 @@ sync_plugin subverselab-mihenk
 sync_plugin subverselab-taban
 sync_plugin subverselab-kor        # ALEV (working name KOR)
 
+# ELEK (project subverselab-splitter-desktop): also its Resources/ (fonts, brand mark, app icon), but NOT the 302 MB model
+# htdemucs.onnx (over GitHub's file limit): the elek-windows job downloads it from ELEK_MODEL_URL. Not _deps/ either: the job
+# downloads ONNX Runtime for Windows itself.
+echo "Syncing subverselab-splitter-desktop (ELEK)..."
+rsync -av --prune-empty-dirs \
+  "${EXCLUDES[@]}" \
+  --exclude '*.onnx' --exclude '_deps/' --exclude 'work/' --exclude 'listen_*/' \
+  --include '*/' \
+  --include 'CMakeLists.txt' --include 'Source/***' --include 'Resources/***' \
+  --include '*.cpp' --include 'README.md' \
+  --exclude '*' \
+  "$SRC_ROOT/subverselab-splitter-desktop/" "$DEST_ROOT/subverselab-splitter-desktop/"
+
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \
   "${EXCLUDES[@]}" \
   --include '*/' \
   --include 'Licensing/***' \
+  --include 'cmake/***' \
+  --include 'tools/app_icon/***' \
   --include 'README.md' \
   --exclude '*' \
   "$SRC_ROOT/subverselab-plugin-common/" "$DEST_ROOT/subverselab-plugin-common/"
