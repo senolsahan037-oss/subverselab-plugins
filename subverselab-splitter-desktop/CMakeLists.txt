@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SubverseSplitter VERSION 1.0.0 LANGUAGES C CXX)
+project(SubverseSplitter VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,7 +28,7 @@ juce_add_plugin(SubverseSplitter
     PLUGIN_MANUFACTURER_CODE Svlb
     PLUGIN_CODE Elek
     BUNDLE_ID com.subverselab.elek
-    VERSION "1.0.0"
+    VERSION "1.0.1"
     FORMATS Standalone VST3 AU
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE

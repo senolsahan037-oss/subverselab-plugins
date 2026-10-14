@@ -1002,6 +1002,7 @@ SubverseSplitterAudioProcessorEditor::StemPanel::StemPanel(const juce::String& n
     exportButton.setTooltip ("Drag into your DAW, or click to show the file");
     exportButton.addMouseListener (this, false);
     addAndMakeVisible (exportButton);
+    setMouseCursor (juce::MouseCursor::DraggingHandCursor);   // the row is grabbed to drop the stem into a DAW
 
     startTimerHz (30);
     generateWaveformPreview();
@@ -1077,13 +1078,12 @@ void SubverseSplitterAudioProcessorEditor::StemPanel::mouseDown (const juce::Mou
 
 void SubverseSplitterAudioProcessorEditor::StemPanel::mouseDrag (const juce::MouseEvent& e)
 {
-    if (e.originalComponent == this)
-    {
-        if (waveArea().contains (e.mouseDownPosition))
-            seekTo (e.x);
-        return;
-    }
-    if (e.originalComponent == &exportButton && ! dragging && e.getDistanceFromDragStart() > 4
+    // Grabbing the stem itself (its waveform) or its WAV button and pulling drops the WAV into a DAW track (owner,
+    // 14 Oct: "sesi tutup DAW'da bir kanala sürükleme"). A click on the waveform still seeks (mouseDown); a drag no
+    // longer scrubs, because the waveform is what people grab to take the stem.
+    const bool fromWave = e.originalComponent == this && waveArea().contains (e.mouseDownPosition);
+    const bool fromButton = e.originalComponent == &exportButton;
+    if ((fromWave || fromButton) && ! dragging && e.getDistanceFromDragStart() > 4
         && ! dragContainer.isDragAndDropActive() && targetFile.existsAsFile())
     {
         dragging = true;
