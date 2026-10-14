@@ -305,9 +305,13 @@ public:
     /** Milliseconds of CPU time of this thread: a busy machine does not inflate it the way wall time is. */
     static double cpuMs()
     {
+       #if JUCE_WINDOWS
+        return juce::Time::getMillisecondCounterHiRes();   // no per-thread CPU clock here without <windows.h>; wall time is enough for the bench
+       #else
         timespec ts {};
         clock_gettime (CLOCK_THREAD_CPUTIME_ID, &ts);
         return (double) ts.tv_sec * 1000.0 + (double) ts.tv_nsec * 1.0e-6;
+       #endif
     }
     LiveStats benchLive (float scale, int frames, bool silent)
     {
