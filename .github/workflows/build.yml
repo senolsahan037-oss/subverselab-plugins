@@ -67,6 +67,15 @@ jobs:
             check: "./build/render_artefacts/Release/render.exe --selftest"
             standalone_exe: "MIHENK.exe"
             snapshot_variants: "v10-simple v10-advanced plugin"
+          # KIYMA: ui_snapshot takes --out <file>, so the panel image is written by the check step itself (to the path the
+          # "Panel snapshot" upload reads); the plain positional call in that step is then a harmless no-op.
+          - name: Kiyma
+            dir: subverselab-kiyma
+            artifact: KIYMA-windows-vst3
+            vst3_name: "KIYMA.vst3"
+            tools: "render ui_snapshot"
+            check: "./build/render_artefacts/Release/render.exe --selftest && ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out ../Kiyma-windows-panel.png --preset 1 --t 3 --fake-audio --mix 1"
+            soft_test: true
     steps:
       - uses: actions/checkout@v4
 

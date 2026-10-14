@@ -57,6 +57,7 @@ sync_plugin subverselab-tutkal
 sync_plugin subverselab-mihenk
 sync_plugin subverselab-taban
 sync_plugin subverselab-kor        # ALEV (working name KOR)
+sync_plugin subverselab-kiyma
 
 # ELEK (project subverselab-splitter-desktop): also its Resources/ (fonts, brand mark, app icon), but NOT the 302 MB model
 # htdemucs.onnx (over GitHub's file limit): the elek-windows job downloads it from ELEK_MODEL_URL. Not _deps/ either: the job
