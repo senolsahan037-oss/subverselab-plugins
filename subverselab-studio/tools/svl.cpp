@@ -329,7 +329,7 @@ static int selftest (const std::string& outDir)
     std::string cmd = "mkdir -p '" + outDir + "'";
     if (std::system (cmd.c_str()) != 0) return 2;
     Report R; R.f = std::fopen ((outDir + "/selftest_report.txt").c_str(), "w");
-    const int SR = 44100;
+    static constexpr int SR = 44100;   // static constexpr: MSVC lets captureless lambdas below read it
     R.line ("SVL engine selftest — sample rate %d Hz", SR);
 
     // 1. aliasing through the engine's own voice path (VA at 2x -> drive off -> decimator -> SVF high-pass at 20 Hz, Q 0.5),
