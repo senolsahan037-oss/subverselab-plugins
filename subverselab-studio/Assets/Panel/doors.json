@@ -1,0 +1,6041 @@
+{
+ "size": [
+  1162,
+  575
+ ],
+ "origin": [
+  208,
+  249
+ ],
+ "seq": {
+  "modules": [
+   {
+    "title": "ARP",
+    "rect": [
+     8,
+     8,
+     692,
+     150
+    ]
+   },
+   {
+    "title": "SEQUENCE",
+    "rect": [
+     708,
+     8,
+     446,
+     150
+    ]
+   },
+   {
+    "title": "",
+    "rect": [
+     8,
+     166,
+     1146,
+     401
+    ]
+   }
+  ],
+  "windows": [],
+  "round_windows": [],
+  "knobs": [
+   {
+    "id": "arp.octaves",
+    "c": [
+     580,
+     86
+    ],
+    "d": 46
+   },
+   {
+    "id": "arp.gate",
+    "c": [
+     630,
+     86
+    ],
+    "d": 46
+   },
+   {
+    "id": "arp.swing",
+    "c": [
+     680,
+     86
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.length",
+    "c": [
+     996,
+     86
+    ],
+    "d": 44
+   },
+   {
+    "id": "seq.swing",
+    "c": [
+     1052,
+     86
+    ],
+    "d": 44
+   },
+   {
+    "id": "seq.s1.note",
+    "c": [
+     132.7,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s1.vel",
+    "c": [
+     132.7,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s1.gate",
+    "c": [
+     132.7,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s2.note",
+    "c": [
+     198.1,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s2.vel",
+    "c": [
+     198.1,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s2.gate",
+    "c": [
+     198.1,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s3.note",
+    "c": [
+     263.4,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s3.vel",
+    "c": [
+     263.4,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s3.gate",
+    "c": [
+     263.4,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s4.note",
+    "c": [
+     328.8,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s4.vel",
+    "c": [
+     328.8,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s4.gate",
+    "c": [
+     328.8,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s5.note",
+    "c": [
+     394.2,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s5.vel",
+    "c": [
+     394.2,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s5.gate",
+    "c": [
+     394.2,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s6.note",
+    "c": [
+     459.6,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s6.vel",
+    "c": [
+     459.6,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s6.gate",
+    "c": [
+     459.6,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s7.note",
+    "c": [
+     524.9,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s7.vel",
+    "c": [
+     524.9,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s7.gate",
+    "c": [
+     524.9,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s8.note",
+    "c": [
+     590.3,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s8.vel",
+    "c": [
+     590.3,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s8.gate",
+    "c": [
+     590.3,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s9.note",
+    "c": [
+     655.7,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s9.vel",
+    "c": [
+     655.7,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s9.gate",
+    "c": [
+     655.7,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s10.note",
+    "c": [
+     721.1,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s10.vel",
+    "c": [
+     721.1,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s10.gate",
+    "c": [
+     721.1,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s11.note",
+    "c": [
+     786.4,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s11.vel",
+    "c": [
+     786.4,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s11.gate",
+    "c": [
+     786.4,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s12.note",
+    "c": [
+     851.8,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s12.vel",
+    "c": [
+     851.8,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s12.gate",
+    "c": [
+     851.8,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s13.note",
+    "c": [
+     917.2,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s13.vel",
+    "c": [
+     917.2,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s13.gate",
+    "c": [
+     917.2,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s14.note",
+    "c": [
+     982.6,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s14.vel",
+    "c": [
+     982.6,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s14.gate",
+    "c": [
+     982.6,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s15.note",
+    "c": [
+     1047.9,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s15.vel",
+    "c": [
+     1047.9,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s15.gate",
+    "c": [
+     1047.9,
+     412
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s16.note",
+    "c": [
+     1113.3,
+     294
+    ],
+    "d": 46
+   },
+   {
+    "id": "seq.s16.vel",
+    "c": [
+     1113.3,
+     356
+    ],
+    "d": 40
+   },
+   {
+    "id": "seq.s16.gate",
+    "c": [
+     1113.3,
+     412
+    ],
+    "d": 40
+   }
+  ],
+  "switches": [
+   {
+    "id": "arp.on",
+    "c": [
+     42,
+     90
+    ],
+    "d": 44,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "arp.latch",
+    "c": [
+     92,
+     90
+    ],
+    "d": 44,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.on",
+    "c": [
+     744,
+     90
+    ],
+    "d": 44,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.mode",
+    "c": [
+     800,
+     90
+    ],
+    "d": 44,
+    "positions": 2,
+    "up": 0,
+    "down": 1
+   },
+   {
+    "id": "seq.s1.row",
+    "c": [
+     132.7,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s1.slide",
+    "c": [
+     117.69999999999999,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s1.accent",
+    "c": [
+     147.7,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s2.row",
+    "c": [
+     198.1,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s2.slide",
+    "c": [
+     183.1,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s2.accent",
+    "c": [
+     213.1,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s3.row",
+    "c": [
+     263.4,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s3.slide",
+    "c": [
+     248.39999999999998,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s3.accent",
+    "c": [
+     278.4,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s4.row",
+    "c": [
+     328.8,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s4.slide",
+    "c": [
+     313.8,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s4.accent",
+    "c": [
+     343.8,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s5.row",
+    "c": [
+     394.2,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s5.slide",
+    "c": [
+     379.2,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s5.accent",
+    "c": [
+     409.2,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s6.row",
+    "c": [
+     459.6,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s6.slide",
+    "c": [
+     444.6,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s6.accent",
+    "c": [
+     474.6,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s7.row",
+    "c": [
+     524.9,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s7.slide",
+    "c": [
+     509.9,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s7.accent",
+    "c": [
+     539.9,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s8.row",
+    "c": [
+     590.3,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s8.slide",
+    "c": [
+     575.3,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s8.accent",
+    "c": [
+     605.3,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s9.row",
+    "c": [
+     655.7,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s9.slide",
+    "c": [
+     640.7,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s9.accent",
+    "c": [
+     670.7,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s10.row",
+    "c": [
+     721.1,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s10.slide",
+    "c": [
+     706.1,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s10.accent",
+    "c": [
+     736.1,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s11.row",
+    "c": [
+     786.4,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s11.slide",
+    "c": [
+     771.4,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s11.accent",
+    "c": [
+     801.4,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s12.row",
+    "c": [
+     851.8,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s12.slide",
+    "c": [
+     836.8,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s12.accent",
+    "c": [
+     866.8,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s13.row",
+    "c": [
+     917.2,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s13.slide",
+    "c": [
+     902.2,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s13.accent",
+    "c": [
+     932.2,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s14.row",
+    "c": [
+     982.6,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s14.slide",
+    "c": [
+     967.6,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s14.accent",
+    "c": [
+     997.6,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s15.row",
+    "c": [
+     1047.9,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s15.slide",
+    "c": [
+     1032.9,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s15.accent",
+    "c": [
+     1062.9,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s16.row",
+    "c": [
+     1113.3,
+     470
+    ],
+    "d": 40,
+    "positions": 3,
+    "up": 2,
+    "down": 0,
+    "mid": 1
+   },
+   {
+    "id": "seq.s16.slide",
+    "c": [
+     1098.3,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "seq.s16.accent",
+    "c": [
+     1128.3,
+     530
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   }
+  ],
+  "selectors": [
+   {
+    "id": "arp.mode",
+    "c": [
+     190,
+     90
+    ],
+    "d": 56,
+    "count": 7,
+    "span": 270
+   },
+   {
+    "id": "arp.chord",
+    "c": [
+     348,
+     90
+    ],
+    "d": 54,
+    "count": 12,
+    "span": 270
+   },
+   {
+    "id": "arp.rate",
+    "c": [
+     486,
+     90
+    ],
+    "d": 54,
+    "count": 6,
+    "span": 270
+   },
+   {
+    "id": "seq.rate",
+    "c": [
+     894,
+     90
+    ],
+    "d": 52,
+    "count": 6,
+    "span": 270
+   }
+  ],
+  "leds": [
+   {
+    "step": 0,
+    "c": [
+     132.7,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 1,
+    "c": [
+     198.1,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 2,
+    "c": [
+     263.4,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 3,
+    "c": [
+     328.8,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 4,
+    "c": [
+     394.2,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 5,
+    "c": [
+     459.6,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 6,
+    "c": [
+     524.9,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 7,
+    "c": [
+     590.3,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 8,
+    "c": [
+     655.7,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 9,
+    "c": [
+     721.1,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 10,
+    "c": [
+     786.4,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 11,
+    "c": [
+     851.8,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 12,
+    "c": [
+     917.2,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 13,
+    "c": [
+     982.6,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 14,
+    "c": [
+     1047.9,
+     202
+    ],
+    "d": 18
+   },
+   {
+    "step": 15,
+    "c": [
+     1113.3,
+     202
+    ],
+    "d": 18
+   }
+  ],
+  "steps": [
+   {
+    "id": "seq.s1.on",
+    "c": [
+     132.7,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s2.on",
+    "c": [
+     198.1,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s3.on",
+    "c": [
+     263.4,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s4.on",
+    "c": [
+     328.8,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s5.on",
+    "c": [
+     394.2,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s6.on",
+    "c": [
+     459.6,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s7.on",
+    "c": [
+     524.9,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s8.on",
+    "c": [
+     590.3,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s9.on",
+    "c": [
+     655.7,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s10.on",
+    "c": [
+     721.1,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s11.on",
+    "c": [
+     786.4,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s12.on",
+    "c": [
+     851.8,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s13.on",
+    "c": [
+     917.2,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s14.on",
+    "c": [
+     982.6,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s15.on",
+    "c": [
+     1047.9,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   },
+   {
+    "id": "seq.s16.on",
+    "c": [
+     1113.3,
+     236
+    ],
+    "d": 40,
+    "states": 2
+   }
+  ],
+  "keys": [
+   {
+    "label": "PLAY",
+    "rect": [
+     988,
+     16,
+     74,
+     24
+    ],
+    "play": {
+     "on": "seq.on",
+     "mode": "seq.mode",
+     "free": 1,
+     "hold": 0
+    },
+    "tip": "Play the sequence on its own clock (no key needed); again: stop"
+   },
+   {
+    "label": "PATTERN",
+    "rect": [
+     822,
+     16,
+     74,
+     24
+    ],
+    "source": {
+     "param": "daw.seq",
+     "unit": 0
+    },
+    "tip": "PATTERN: the arp and the sequence play. MIDI: only the notes from your DAW play (a dragged clip switches here by itself)"
+   },
+   {
+    "label": "CLIP",
+    "rect": [
+     904,
+     16,
+     74,
+     24
+    ],
+    "clip": 0,
+    "tip": "Drag onto a DAW track: the sequence as a MIDI clip. Click: save it to Music/JING FANG/MIDI"
+   },
+   {
+    "label": "CLEAR",
+    "rect": [
+     1070,
+     16,
+     74,
+     24
+    ],
+    "clear": [
+     "seq.s1.on",
+     "seq.s1.note",
+     "seq.s1.row",
+     "seq.s1.vel",
+     "seq.s1.gate",
+     "seq.s1.slide",
+     "seq.s1.accent",
+     "seq.s2.on",
+     "seq.s2.note",
+     "seq.s2.row",
+     "seq.s2.vel",
+     "seq.s2.gate",
+     "seq.s2.slide",
+     "seq.s2.accent",
+     "seq.s3.on",
+     "seq.s3.note",
+     "seq.s3.row",
+     "seq.s3.vel",
+     "seq.s3.gate",
+     "seq.s3.slide",
+     "seq.s3.accent",
+     "seq.s4.on",
+     "seq.s4.note",
+     "seq.s4.row",
+     "seq.s4.vel",
+     "seq.s4.gate",
+     "seq.s4.slide",
+     "seq.s4.accent",
+     "seq.s5.on",
+     "seq.s5.note",
+     "seq.s5.row",
+     "seq.s5.vel",
+     "seq.s5.gate",
+     "seq.s5.slide",
+     "seq.s5.accent",
+     "seq.s6.on",
+     "seq.s6.note",
+     "seq.s6.row",
+     "seq.s6.vel",
+     "seq.s6.gate",
+     "seq.s6.slide",
+     "seq.s6.accent",
+     "seq.s7.on",
+     "seq.s7.note",
+     "seq.s7.row",
+     "seq.s7.vel",
+     "seq.s7.gate",
+     "seq.s7.slide",
+     "seq.s7.accent",
+     "seq.s8.on",
+     "seq.s8.note",
+     "seq.s8.row",
+     "seq.s8.vel",
+     "seq.s8.gate",
+     "seq.s8.slide",
+     "seq.s8.accent",
+     "seq.s9.on",
+     "seq.s9.note",
+     "seq.s9.row",
+     "seq.s9.vel",
+     "seq.s9.gate",
+     "seq.s9.slide",
+     "seq.s9.accent",
+     "seq.s10.on",
+     "seq.s10.note",
+     "seq.s10.row",
+     "seq.s10.vel",
+     "seq.s10.gate",
+     "seq.s10.slide",
+     "seq.s10.accent",
+     "seq.s11.on",
+     "seq.s11.note",
+     "seq.s11.row",
+     "seq.s11.vel",
+     "seq.s11.gate",
+     "seq.s11.slide",
+     "seq.s11.accent",
+     "seq.s12.on",
+     "seq.s12.note",
+     "seq.s12.row",
+     "seq.s12.vel",
+     "seq.s12.gate",
+     "seq.s12.slide",
+     "seq.s12.accent",
+     "seq.s13.on",
+     "seq.s13.note",
+     "seq.s13.row",
+     "seq.s13.vel",
+     "seq.s13.gate",
+     "seq.s13.slide",
+     "seq.s13.accent",
+     "seq.s14.on",
+     "seq.s14.note",
+     "seq.s14.row",
+     "seq.s14.vel",
+     "seq.s14.gate",
+     "seq.s14.slide",
+     "seq.s14.accent",
+     "seq.s15.on",
+     "seq.s15.note",
+     "seq.s15.row",
+     "seq.s15.vel",
+     "seq.s15.gate",
+     "seq.s15.slide",
+     "seq.s15.accent",
+     "seq.s16.on",
+     "seq.s16.note",
+     "seq.s16.row",
+     "seq.s16.vel",
+     "seq.s16.gate",
+     "seq.s16.slide",
+     "seq.s16.accent"
+    ],
+    "tip": "Every step back to its default (right-click a step key: that step off)"
+   }
+  ],
+  "prints": [
+   {
+    "text": "ARP",
+    "x": 22,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "SEQUENCE",
+    "x": 722,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "ON",
+    "x": 42,
+    "y": 120.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LATCH",
+    "x": 92,
+    "y": 120.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "UP",
+    "x": 161.6,
+    "y": 118.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "DOWN",
+    "x": 142.4,
+    "y": 90.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "U-D",
+    "x": 160.2,
+    "y": 61.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "D-U",
+    "x": 190.0,
+    "y": 48.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RND",
+    "x": 219.8,
+    "y": 61.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "CHORD",
+    "x": 240.6,
+    "y": 90.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "PLAY",
+    "x": 221.3,
+    "y": 118.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MODE",
+    "x": 190,
+    "y": 142,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 301.2,
+    "y": 123.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OCT",
+    "x": 284.1,
+    "y": 105.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "5TH",
+    "x": 279.5,
+    "y": 86.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MAJ",
+    "x": 288.6,
+    "y": 68.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MIN",
+    "x": 308.9,
+    "y": 52.2,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SUS2",
+    "x": 334.7,
+    "y": 43.2,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SUS4",
+    "x": 361.3,
+    "y": 43.2,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MAJ7",
+    "x": 388.1,
+    "y": 52.2,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MIN7",
+    "x": 409.6,
+    "y": 68.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "7",
+    "x": 410.7,
+    "y": 86.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ADD9",
+    "x": 414.4,
+    "y": 105.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MIN9",
+    "x": 396.2,
+    "y": 123.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "CHORD",
+    "x": 348,
+    "y": 144,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/4",
+    "x": 457.6,
+    "y": 118.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8",
+    "x": 443.9,
+    "y": 84.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8T",
+    "x": 468.2,
+    "y": 53.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16",
+    "x": 503.8,
+    "y": 53.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16T",
+    "x": 533.8,
+    "y": 84.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/32",
+    "x": 515.9,
+    "y": 118.9,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 486,
+    "y": 142,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OCT",
+    "x": 580,
+    "y": 118.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "GATE",
+    "x": 630,
+    "y": 118.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SWING",
+    "x": 680,
+    "y": 118.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ON",
+    "x": 744,
+    "y": 120.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "HOLD",
+    "x": 800,
+    "y": 58,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FREE",
+    "x": 800,
+    "y": 124,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/4",
+    "x": 867.0,
+    "y": 117.4,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8",
+    "x": 853.9,
+    "y": 84.3,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8T",
+    "x": 877.1,
+    "y": 54.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16",
+    "x": 910.9,
+    "y": 54.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16T",
+    "x": 939.8,
+    "y": 84.3,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/32",
+    "x": 922.4,
+    "y": 117.4,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 894,
+    "y": 140,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "STEPS",
+    "x": 996,
+    "y": 117.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SWING",
+    "x": 1052,
+    "y": 117.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "STEP",
+    "x": 22,
+    "y": 236,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "NOTE",
+    "x": 22,
+    "y": 294,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "VEL",
+    "x": 22,
+    "y": 356,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "GATE",
+    "x": 22,
+    "y": 412,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "ROW",
+    "x": 22,
+    "y": 470,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "SLIDE / ACC",
+    "x": 22,
+    "y": 530,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "HI",
+    "x": 72,
+    "y": 458,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LO",
+    "x": 72,
+    "y": 482,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1",
+    "x": 132.7,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "2",
+    "x": 198.1,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "3",
+    "x": 263.4,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "4",
+    "x": 328.8,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "5",
+    "x": 394.2,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "6",
+    "x": 459.6,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "7",
+    "x": 524.9,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "8",
+    "x": 590.3,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "9",
+    "x": 655.7,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "10",
+    "x": 721.1,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "11",
+    "x": 786.4,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "12",
+    "x": 851.8,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "13",
+    "x": 917.2,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "14",
+    "x": 982.6,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "15",
+    "x": 1047.9,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "16",
+    "x": 1113.3,
+    "y": 182,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   }
+  ],
+  "pickers": [],
+  "faders": [],
+  "tempo": [
+   {
+    "c": [
+     1112,
+     86
+    ],
+    "d": 44
+   }
+  ]
+ },
+ "lab": {
+  "modules": [
+   {
+    "title": "TUNING A",
+    "rect": [
+     8,
+     8,
+     560,
+     170
+    ]
+   },
+   {
+    "title": "TUNING B",
+    "rect": [
+     8,
+     186,
+     560,
+     170
+    ]
+   },
+   {
+    "title": "LAB",
+    "rect": [
+     8,
+     364,
+     560,
+     203
+    ]
+   },
+   {
+    "title": "PITCH WHEEL",
+    "rect": [
+     576,
+     8,
+     330,
+     348
+    ]
+   },
+   {
+    "title": "WHAT SOUNDS",
+    "rect": [
+     914,
+     8,
+     240,
+     559
+    ]
+   },
+   {
+    "title": "",
+    "rect": [
+     576,
+     364,
+     330,
+     203
+    ]
+   }
+  ],
+  "windows": [
+   [
+    24,
+    34,
+    528,
+    92
+   ],
+   [
+    24,
+    212,
+    528,
+    92
+   ],
+   [
+    928,
+    34,
+    212,
+    519
+   ],
+   [
+    592,
+    380,
+    298,
+    171
+   ]
+  ],
+  "round_windows": [
+   {
+    "c": [
+     741,
+     192
+    ],
+    "r": 146
+   }
+  ],
+  "knobs": [],
+  "switches": [],
+  "selectors": [],
+  "leds": [],
+  "steps": [],
+  "keys": [],
+  "prints": [
+   {
+    "text": "TUNING A",
+    "x": 22,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "TUNING B",
+    "x": 22,
+    "y": 202,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "LAB",
+    "x": 22,
+    "y": 380,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "PITCH WHEEL",
+    "x": 590,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "WHAT SOUNDS",
+    "x": 928,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "LAB ON",
+    "x": 58,
+    "y": 510,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ON",
+    "x": 58,
+    "y": 424,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 58,
+    "y": 496,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "DIRECTION",
+    "x": 138,
+    "y": 510,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ON",
+    "x": 138,
+    "y": 424,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 138,
+    "y": 496,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ADAPTIVE",
+    "x": 218,
+    "y": 510,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "ON",
+    "x": 218,
+    "y": 424,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 218,
+    "y": 496,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MORPH A > B",
+    "x": 338,
+    "y": 511.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "WINDOW",
+    "x": 438,
+    "y": 500.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "HOME PULL",
+    "x": 512,
+    "y": 500.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "A",
+    "x": 294,
+    "y": 504,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "B",
+    "x": 382,
+    "y": 504,
+    "size": 11.2,
+    "ink": "gold",
+    "align": "CENTER"
+   }
+  ],
+  "pickers": [],
+  "faders": [],
+  "cards": [
+   [
+    24,
+    34,
+    528,
+    92
+   ],
+   [
+    24,
+    212,
+    528,
+    92
+   ]
+  ],
+  "card_keys": [
+   [
+    24,
+    136
+   ],
+   [
+    24,
+    314
+   ]
+  ],
+  "sounds": [
+   928,
+   34,
+   212,
+   519
+  ],
+  "status": [
+   592,
+   380,
+   298,
+   171
+  ],
+  "lab_switches": [
+   {
+    "what": "on",
+    "c": [
+     58,
+     460
+    ],
+    "d": 48,
+    "label": "LAB ON"
+   },
+   {
+    "what": "directional",
+    "c": [
+     138,
+     460
+    ],
+    "d": 48,
+    "label": "DIRECTION"
+   },
+   {
+    "what": "adaptive",
+    "c": [
+     218,
+     460
+    ],
+    "d": 48,
+    "label": "ADAPTIVE"
+   }
+  ],
+  "lab_knobs": [
+   {
+    "what": "morph",
+    "c": [
+     338,
+     462
+    ],
+    "d": 74,
+    "label": "MORPH A > B"
+   },
+   {
+    "what": "window",
+    "c": [
+     438,
+     462
+    ],
+    "d": 52,
+    "label": "WINDOW"
+   },
+   {
+    "what": "pull",
+    "c": [
+     512,
+     462
+    ],
+    "d": 52,
+    "label": "HOME PULL"
+   }
+  ]
+ },
+ "drum": {
+  "modules": [
+   {
+    "title": "DRUMS",
+    "rect": [
+     8,
+     8,
+     1146,
+     74
+    ]
+   },
+   {
+    "title": "",
+    "rect": [
+     8,
+     90,
+     1146,
+     477
+    ]
+   }
+  ],
+  "windows": [
+   [
+    22,
+    142.3,
+    130,
+    30
+   ],
+   [
+    22,
+    196.9,
+    130,
+    30
+   ],
+   [
+    22,
+    251.60000000000002,
+    130,
+    30
+   ],
+   [
+    22,
+    306.2,
+    130,
+    30
+   ],
+   [
+    22,
+    360.8,
+    130,
+    30
+   ],
+   [
+    22,
+    415.4,
+    130,
+    30
+   ],
+   [
+    22,
+    470.1,
+    130,
+    30
+   ],
+   [
+    22,
+    524.7,
+    130,
+    30
+   ]
+  ],
+  "round_windows": [],
+  "knobs": [
+   {
+    "id": "drums.length",
+    "c": [
+     428,
+     46
+    ],
+    "d": 40
+   },
+   {
+    "id": "drums.swing",
+    "c": [
+     548,
+     46
+    ],
+    "d": 40
+   },
+   {
+    "id": "drums.level",
+    "c": [
+     668,
+     46
+    ],
+    "d": 40
+   },
+   {
+    "id": "drums.t1.level",
+    "c": [
+     212,
+     157.3
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t1.tune",
+    "c": [
+     246,
+     157.3
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t1.decay",
+    "c": [
+     280,
+     157.3
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t1.pan",
+    "c": [
+     314,
+     157.3
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t2.level",
+    "c": [
+     212,
+     211.9
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t2.tune",
+    "c": [
+     246,
+     211.9
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t2.decay",
+    "c": [
+     280,
+     211.9
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t2.pan",
+    "c": [
+     314,
+     211.9
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t3.level",
+    "c": [
+     212,
+     266.6
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t3.tune",
+    "c": [
+     246,
+     266.6
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t3.decay",
+    "c": [
+     280,
+     266.6
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t3.pan",
+    "c": [
+     314,
+     266.6
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t4.level",
+    "c": [
+     212,
+     321.2
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t4.tune",
+    "c": [
+     246,
+     321.2
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t4.decay",
+    "c": [
+     280,
+     321.2
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t4.pan",
+    "c": [
+     314,
+     321.2
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t5.level",
+    "c": [
+     212,
+     375.8
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t5.tune",
+    "c": [
+     246,
+     375.8
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t5.decay",
+    "c": [
+     280,
+     375.8
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t5.pan",
+    "c": [
+     314,
+     375.8
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t6.level",
+    "c": [
+     212,
+     430.4
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t6.tune",
+    "c": [
+     246,
+     430.4
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t6.decay",
+    "c": [
+     280,
+     430.4
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t6.pan",
+    "c": [
+     314,
+     430.4
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t7.level",
+    "c": [
+     212,
+     485.1
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t7.tune",
+    "c": [
+     246,
+     485.1
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t7.decay",
+    "c": [
+     280,
+     485.1
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t7.pan",
+    "c": [
+     314,
+     485.1
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t8.level",
+    "c": [
+     212,
+     539.7
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t8.tune",
+    "c": [
+     246,
+     539.7
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t8.decay",
+    "c": [
+     280,
+     539.7
+    ],
+    "d": 28
+   },
+   {
+    "id": "drums.t8.pan",
+    "c": [
+     314,
+     539.7
+    ],
+    "d": 28
+   }
+  ],
+  "switches": [
+   {
+    "id": "drums.on",
+    "c": [
+     108,
+     48
+    ],
+    "d": 40,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.keys",
+    "c": [
+     770,
+     48
+    ],
+    "d": 40,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.mode",
+    "c": [
+     880,
+     48
+    ],
+    "d": 40,
+    "positions": 2,
+    "up": 0,
+    "down": 1
+   },
+   {
+    "id": "drums.t1.mute",
+    "c": [
+     174,
+     157.3
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t2.mute",
+    "c": [
+     174,
+     211.9
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t3.mute",
+    "c": [
+     174,
+     266.6
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t4.mute",
+    "c": [
+     174,
+     321.2
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t5.mute",
+    "c": [
+     174,
+     375.8
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t6.mute",
+    "c": [
+     174,
+     430.4
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t7.mute",
+    "c": [
+     174,
+     485.1
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "drums.t8.mute",
+    "c": [
+     174,
+     539.7
+    ],
+    "d": 34,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   }
+  ],
+  "selectors": [
+   {
+    "id": "drums.rate",
+    "c": [
+     186,
+     48
+    ],
+    "d": 40,
+    "count": 6,
+    "span": 270
+   },
+   {
+    "id": "drums.octave",
+    "c": [
+     338,
+     48
+    ],
+    "d": 40,
+    "count": 5,
+    "span": 270
+   }
+  ],
+  "leds": [
+   {
+    "step": 0,
+    "c": [
+     367.1,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 1,
+    "c": [
+     417.2,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 2,
+    "c": [
+     467.3,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 3,
+    "c": [
+     517.4,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 4,
+    "c": [
+     567.6,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 5,
+    "c": [
+     617.7,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 6,
+    "c": [
+     667.8,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 7,
+    "c": [
+     717.9,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 8,
+    "c": [
+     768.1,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 9,
+    "c": [
+     818.2,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 10,
+    "c": [
+     868.3,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 11,
+    "c": [
+     918.4,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 12,
+    "c": [
+     968.6,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 13,
+    "c": [
+     1018.7,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 14,
+    "c": [
+     1068.8,
+     120
+    ],
+    "d": 14
+   },
+   {
+    "step": 15,
+    "c": [
+     1118.9,
+     120
+    ],
+    "d": 14
+   }
+  ],
+  "steps": [
+   {
+    "id": "drums.t1.s1",
+    "c": [
+     367.1,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s2",
+    "c": [
+     417.2,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s3",
+    "c": [
+     467.3,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s4",
+    "c": [
+     517.4,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s5",
+    "c": [
+     567.6,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s6",
+    "c": [
+     617.7,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s7",
+    "c": [
+     667.8,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s8",
+    "c": [
+     717.9,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s9",
+    "c": [
+     768.1,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s10",
+    "c": [
+     818.2,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s11",
+    "c": [
+     868.3,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s12",
+    "c": [
+     918.4,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s13",
+    "c": [
+     968.6,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s14",
+    "c": [
+     1018.7,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s15",
+    "c": [
+     1068.8,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t1.s16",
+    "c": [
+     1118.9,
+     157.3
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s1",
+    "c": [
+     367.1,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s2",
+    "c": [
+     417.2,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s3",
+    "c": [
+     467.3,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s4",
+    "c": [
+     517.4,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s5",
+    "c": [
+     567.6,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s6",
+    "c": [
+     617.7,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s7",
+    "c": [
+     667.8,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s8",
+    "c": [
+     717.9,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s9",
+    "c": [
+     768.1,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s10",
+    "c": [
+     818.2,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s11",
+    "c": [
+     868.3,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s12",
+    "c": [
+     918.4,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s13",
+    "c": [
+     968.6,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s14",
+    "c": [
+     1018.7,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s15",
+    "c": [
+     1068.8,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t2.s16",
+    "c": [
+     1118.9,
+     211.9
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s1",
+    "c": [
+     367.1,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s2",
+    "c": [
+     417.2,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s3",
+    "c": [
+     467.3,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s4",
+    "c": [
+     517.4,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s5",
+    "c": [
+     567.6,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s6",
+    "c": [
+     617.7,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s7",
+    "c": [
+     667.8,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s8",
+    "c": [
+     717.9,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s9",
+    "c": [
+     768.1,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s10",
+    "c": [
+     818.2,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s11",
+    "c": [
+     868.3,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s12",
+    "c": [
+     918.4,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s13",
+    "c": [
+     968.6,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s14",
+    "c": [
+     1018.7,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s15",
+    "c": [
+     1068.8,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t3.s16",
+    "c": [
+     1118.9,
+     266.6
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s1",
+    "c": [
+     367.1,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s2",
+    "c": [
+     417.2,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s3",
+    "c": [
+     467.3,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s4",
+    "c": [
+     517.4,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s5",
+    "c": [
+     567.6,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s6",
+    "c": [
+     617.7,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s7",
+    "c": [
+     667.8,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s8",
+    "c": [
+     717.9,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s9",
+    "c": [
+     768.1,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s10",
+    "c": [
+     818.2,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s11",
+    "c": [
+     868.3,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s12",
+    "c": [
+     918.4,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s13",
+    "c": [
+     968.6,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s14",
+    "c": [
+     1018.7,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s15",
+    "c": [
+     1068.8,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t4.s16",
+    "c": [
+     1118.9,
+     321.2
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s1",
+    "c": [
+     367.1,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s2",
+    "c": [
+     417.2,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s3",
+    "c": [
+     467.3,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s4",
+    "c": [
+     517.4,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s5",
+    "c": [
+     567.6,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s6",
+    "c": [
+     617.7,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s7",
+    "c": [
+     667.8,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s8",
+    "c": [
+     717.9,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s9",
+    "c": [
+     768.1,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s10",
+    "c": [
+     818.2,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s11",
+    "c": [
+     868.3,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s12",
+    "c": [
+     918.4,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s13",
+    "c": [
+     968.6,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s14",
+    "c": [
+     1018.7,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s15",
+    "c": [
+     1068.8,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t5.s16",
+    "c": [
+     1118.9,
+     375.8
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s1",
+    "c": [
+     367.1,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s2",
+    "c": [
+     417.2,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s3",
+    "c": [
+     467.3,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s4",
+    "c": [
+     517.4,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s5",
+    "c": [
+     567.6,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s6",
+    "c": [
+     617.7,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s7",
+    "c": [
+     667.8,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s8",
+    "c": [
+     717.9,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s9",
+    "c": [
+     768.1,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s10",
+    "c": [
+     818.2,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s11",
+    "c": [
+     868.3,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s12",
+    "c": [
+     918.4,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s13",
+    "c": [
+     968.6,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s14",
+    "c": [
+     1018.7,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s15",
+    "c": [
+     1068.8,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t6.s16",
+    "c": [
+     1118.9,
+     430.4
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s1",
+    "c": [
+     367.1,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s2",
+    "c": [
+     417.2,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s3",
+    "c": [
+     467.3,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s4",
+    "c": [
+     517.4,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s5",
+    "c": [
+     567.6,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s6",
+    "c": [
+     617.7,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s7",
+    "c": [
+     667.8,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s8",
+    "c": [
+     717.9,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s9",
+    "c": [
+     768.1,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s10",
+    "c": [
+     818.2,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s11",
+    "c": [
+     868.3,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s12",
+    "c": [
+     918.4,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s13",
+    "c": [
+     968.6,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s14",
+    "c": [
+     1018.7,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s15",
+    "c": [
+     1068.8,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t7.s16",
+    "c": [
+     1118.9,
+     485.1
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s1",
+    "c": [
+     367.1,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s2",
+    "c": [
+     417.2,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s3",
+    "c": [
+     467.3,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s4",
+    "c": [
+     517.4,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s5",
+    "c": [
+     567.6,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s6",
+    "c": [
+     617.7,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s7",
+    "c": [
+     667.8,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s8",
+    "c": [
+     717.9,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s9",
+    "c": [
+     768.1,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s10",
+    "c": [
+     818.2,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s11",
+    "c": [
+     868.3,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s12",
+    "c": [
+     918.4,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s13",
+    "c": [
+     968.6,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s14",
+    "c": [
+     1018.7,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s15",
+    "c": [
+     1068.8,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   },
+   {
+    "id": "drums.t8.s16",
+    "c": [
+     1118.9,
+     539.7
+    ],
+    "d": 40,
+    "states": 3
+   }
+  ],
+  "keys": [
+   {
+    "label": "PATTERN",
+    "rect": [
+     986,
+     16,
+     74,
+     24
+    ],
+    "source": {
+     "param": "daw.drums",
+     "unit": 1
+    },
+    "tip": "PATTERN: the beat plays. MIDI: only your DAW's notes 36..43 hit tracks 1..8 (a dragged clip switches here by itself)"
+   },
+   {
+    "label": "CLIP",
+    "rect": [
+     986,
+     48,
+     74,
+     24
+    ],
+    "clip": 1,
+    "tip": "Drag onto a DAW track: the beat as a MIDI clip (tracks 1..8 = notes 36..43). Click: save it to Music/JING FANG/MIDI"
+   },
+   {
+    "label": "PLAY",
+    "rect": [
+     1068,
+     16,
+     74,
+     24
+    ],
+    "play": {
+     "on": "drums.on",
+     "mode": "drums.mode",
+     "free": 1,
+     "hold": 0
+    },
+    "tip": "Play the beat on its own clock (no key needed); again: stop"
+   },
+   {
+    "label": "CLEAR",
+    "rect": [
+     1068,
+     48,
+     74,
+     24
+    ],
+    "clear": [
+     "drums.t1.s1",
+     "drums.t1.s2",
+     "drums.t1.s3",
+     "drums.t1.s4",
+     "drums.t1.s5",
+     "drums.t1.s6",
+     "drums.t1.s7",
+     "drums.t1.s8",
+     "drums.t1.s9",
+     "drums.t1.s10",
+     "drums.t1.s11",
+     "drums.t1.s12",
+     "drums.t1.s13",
+     "drums.t1.s14",
+     "drums.t1.s15",
+     "drums.t1.s16",
+     "drums.t2.s1",
+     "drums.t2.s2",
+     "drums.t2.s3",
+     "drums.t2.s4",
+     "drums.t2.s5",
+     "drums.t2.s6",
+     "drums.t2.s7",
+     "drums.t2.s8",
+     "drums.t2.s9",
+     "drums.t2.s10",
+     "drums.t2.s11",
+     "drums.t2.s12",
+     "drums.t2.s13",
+     "drums.t2.s14",
+     "drums.t2.s15",
+     "drums.t2.s16",
+     "drums.t3.s1",
+     "drums.t3.s2",
+     "drums.t3.s3",
+     "drums.t3.s4",
+     "drums.t3.s5",
+     "drums.t3.s6",
+     "drums.t3.s7",
+     "drums.t3.s8",
+     "drums.t3.s9",
+     "drums.t3.s10",
+     "drums.t3.s11",
+     "drums.t3.s12",
+     "drums.t3.s13",
+     "drums.t3.s14",
+     "drums.t3.s15",
+     "drums.t3.s16",
+     "drums.t4.s1",
+     "drums.t4.s2",
+     "drums.t4.s3",
+     "drums.t4.s4",
+     "drums.t4.s5",
+     "drums.t4.s6",
+     "drums.t4.s7",
+     "drums.t4.s8",
+     "drums.t4.s9",
+     "drums.t4.s10",
+     "drums.t4.s11",
+     "drums.t4.s12",
+     "drums.t4.s13",
+     "drums.t4.s14",
+     "drums.t4.s15",
+     "drums.t4.s16",
+     "drums.t5.s1",
+     "drums.t5.s2",
+     "drums.t5.s3",
+     "drums.t5.s4",
+     "drums.t5.s5",
+     "drums.t5.s6",
+     "drums.t5.s7",
+     "drums.t5.s8",
+     "drums.t5.s9",
+     "drums.t5.s10",
+     "drums.t5.s11",
+     "drums.t5.s12",
+     "drums.t5.s13",
+     "drums.t5.s14",
+     "drums.t5.s15",
+     "drums.t5.s16",
+     "drums.t6.s1",
+     "drums.t6.s2",
+     "drums.t6.s3",
+     "drums.t6.s4",
+     "drums.t6.s5",
+     "drums.t6.s6",
+     "drums.t6.s7",
+     "drums.t6.s8",
+     "drums.t6.s9",
+     "drums.t6.s10",
+     "drums.t6.s11",
+     "drums.t6.s12",
+     "drums.t6.s13",
+     "drums.t6.s14",
+     "drums.t6.s15",
+     "drums.t6.s16",
+     "drums.t7.s1",
+     "drums.t7.s2",
+     "drums.t7.s3",
+     "drums.t7.s4",
+     "drums.t7.s5",
+     "drums.t7.s6",
+     "drums.t7.s7",
+     "drums.t7.s8",
+     "drums.t7.s9",
+     "drums.t7.s10",
+     "drums.t7.s11",
+     "drums.t7.s12",
+     "drums.t7.s13",
+     "drums.t7.s14",
+     "drums.t7.s15",
+     "drums.t7.s16",
+     "drums.t8.s1",
+     "drums.t8.s2",
+     "drums.t8.s3",
+     "drums.t8.s4",
+     "drums.t8.s5",
+     "drums.t8.s6",
+     "drums.t8.s7",
+     "drums.t8.s8",
+     "drums.t8.s9",
+     "drums.t8.s10",
+     "drums.t8.s11",
+     "drums.t8.s12",
+     "drums.t8.s13",
+     "drums.t8.s14",
+     "drums.t8.s15",
+     "drums.t8.s16"
+    ],
+    "tip": "Every step of every track off (right-click a step key: that step off)"
+   }
+  ],
+  "prints": [
+   {
+    "text": "DRUMS",
+    "x": 22,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "ON",
+    "x": 108,
+    "y": 20,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 108,
+    "y": 74,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/4",
+    "x": 160.4,
+    "y": 69.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8",
+    "x": 147.9,
+    "y": 43.7,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/8T",
+    "x": 170.0,
+    "y": 20.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16",
+    "x": 202.0,
+    "y": 20.8,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/16T",
+    "x": 229.8,
+    "y": 43.7,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "1/32",
+    "x": 213.0,
+    "y": 69.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 254,
+    "y": 48,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "-2",
+    "x": 313.9,
+    "y": 69.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "-1",
+    "x": 305.3,
+    "y": 37.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "0",
+    "x": 338.0,
+    "y": 17.0,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "+1",
+    "x": 370.7,
+    "y": 37.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "+2",
+    "x": 362.1,
+    "y": 69.1,
+    "size": 8.82,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OCT",
+    "x": 376,
+    "y": 48,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "STEPS",
+    "x": 460,
+    "y": 46,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "SWING",
+    "x": 580,
+    "y": 46,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "LEVEL",
+    "x": 700,
+    "y": 46,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "ON",
+    "x": 770,
+    "y": 20,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OFF",
+    "x": 770,
+    "y": 74,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "MIDI KEYS",
+    "x": 796,
+    "y": 48,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "LEFT"
+   },
+   {
+    "text": "HOLD",
+    "x": 880,
+    "y": 20,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FREE",
+    "x": 880,
+    "y": 74,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SOUND",
+    "x": 87,
+    "y": 106,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "MUTE",
+    "x": 174,
+    "y": 106,
+    "size": 9.8,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "LEVEL",
+    "x": 212,
+    "y": 106,
+    "size": 9.1,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "TUNE",
+    "x": 246,
+    "y": 106,
+    "size": 9.1,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "DECAY",
+    "x": 280,
+    "y": 106,
+    "size": 9.1,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "PAN",
+    "x": 314,
+    "y": 106,
+    "size": 9.1,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "1",
+    "x": 367.1,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "2",
+    "x": 417.2,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "3",
+    "x": 467.3,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "4",
+    "x": 517.4,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "5",
+    "x": 567.6,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "6",
+    "x": 617.7,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "7",
+    "x": 667.8,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "8",
+    "x": 717.9,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "9",
+    "x": 768.1,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "10",
+    "x": 818.2,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "11",
+    "x": 868.3,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "12",
+    "x": 918.4,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "13",
+    "x": 968.6,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "14",
+    "x": 1018.7,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "15",
+    "x": 1068.8,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "16",
+    "x": 1118.9,
+    "y": 104,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   }
+  ],
+  "pickers": [
+   {
+    "track": 0,
+    "rect": [
+     22,
+     142.3,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 1,
+    "rect": [
+     22,
+     196.9,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 2,
+    "rect": [
+     22,
+     251.60000000000002,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 3,
+    "rect": [
+     22,
+     306.2,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 4,
+    "rect": [
+     22,
+     360.8,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 5,
+    "rect": [
+     22,
+     415.4,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 6,
+    "rect": [
+     22,
+     470.1,
+     130,
+     30
+    ]
+   },
+   {
+    "track": 7,
+    "rect": [
+     22,
+     524.7,
+     130,
+     30
+    ]
+   }
+  ],
+  "faders": [],
+  "tempo": [
+   {
+    "c": [
+     940,
+     42
+    ],
+    "d": 36
+   }
+  ]
+ },
+ "patch": {
+  "modules": [
+   {
+    "title": "LFO 1",
+    "rect": [
+     8,
+     8,
+     330,
+     180
+    ]
+   },
+   {
+    "title": "LFO 2",
+    "rect": [
+     8,
+     196,
+     330,
+     180
+    ]
+   },
+   {
+    "title": "LFO 3",
+    "rect": [
+     8,
+     384,
+     330,
+     180
+    ]
+   },
+   {
+    "title": "SOURCES",
+    "rect": [
+     346,
+     8,
+     808,
+     390
+    ]
+   },
+   {
+    "title": "AMOUNT  ONE KNOB PER CABLE",
+    "rect": [
+     346,
+     406,
+     808,
+     161
+    ]
+   }
+  ],
+  "windows": [
+   [
+    190,
+    108,
+    136,
+    56
+   ],
+   [
+    190,
+    296,
+    136,
+    56
+   ],
+   [
+    190,
+    484,
+    136,
+    56
+   ]
+  ],
+  "round_windows": [],
+  "knobs": [
+   {
+    "id": "lfo1.rate",
+    "c": [
+     60,
+     106
+    ],
+    "d": 54
+   },
+   {
+    "id": "lfo1.fade",
+    "c": [
+     132,
+     106
+    ],
+    "d": 54
+   },
+   {
+    "id": "lfo2.rate",
+    "c": [
+     60,
+     294
+    ],
+    "d": 54
+   },
+   {
+    "id": "lfo2.fade",
+    "c": [
+     132,
+     294
+    ],
+    "d": 54
+   },
+   {
+    "id": "lfo3.rate",
+    "c": [
+     60,
+     482
+    ],
+    "d": 54
+   },
+   {
+    "id": "lfo3.fade",
+    "c": [
+     132,
+     482
+    ],
+    "d": 54
+   },
+   {
+    "id": "mod1.amount",
+    "c": [
+     395.6,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod2.amount",
+    "c": [
+     442.9,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod3.amount",
+    "c": [
+     490.1,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod4.amount",
+    "c": [
+     537.4,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod5.amount",
+    "c": [
+     584.6,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod6.amount",
+    "c": [
+     631.9,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod7.amount",
+    "c": [
+     679.1,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod8.amount",
+    "c": [
+     726.4,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod9.amount",
+    "c": [
+     773.6,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod10.amount",
+    "c": [
+     820.9,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod11.amount",
+    "c": [
+     868.1,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod12.amount",
+    "c": [
+     915.4,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod13.amount",
+    "c": [
+     962.6,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod14.amount",
+    "c": [
+     1009.9,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod15.amount",
+    "c": [
+     1057.1,
+     498
+    ],
+    "d": 32
+   },
+   {
+    "id": "mod16.amount",
+    "c": [
+     1104.4,
+     498
+    ],
+    "d": 32
+   }
+  ],
+  "switches": [
+   {
+    "id": "lfo1.retrigger",
+    "c": [
+     304,
+     26
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "lfo2.retrigger",
+    "c": [
+     304,
+     214
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   },
+   {
+    "id": "lfo3.retrigger",
+    "c": [
+     304,
+     402
+    ],
+    "d": 30,
+    "positions": 2,
+    "up": 1,
+    "down": 0
+   }
+  ],
+  "selectors": [],
+  "leds": [],
+  "steps": [],
+  "keys": [],
+  "prints": [
+   {
+    "text": "LFO 1",
+    "x": 22,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "SYNC",
+    "x": 258,
+    "y": 60,
+    "size": 10.5,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RETRIG",
+    "x": 266,
+    "y": 21,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FREE",
+    "x": 266,
+    "y": 33,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 60,
+    "y": 142.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FADE",
+    "x": 132,
+    "y": 142.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO 2",
+    "x": 22,
+    "y": 212,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "SYNC",
+    "x": 258,
+    "y": 248,
+    "size": 10.5,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RETRIG",
+    "x": 266,
+    "y": 209,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FREE",
+    "x": 266,
+    "y": 221,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 60,
+    "y": 330.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FADE",
+    "x": 132,
+    "y": 330.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO 3",
+    "x": 22,
+    "y": 400,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "SYNC",
+    "x": 258,
+    "y": 436,
+    "size": 10.5,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RETRIG",
+    "x": 266,
+    "y": 397,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FREE",
+    "x": 266,
+    "y": 409,
+    "size": 9.1,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RATE",
+    "x": 60,
+    "y": 518.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FADE",
+    "x": 132,
+    "y": 518.0,
+    "size": 11.2,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "SOURCES",
+    "x": 360,
+    "y": 24,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "DESTINATIONS",
+    "x": 360,
+    "y": 140,
+    "size": 14.7,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "LFO 1",
+    "x": 404.4,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO 2",
+    "x": 481.2,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO 3",
+    "x": 558.0,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "AMP ENV",
+    "x": 634.8,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FLT ENV",
+    "x": 711.6,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "VELOCITY",
+    "x": 788.4,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "KEY",
+    "x": 865.2,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "WHEEL",
+    "x": 942.0,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "PRESSURE",
+    "x": 1018.8,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RANDOM",
+    "x": 1095.6,
+    "y": 62,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "PITCH",
+    "x": 404.4,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC1 PITCH",
+    "x": 481.2,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC2 PITCH",
+    "x": 558.0,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC3 PITCH",
+    "x": 634.8,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC1 LEVEL",
+    "x": 711.6,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC2 LEVEL",
+    "x": 788.4,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC3 LEVEL",
+    "x": 865.2,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC1 PW",
+    "x": 942.0,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC2 PW",
+    "x": 1018.8,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "OSC3 PW",
+    "x": 1095.6,
+    "y": 184,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "CUTOFF",
+    "x": 404.4,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "RESO",
+    "x": 481.2,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "DRIVE",
+    "x": 558.0,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "FM",
+    "x": 634.8,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "PAN",
+    "x": 711.6,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "AMP",
+    "x": 788.4,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO1 RATE",
+    "x": 865.2,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO2 RATE",
+    "x": 942.0,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "LFO3 RATE",
+    "x": 1018.8,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "DETUNE",
+    "x": 1095.6,
+    "y": 296,
+    "size": 9.8,
+    "ink": "ivory",
+    "align": "CENTER"
+   },
+   {
+    "text": "AMOUNT  ONE KNOB PER CABLE",
+    "x": 360,
+    "y": 422,
+    "size": 12.5,
+    "ink": "gold",
+    "align": "LEFT"
+   },
+   {
+    "text": "1",
+    "x": 395.6,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "2",
+    "x": 442.9,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "3",
+    "x": 490.1,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "4",
+    "x": 537.4,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "5",
+    "x": 584.6,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "6",
+    "x": 631.9,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "7",
+    "x": 679.1,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "8",
+    "x": 726.4,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "9",
+    "x": 773.6,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "10",
+    "x": 820.9,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "11",
+    "x": 868.1,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "12",
+    "x": 915.4,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "13",
+    "x": 962.6,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "14",
+    "x": 1009.9,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "15",
+    "x": 1057.1,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   },
+   {
+    "text": "16",
+    "x": 1104.4,
+    "y": 530,
+    "size": 10.5,
+    "ink": "gold",
+    "align": "CENTER"
+   }
+  ],
+  "pickers": [],
+  "faders": [],
+  "lfos": [
+   {
+    "shape": [
+     78,
+     16,
+     150,
+     22
+    ],
+    "sync": [
+     188,
+     70,
+     140,
+     22
+    ],
+    "scope": [
+     190,
+     108,
+     136,
+     56
+    ]
+   },
+   {
+    "shape": [
+     78,
+     204,
+     150,
+     22
+    ],
+    "sync": [
+     188,
+     258,
+     140,
+     22
+    ],
+    "scope": [
+     190,
+     296,
+     136,
+     56
+    ]
+   },
+   {
+    "shape": [
+     78,
+     392,
+     150,
+     22
+    ],
+    "sync": [
+     188,
+     446,
+     140,
+     22
+    ],
+    "scope": [
+     190,
+     484,
+     136,
+     56
+    ]
+   }
+  ],
+  "jacks": {
+   "src": [
+    [
+     404.4,
+     90
+    ],
+    [
+     481.2,
+     90
+    ],
+    [
+     558.0,
+     90
+    ],
+    [
+     634.8,
+     90
+    ],
+    [
+     711.6,
+     90
+    ],
+    [
+     788.4,
+     90
+    ],
+    [
+     865.2,
+     90
+    ],
+    [
+     942.0,
+     90
+    ],
+    [
+     1018.8,
+     90
+    ],
+    [
+     1095.6,
+     90
+    ]
+   ],
+   "dst": [
+    [
+     404.4,
+     212
+    ],
+    [
+     481.2,
+     212
+    ],
+    [
+     558.0,
+     212
+    ],
+    [
+     634.8,
+     212
+    ],
+    [
+     711.6,
+     212
+    ],
+    [
+     788.4,
+     212
+    ],
+    [
+     865.2,
+     212
+    ],
+    [
+     942.0,
+     212
+    ],
+    [
+     1018.8,
+     212
+    ],
+    [
+     1095.6,
+     212
+    ],
+    [
+     404.4,
+     324
+    ],
+    [
+     481.2,
+     324
+    ],
+    [
+     558.0,
+     324
+    ],
+    [
+     634.8,
+     324
+    ],
+    [
+     711.6,
+     324
+    ],
+    [
+     788.4,
+     324
+    ],
+    [
+     865.2,
+     324
+    ],
+    [
+     942.0,
+     324
+    ],
+    [
+     1018.8,
+     324
+    ],
+    [
+     1095.6,
+     324
+    ]
+   ],
+   "r": 16
+  },
+  "amounts": [
+   {
+    "tab": [
+     379.6,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     426.9,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     474.1,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     521.4,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     568.6,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     615.9,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     663.1,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     710.4,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     757.6,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     804.9,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     852.1,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     899.4,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     946.6,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     993.9,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     1041.1,
+     460,
+     32,
+     4
+    ]
+   },
+   {
+    "tab": [
+     1088.4,
+     460,
+     32,
+     4
+    ]
+   }
+  ]
+ }
+}

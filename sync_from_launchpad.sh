@@ -72,6 +72,20 @@ rsync -av --prune-empty-dirs \
   --exclude '*' \
   "$SRC_ROOT/subverselab-splitter-desktop/" "$DEST_ROOT/subverselab-splitter-desktop/"
 
+sync_plugin subverselab-seda       # SEDA (release build: SVL_LICENSING OFF, no licence keys)
+
+# JING FANG (project subverselab-studio): its factory presets (presets/<family>/*.xml) are compiled in, and its build trees are
+# build/, build_ui/, build-release/ (build_ui holds JUCE's own CMakeLists.txt under _deps, so the root CMakeLists is anchored).
+echo "Syncing subverselab-studio (JING FANG)..."
+rsync -av --prune-empty-dirs --delete \
+  "${EXCLUDES[@]}" \
+  --exclude 'build_ui/' --exclude 'out/' --exclude 'marketing/' --exclude 'notes/' \
+  --include '*/' \
+  --include '/CMakeLists.txt' --include 'Source/***' --include 'tests/*.cpp' --include 'Assets/***' --include 'presets/***' \
+  --include 'tools/svl.cpp' \
+  --exclude '*' \
+  "$SRC_ROOT/subverselab-studio/" "$DEST_ROOT/subverselab-studio/"
+
 echo "Syncing subverselab-plugin-common..."
 rsync -av --prune-empty-dirs \
   "${EXCLUDES[@]}" \

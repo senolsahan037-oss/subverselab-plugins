@@ -76,6 +76,27 @@ jobs:
             tools: "render ui_snapshot"
             check: "./build/render_artefacts/Release/render.exe --selftest && ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out ../Kiyma-windows-panel.png --preset 1 --t 3 --fake-audio --mix 1"
             soft_test: true
+          # JING FANG 1.0.0 (subverselab-studio): synth, VST3 + standalone app, no licence keys. The engine selftest is the plain
+          # C++ `svl` tool (single-config target: build/Release/svl.exe with MSVC); ui_snapshot <dir> writes the panel PNGs.
+          - name: JingFang
+            dir: subverselab-studio
+            artifact: JING-FANG-windows
+            vst3_name: "JING FANG.vst3"
+            tools: "JingFang_Standalone svl ui_snapshot"
+            check: "./build/Release/svl.exe --selftest --out-dir ../jf-selftest"
+            standalone_exe: "JING FANG.exe"
+            panel_dir: "yes"
+            soft_test: true
+          # SEDA 1.0.0: analog delay, VST3 + standalone app, SVL_LICENSING OFF (the default). ui_snapshot <dir> writes the panels.
+          - name: Seda
+            dir: subverselab-seda
+            artifact: SEDA-windows
+            vst3_name: "SEDA.vst3"
+            tools: "Seda_Standalone plugin_check ui_snapshot"
+            check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
+            standalone_exe: "SEDA.exe"
+            panel_dir: "yes"
+            soft_test: true
     steps:
       - uses: actions/checkout@v4
 
