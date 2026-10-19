@@ -281,10 +281,15 @@ static double meanDb (const Buf& b)
 }
 
 // ---------------------------------------------------------------- selftest
+#if defined (__GNUC__) || defined (__clang__)
+ #define SVL_PRINTF_LIKE(f, a) __attribute__ ((format (printf, f, a)))
+#else
+ #define SVL_PRINTF_LIKE(f, a)   // MSVC has no format attribute (Windows CI)
+#endif
 struct Report
 {
     FILE* f = nullptr; int pass = 0, fail = 0;
-    void line (const char* fmt, ...) __attribute__ ((format (printf, 2, 3)))
+    void line (const char* fmt, ...) SVL_PRINTF_LIKE (2, 3)
     {
         char b[1024]; va_list ap; va_start (ap, fmt); std::vsnprintf (b, sizeof b, fmt, ap); va_end (ap);
         std::printf ("%s\n", b); if (f) std::fprintf (f, "%s\n", b);
