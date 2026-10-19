@@ -91,6 +91,7 @@ rsync -av --prune-empty-dirs \
   "${EXCLUDES[@]}" \
   --include '*/' \
   --include 'Licensing/***' \
+  --include 'SourceSense/***' \
   --include 'cmake/***' \
   --include 'tools/app_icon/***' \
   --include 'README.md' \

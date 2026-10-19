@@ -478,7 +478,7 @@ void JingFangEditor::PresetFace::mouseUp (const juce::MouseEvent& e)
         menu.addSubMenu (fam, sub, true, nullptr, fam == proc.currentFamily());
     }
     // owner 18 Oct: every preset can be deleted, factory ones included, and they do not come back
-    constexpr int kDelete = 100000, kUnhide = 100001;
+    static constexpr int kDelete = 100000, kUnhide = 100001;   // static: MSVC does not let the menu lambda use a local constexpr uncaptured
     const int cur = proc.currentPresetIndex();
     menu.addSeparator();
     if (cur >= 0) menu.addItem (kDelete, "Delete \"" + list[(size_t) cur].name + "\"...");
