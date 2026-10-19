@@ -82,8 +82,9 @@ jobs:
             dir: subverselab-studio
             artifact: JING-FANG-windows
             vst3_name: "JING FANG.vst3"
-            tools: "JingFang_Standalone svl ui_snapshot"
-            check: "./build/Release/svl.exe --selftest --out-dir ../jf-selftest"
+            tools: "JingFang_Standalone ui_snapshot"
+            # the selftest tool builds in the (soft) test step, so a test-tool compile problem never holds back the zip
+            check: "cmake --build build --config Release --target svl --parallel && ./build/Release/svl.exe --selftest --out-dir ../jf-selftest"
             standalone_exe: "JING FANG.exe"
             panel_dir: "yes"
             soft_test: true
