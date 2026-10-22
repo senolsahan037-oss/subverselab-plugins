@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SubverseSplitter VERSION 1.0.1 LANGUAGES C CXX)
+# Oldest macOS the release supports (Big Sur), as MIHENK and KIYMA. Left empty, CMake used the build Mac's own macOS:
+# ELEK 1.0.0 and 1.0.1 shipped with minos 27.0 and did not load on macOS 11-26 (found 2026-10-22).
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
+endif()
+
+project(SubverseSplitter VERSION 1.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,7 +34,7 @@ juce_add_plugin(SubverseSplitter
     PLUGIN_MANUFACTURER_CODE Svlb
     PLUGIN_CODE Elek
     BUNDLE_ID com.subverselab.elek
-    VERSION "1.0.1"
+    VERSION "1.0.2"
     FORMATS Standalone VST3 AU
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
