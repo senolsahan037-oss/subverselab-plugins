@@ -44,8 +44,44 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
     {
         const auto id = k["id"].toString();
         if (! has (id)) continue;
-        makeKnob (id, "", partBox (k["c"], (float) (double) k["d"]), this).setPrinted (true);
+        auto& kn = makeKnob (id, "", partBox (k["c"], (float) (double) k["d"]), this);
+        kn.setPrinted (true);
         ++knobCount;
+        if (name == "seq" && id.endsWith (".vel"))
+        {   // the VEL row is a lane (work order 20 Oct, item 5): the same places carry PROB and RATCH knobs, one lane shown at a time
+            const auto pre = id.upToLastOccurrenceOf (".", true, false);
+            lanes[0].push_back (&kn);
+            for (int l = 1; l <= 2; ++l)
+            {
+                const auto lid = pre + (l == 1 ? "prob" : "ratchet");
+                if (! has (lid)) continue;
+                auto& lk = makeKnob (lid, "", kn.getBounds(), this);
+                lk.setPrinted (true);
+                lk.setVisible (false);
+                lanes[(size_t) l].push_back (&lk);
+                ++knobCount;
+            }
+        }
+    }
+    if (name == "seq")
+    {   // the lane key sits over the row's printed name; the direction selector in the empty corner left of the step numbers
+        auto* lane = static_cast<PanelKey*> (add (new PanelKey ("VEL"), { 14, 345, 82, 22 }));
+        lane->fontPx = 10.0f;
+        lane->setTooltip ("This row: VEL (how hard each step plays), PROB (the chance a step plays) or RATCH (a step played 1 to 4 times in its length); click for the next");
+        lane->onClick = [this, lane]
+        {
+            shownLane = (shownLane + 1) % 3;
+            static const char* names[] = { "VEL", "PROB", "RATCH" };
+            lane->text = names[shownLane];
+            for (int l = 0; l < 3; ++l) for (auto* kk : lanes[(size_t) l]) kk->setVisible (l == shownLane);
+            lane->repaint();
+        };
+        laneKey = lane;
+        if (has ("seq.direction"))
+        {
+            auto* dir = add (new TypeStepper (proc, "seq.direction"), { 10, 171, 112, 22 });
+            static_cast<TypeStepper*> (dir)->setTooltip ("The order the steps play: forward, reverse, bounce (there and back) or random (the same random every time round)");
+        }
     }
     for (auto& s : list ("switches"))
     {
@@ -128,10 +164,16 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
             const float freeV = (float) (double) pl["free"], holdV = (float) (double) pl["hold"];
             if (onP == nullptr || modeP == nullptr) { key->setVisible (false); continue; }
             auto plain = [] (juce::RangedAudioParameter* p) { return p->convertFrom0to1 (p->getValue()); };
-            key->isOn = [onP, modeP, freeV, plain] { return plain (onP) > 0.5f && std::abs (plain (modeP) - freeV) < 0.5f; };
             const int unit = pl["on"].toString().startsWith ("drums") ? 1 : 0;
+            // in a playing host PLAY mirrors the host: lit while the unit runs on the host's grid (the DAW's notes drive it)
+            key->isOn = [this, onP, modeP, freeV, plain, unit]
+            {
+                if (proc.inHost() && proc.hostPlaying()) return (unit == 0 ? proc.live().seqStep : proc.drumStep()) >= 0;
+                return plain (onP) > 0.5f && std::abs (plain (modeP) - freeV) < 0.5f;
+            };
             key->onClick = [this, onP, modeP, freeV, holdV, plain, key, unit]
             {
+                if (proc.inHost() && proc.hostPlaying()) return;   // the DAW plays: no second playback inside the plug-in (owner 20 Oct)
                 const bool playing = plain (onP) > 0.5f && std::abs (plain (modeP) - freeV) < 0.5f;
                 if (playing) setParamGesture (modeP, holdV);
                 else { setParamGesture (onP, 1.0f); setParamGesture (modeP, freeV); }
@@ -141,7 +183,7 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
             };
             if (! proc.isStandalone())
                 key->setTooltip (key->getTooltip().replace ("on its own clock (no key needed)",
-                                                            "with your host's transport (no key needed); with the host stopped it previews"));
+                                                            "as a preview while your host is stopped (no key needed); while the host plays, its notes drive it and PLAY follows the host"));
             playKeys.push_back (key);
             continue;
         }
@@ -203,6 +245,8 @@ void AnalogDoor::tick()
         int sig = 0;
         for (auto* k : playKeys) sig = sig * 2 + (k->isOn && k->isOn() ? 1 : 0);
         if (sig != playSig) { playSig = sig; for (auto* k : playKeys) k->repaint(); }
+        const float a = proc.inHost() && proc.hostPlaying() ? 0.5f : 1.0f;   // faint while the host plays: it follows the host
+        for (auto* k : playKeys) if (k->getAlpha() != a) k->setAlpha (a);
     }
     {   // steps past the pattern's length are dim, so a 7/8 or 9/8 preset shows its own length (owner 18 Oct)
         auto* lenP = proc.apvts.getParameter (name == "drum" ? "drums.length" : "seq.length");

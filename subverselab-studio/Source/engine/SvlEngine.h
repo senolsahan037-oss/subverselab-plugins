@@ -36,6 +36,7 @@ struct Event
     float vel = 1;       // 0..1
     int id = 0;          // note id (MIDI key for noteOn())
     int key = -1;        // MIDI key when the pitch is resolved at the event's sample (tuning map, keyswitches)
+    int chan = 0;        // MPE member channel 1..15 (0: not an MPE note; its bend / pressure / brightness are the global ones)
 };
 
 constexpr int kOscOrder[kNumOsc] = { 1, 0, 2 };
@@ -119,6 +120,17 @@ public:
     // ---- events for the next process() block
     void noteOn (int key, float vel, int offset) { if (key >= 0 && key < 128) push ({ Event::on, offset, 0, vel, key, key }); }
     void noteOff (int key, int offset) { push ({ Event::off, offset, 0, 0, key, key }); }
+    // MPE (work order item 8): a note on member channel `chan` (1..16) has its own pitch bend, pressure and slide. The id is unique
+    // per key and channel, so the same key on two channels is two notes.
+    static int mpeId (int key, int chan) { return key + 128 * chan; }
+    void noteOnMpe (int key, float vel, int chan, int offset)
+    { if (key >= 0 && key < 128 && chan >= 1 && chan <= 16) push ({ Event::on, offset, 0, vel, mpeId (key, chan), key, chan }); }
+    void noteOffMpe (int key, int chan, int offset) { if (chan >= 1 && chan <= 16) push ({ Event::off, offset, 0, 0, mpeId (key, chan), key, chan }); }
+    // bend in semitones (already scaled by the channel's bend range), pressure and slide 0..1 (slide rests at 0.5)
+    void setMemberBend (int chan, float semis) { if (chan >= 1 && chan <= 16) mBend[(size_t) chan] = std::fmax (-96.0f, std::fmin (96.0f, semis)); }
+    void setMemberPressure (int chan, float v01) { if (chan >= 1 && chan <= 16) mPress[(size_t) chan] = std::fmax (0.0f, std::fmin (1.0f, v01)); }
+    void setMemberSlide (int chan, float v01) { if (chan >= 1 && chan <= 16) mSlide[(size_t) chan] = std::fmax (0.0f, std::fmin (1.0f, v01)); }
+    void resetMember (int chan) { if (chan >= 1 && chan <= 16) { mBend[(size_t) chan] = 0; mPress[(size_t) chan] = 0; mSlide[(size_t) chan] = 0.5f; } }
     // pitch a MIDI key plays now (tuning table + mode + rows; before the reference offset)
     float keyPitch (int key) const
     {
@@ -144,6 +156,7 @@ public:
             while (e < numEvents && events[(size_t) e].offset <= pos) apply (events[(size_t) e++]);
             int end = std::min (n, pos + kChunk);
             if (e < numEvents) end = std::min (end, events[(size_t) e].offset);
+            syncPeers();   // a unit that starts on its own clock joins the other's grid
             const bool g = gen.needsService();
             if (g)
             {
@@ -174,12 +187,13 @@ public:
         const Voice& v = voices[(size_t) i];
         return { v.aenv.active(), v.gate, v.fading, v.id, v.pitch, v.aenv.level, (int) v.aenv.stage };
     }
+    float fxReductionDb() const { return isTrack ? 0.0f : fx.reductionDb(); }
     struct Stats { uint64_t steals = 0, hardSteals = 0, nonFiniteResets = 0, droppedEvents = 0; } stats;
 
 private:
     struct Voice
     {
-        int id = -1;
+        int id = -1, chan = 0;
         bool gate = false, fading = false, sounding = false;
         uint64_t age = 0;
         int fadeRemain = 0; float fadeStep = 0, fadeGain = 1;
@@ -213,6 +227,7 @@ private:
     void drumsTransport (bool hasHost, bool playing, double ppq);
     void drumsParams();
     bool drumsService (int maxN, int end);
+    void syncPeers();
     int drumsNext();
     void drumsAdvance (int n);
     void drumsRender (float* L, float* R, int n);
@@ -228,6 +243,8 @@ private:
     int numEvents = 0;
     uint64_t ageCounter = 0, seedCounter = 1;
     float bendNorm = 0, modWheel = 0, aftertouch = 0, tempo = 120;
+    std::array<float, 17> mBend {}, mPress {}, mSlide { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+    int curChan = 0;   // the channel of the event being applied (a voice takes it in start())
     double lfoGlobalPhase[kNumLfo] {};
     bool tuningDirty = false;
 
@@ -273,6 +290,11 @@ private:
         s.driveAmount = params[FXD_AMOUNT]; s.driveTone = params[FXD_TONE]; s.driveMix = params[FXD_MIX];
         s.echoTime = (int) params[FXE_TIME]; s.echoFb = params[FXE_FB]; s.echoDamp = params[FXE_DAMP]; s.echoMix = params[FXE_MIX];
         s.revSize = params[FXR_SIZE]; s.revDecay = params[FXR_DECAY]; s.revPre = params[FXR_PRE]; s.revDamp = params[FXR_DAMP]; s.revMix = params[FXR_MIX];
+        s.eqLow = params[FXQ_LOW]; s.eqMid = params[FXQ_MID]; s.eqMidF = params[FXQ_MIDF]; s.eqHigh = params[FXQ_HIGH];
+        s.compThresh = params[FXC_THRESH]; s.compRatio = params[FXC_RATIO]; s.compAttack = params[FXC_ATTACK]; s.compRelease = params[FXC_RELEASE];
+        s.compMakeup = params[FXC_MAKEUP];
+        s.modType = (int) params[FXM_TYPE]; s.modRate = params[FXM_RATE]; s.modDepth = params[FXM_DEPTH]; s.modFb = params[FXM_FB]; s.modMix = params[FXM_MIX];
+        s.echoType = (int) params[FXE_TYPE];
         return s;
     }
     FxRack fx;
@@ -301,6 +323,7 @@ private:
     void apply (const Event& evIn)
     {
         Event ev = evIn;
+        curChan = ev.chan;
         if (ev.key >= 0)
         {
             // only note-ons are filtered by the keyswitch / drum-key state: an off always reaches the voices, so a key that was
@@ -320,23 +343,26 @@ private:
             }
             drumsKey (ev);   // drums.mode hold: the pattern runs while a key is held
             if (ev.type == Event::on && drumsTakeKeys()) return;   // hold: keys are the drum machine's transport only (owner 19 Oct)
-            if (gen.active() && ev.type != Event::allOff)
+            if (gen.takesKeys() && ev.type != Event::allOff)
             {   // the arp / seq take the key; a note-off also reaches a voice the key started before they were switched on
                 if (ev.type == Event::on) { gen.keyOn (ev.id, ev.key, 0, ev.vel); return; }
                 gen.keyOff (ev.id);
             }
             else if (ev.type == Event::on) ev.pitch = keyPitch (ev.key);
+            else if (ev.type == Event::off) gen.keyOff (ev.id);   // a key that went down while the arp / seq ran: never left held
+                                                                  // in it (the next arp / seq preset would run on that key)
         }
         else if (ev.type != Event::allOff)
         {
             drumsKey (ev);
             if (ev.type == Event::on && drumsTakeKeys()) return;
         }
-        if (ev.key < 0 && gen.active() && ev.type != Event::allOff)
+        if (ev.key < 0 && gen.takesKeys() && ev.type != Event::allOff)
         {   // a panel row key (explicit pitch)
             if (ev.type == Event::on) { gen.keyOn (ev.id, -1, ev.pitch, ev.vel); return; }
             gen.keyOff (ev.id);
         }
+        else if (ev.key < 0 && ev.type == Event::off) gen.keyOff (ev.id);
         if (ev.type == Event::on) ev.pitch += refSemis();
         if (ev.type == Event::allOff)
         {
@@ -354,7 +380,7 @@ private:
     void applyGen (const GenNote& g)
     {
         if (g.kind == GenNote::off) { mode() == VoiceMode::poly ? polyOff (g.id) : monoOff (g.id); return; }
-        Event ev; ev.type = Event::on; ev.id = g.id; ev.vel = g.vel;
+        Event ev; ev.type = Event::on; ev.id = g.id; ev.vel = g.vel; curChan = 0;
         ev.pitch = (g.key >= 0 ? keyPitch (g.key) : g.pitch) + g.add + refSemis();
         if (g.kind == GenNote::slide)
             for (auto& v : voices)
@@ -449,7 +475,7 @@ private:
             for (auto& o : voices) if (&o != &v && o.aenv.active() && ! o.fading) startFade (o);
         const bool legatoPitch = continuing && v.sounding && mode() != VoiceMode::poly;
         if (! continuing) { v.reset(); }
-        v.id = id; v.gate = true; v.fading = false; v.fadeGain = 1; v.fadeRemain = 0;
+        v.id = id; v.chan = curChan; v.gate = true; v.fading = false; v.fadeGain = 1; v.fadeRemain = 0;
         v.age = ++ageCounter;
         v.vel = std::fmax (0.0f, std::fmin (1.0f, vel));
         const float va = params[V_VELAMP];
@@ -533,14 +559,26 @@ private:
         for (auto& v : voices) if (v.aenv.active()) renderVoice (v, n);
         for (int i = 0; i < n; ++i) { mixL[i] *= aMaster[i]; mixR[i] *= aMaster[i]; }
         if (drums) drumsRender (mixL, mixR, n);
-        fx.process (mixL, mixR, n);
+        if (! isTrack) fx.process (mixL, mixR, n);   // a drum track has no rack (it was never prepared)
         for (int i = 0; i < n; ++i)
         {
             const float l = mixL[i], r = mixR[i];
             dcY[0] = l - dcX[0] + dcR * dcY[0]; dcX[0] = l;
             dcY[1] = r - dcX[1] + dcR * dcY[1]; dcX[1] = r;
-            outL[i] = dcY[0]; outR[i] = dcY[1];
+            outL[i] = isTrack ? dcY[0] : outCeiling (dcY[0]); outR[i] = isTrack ? dcY[1] : outCeiling (dcY[1]);
         }
+    }
+
+    // the output ceiling (owner 21 Oct: "çıkışa sınır koy; clippinge düşebilir ama daha fazlası değil"): up to 0.98 (-0.18 dBFS) the sample is untouched,
+    // above it a tanh knee that reaches 1.0 and never passes it. A loud patch may touch full scale, never exceed it; non-finite -> 0.
+    static float outCeiling (float x)
+    {
+        constexpr float t = 0.98f, k = 1.0f - t;
+        const float a = std::fabs (x);
+        if (! (a == a)) return 0.0f;
+        if (a <= t) return x;
+        const float y = t + k * std::tanh ((a - t) / k);
+        return x < 0 ? -y : y;
     }
 
     float lfoRate[kNumLfo] {};
@@ -618,7 +656,7 @@ private:
         for (int i = 0; i < n; ++i)
         {
             if (v.glideRemain > 0) { v.pitch += v.glideStep; if (--v.glideRemain == 0) v.pitch = v.target; }
-            float p = v.pitch + aBend[i] + penvAmt * v.penvScale * v.penv;
+            float p = v.pitch + aBend[i] + penvAmt * v.penvScale * v.penv + (v.chan ? mBend[(size_t) v.chan] : 0.0f);
             v.penv *= v.penvMul;
             float driftGain = 1.0f;
             if (drift)
@@ -642,7 +680,7 @@ private:
                 }
                 src[(int) ModSrc::ampEnv] = v.aenv.level; src[(int) ModSrc::filterEnv] = v.fenv.level;
                 src[(int) ModSrc::velocity] = v.vel; src[(int) ModSrc::key] = (v.pitch - 60.0f) / 60.0f;
-                src[(int) ModSrc::modWheel] = modWheel; src[(int) ModSrc::aftertouch] = aftertouch; src[(int) ModSrc::random] = v.noteRnd;
+                src[(int) ModSrc::modWheel] = modWheel; src[(int) ModSrc::aftertouch] = v.chan ? mPress[(size_t) v.chan] : aftertouch; src[(int) ModSrc::random] = v.noteRnd;
                 for (int d = 0; d < ND; ++d) mod[d] = 0;
                 for (int m = 0; m < nSlots; ++m) mod[slotDst[m]] += src[slotSrc[m]] * slotAmt[m];
                 for (int l = 0; l < kNumLfo; ++l) v.lfoRateMod[l] = mod[(int) ModDst::lfo1Rate + l];
@@ -717,7 +755,8 @@ private:
             }
             float L, R;
             v.dec.process (L2, R2, L, R);
-            const float oct = aCut[i] + aEnvAmt[i] * fe + keyTrack * (p - 60.0f) / 12.0f + velOct + (nSlots ? mod[(int) ModDst::cutoff] : 0.0f);
+            const float oct = aCut[i] + aEnvAmt[i] * fe + keyTrack * (p - 60.0f) / 12.0f + velOct + (nSlots ? mod[(int) ModDst::cutoff] : 0.0f)
+                              + (v.chan ? (mSlide[(size_t) v.chan] - 0.5f) * 4.0f : 0.0f);   // MPE slide: brightness, +-2 octaves of cutoff
             v.svf.setCoeffs (std::exp2 (oct), nSlots ? std::fmax (0.0f, std::fmin (1.0f, aReso[i] + mod[(int) ModDst::reso])) : aReso[i], sr);
             L = v.svf.process (0, L, fm); R = v.svf.process (1, R, fm);
             if (v.clickAmp > 1e-5f)
@@ -727,7 +766,7 @@ private:
                 v.clickAmp *= v.clickMul;
                 L += v.clickY; R += v.clickY;
             }
-            float gain = amp * v.velGain * driftGain;
+            float gain = amp * v.velGain * driftGain * (v.chan ? 1.0f + 0.5f * mPress[(size_t) v.chan] : 1.0f);   // MPE pressure: level, up to +3.5 dB
             if (nSlots)
             {
                 gain *= std::fmax (0.0f, 1.0f + mod[(int) ModDst::amp]);
@@ -783,6 +822,12 @@ inline bool Engine::drumsService (int, int)
     for (int guard = 0; guard < 4 && drums->samplesToNext() == 0; ++guard) drums->fireDue();
     return true;
 }
+inline void Engine::syncPeers()
+{
+    if (! drums) return;
+    gen.setPeer (drums->isRunning(), drums->beatNow());
+    drums->setPeer (gen.isRunning(), gen.beatNow());
+}
 inline int Engine::drumsNext() { return std::max (1, drums->samplesToNext()); }
 inline void Engine::drumsAdvance (int n) { drums->advance (n); }
 inline void Engine::drumsRender (float* L, float* R, int n) { drums->render (L, R, n); }
@@ -793,7 +838,8 @@ inline bool Engine::drumsTakeKeys() const { return drums && drums->holdsKeys(); 
 inline void Engine::drumsKey (const Event& ev)
 {
     if (! drums) return;
-    if (ev.type == Event::on) drums->keyDown (ev.id); else if (ev.type == Event::off) drums->keyUp (ev.id);
+    const int k = ev.chan ? ev.key : ev.id;   // an MPE id carries the channel; the drums count keys
+    if (ev.type == Event::on) drums->keyDown (k); else if (ev.type == Event::off) drums->keyUp (k);
 }
 
 } // namespace svl

@@ -11,7 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-project(SVL VERSION 1.0.0 LANGUAGES C CXX)
+project(SVL VERSION 1.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -85,7 +85,7 @@ if(SVL_BUILD_PLUGIN)
 
     set(JF_SOURCES Source/plugin/PluginProcessor.cpp Source/plugin/PluginEditor.cpp Source/plugin/Ui.cpp Source/plugin/Keyboard.cpp
         Source/plugin/Dragon.cpp Source/plugin/PatchBay.cpp Source/plugin/Scopes.cpp Source/plugin/AnalogDoor.cpp Source/plugin/Analog.cpp Source/plugin/MidiClip.cpp
-    Source/plugin/LabDoor.cpp)
+    Source/plugin/LabDoor.cpp Source/plugin/FxDoor.cpp)
     target_sources(JingFang PRIVATE ${JF_SOURCES})
     target_include_directories(JingFang PRIVATE Source/engine Source/plugin)
     set(JF_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
@@ -118,4 +118,21 @@ if(SVL_BUILD_PLUGIN)
     jf_tool(ui_snapshot)
     # demo_render: the ads, rendered from the plug-in itself (frames + audio, no screen capture)
     jf_tool(demo_render)
+    # preset_storm: bug 1 of 20 Oct (fast preset / set / slot switching while the host plays left the channel silent)
+    jf_tool(preset_storm)
+    # rack_capture / rack_render (work order 1.x item 6 preparation): host Reason Rack Plugin as a local measurement reference
+    set(JF_RACK_DEFS JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
+        JUCE_APPLICATION_NAME_STRING="rack" JUCE_APPLICATION_VERSION_STRING="1.0.0")
+    foreach(name rack_capture rack_render)
+        if(name STREQUAL rack_capture)
+            juce_add_gui_app(${name} PRODUCT_NAME "${name}")
+        else()
+            juce_add_console_app(${name} PRODUCT_NAME "${name}")
+        endif()
+        juce_generate_juce_header(${name})
+        target_sources(${name} PRIVATE tests/${name}.cpp)
+        target_compile_definitions(${name} PRIVATE ${JF_RACK_DEFS})
+        target_link_libraries(${name} PRIVATE juce::juce_audio_utils juce::juce_audio_processors juce::juce_audio_formats juce::juce_gui_basics
+            juce::juce_recommended_config_flags)
+    endforeach()
 endif()

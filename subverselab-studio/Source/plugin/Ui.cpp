@@ -430,7 +430,7 @@ void TypeStepper::paint (juce::Graphics& g)
         g.setColour (kKeyTextDim); g.fillPath (l); g.fillPath (r);
     }
     const int t = value();
-    if (! param->paramID.endsWith (".type"))
+    if (! (param->paramID.startsWith ("osc") && param->paramID.endsWith (".type")))
     {   // any other choice: just its name
         g.setColour (kKeyText);
         drawTracked (g, param->getCurrentValueAsText().replace ("_", " ").toUpperCase(), b.reduced (h, 0.0f), heros (9.4f, true), 0.08f,

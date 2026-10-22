@@ -221,6 +221,8 @@ int main (int argc, char** argv)
         for (auto& k : ed->allKnobs()) covered.add (k->paramId());
         for (int o = 1; o <= 3; ++o) covered.add ("osc" + juce::String (o) + ".type");           // TypeStepper
         covered.add ("fx.echo.time");                                                              // TypeStepper
+        covered.add ("fx.mod.type"); covered.add ("fx.echo.type");                                 // FX door TypeSteppers
+        covered.add ("seq.direction");                                                             // SEQ door TypeStepper
         for (auto id : { "filter.mode", "drum.mode", "drum.one_shot", "voice.mode", "tuning.keyswitch", "tuning.mode" }) covered.add (id);   // segments, NORMAL / MICRO
         for (int pc = 0; pc < 12; ++pc) covered.add (juce::String ("tuning.row.") + svl::kPitchClassIds[pc]);   // keyboard click / keyswitches
         covered.add ("fm.target");                                                                                 // segments
@@ -504,6 +506,50 @@ int main (int argc, char** argv)
         for (int i = 0; i < 40; ++i) ed->tickForTest();
     }
 
+    // ---- the FX rack door (work order 20 Oct, item 4): its key in the REVERB title bar, 16 knobs, 3 selectors, the EQ curve,
+    //      the gain reduction, double-click back to the loaded value
+    {
+        auto* fx = ed->fxDoorView();
+        check (fx != nullptr && ! fx->isVisible(), "the FX door is closed at start");
+        ed->openDoorForTest (5);
+        int frames = 0;
+        while (fx != nullptr && fx->openAmount() < 1.0f && frames < 60) { ed->tickForTest(); ++frames; }
+        int knobsIn = 0, knobs = 0, steppers = 0;
+        for (auto& k : ed->allKnobs()) if (k->getParentComponent() == fx) { ++knobs; if (fx->getLocalBounds().contains (k->getBounds())) ++knobsIn; }
+        for (auto* c : fx->getChildren()) if (dynamic_cast<jfui::TypeStepper*> (c) != nullptr) ++steppers;
+        check (fx->isVisible() && frames >= 3 && frames <= 12 && knobs == 16 && knobsIn == 16 && steppers == 3 && (int) fx->labelsForTest().size() == 16,
+               "FX RACK rolls the door down in " + juce::String (frames) + " frames: " + juce::String (knobsIn) + " / " + juce::String (knobs)
+                   + " knobs inside, " + juce::String (steppers) + " selectors (mod type, echo type, echo time), " + juce::String ((int) fx->labelsForTest().size()) + " labels");
+        // a sound through EQ + COMP + phaser, then the snapshot
+        proc.loadPresetIndex (presetIndex (proc, "Init", "Init"));
+        for (auto [id, v] : { std::pair<const char*, float> { "fx.eq.low", 6.0f }, { "fx.eq.mid", -5.0f }, { "fx.eq.mid_freq", 2500.0f }, { "fx.eq.high", 4.0f },
+                              { "fx.comp.ratio", 6.0f }, { "fx.comp.threshold", -30.0f }, { "fx.comp.makeup", 6.0f }, { "fx.mod.type", 3.0f }, { "fx.mod.mix", 0.7f },
+                              { "fx.echo.type", 3.0f }, { "fx.echo.mix", 0.25f } })
+            jfui::setParamGesture (proc.apvts.getParameter (id), v);
+        juce::AudioBuffer<float> buf (2, 512);
+        { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 48, (juce::uint8) 110), 0); proc.processBlock (buf, m); }
+        juce::MidiBuffer none;
+        for (int b = 0; b < 40; ++b) proc.processBlock (buf, none);
+        for (int i = 0; i < 20; ++i) ed->tickForTest();
+        const float gr = proc.fxReductionDb();
+        check (gr > 3.0f, "COMP's gain reduction reaches the door (" + juce::String (gr, 1) + " dB on a held saw at -30 dB threshold, 6:1)");
+        snap (*ed, "front_fx.png");
+        // double-click a door knob: back to the loaded preset's value (Init: 0 dB)
+        jfui::Knob* mid = nullptr;
+        for (auto& k : ed->allKnobs()) if (k->getParentComponent() == fx && k->paramId() == "fx.eq.mid") mid = k.get();
+        if (mid != nullptr) mid->resetToLoaded();
+        proc.processBlock (buf, none);
+        check (mid != nullptr && std::abs (proc.exactValue (svl::FXQ_MID)) < 1.0e-4f && mid->gliding(),
+               "double-click on EQ MID: back to the loaded 0 dB, the knob glides (" + juce::String (proc.exactValue (svl::FXQ_MID), 2) + " dB)");
+        proc.loadPresetIndex (presetIndex (proc, "Init", "Init"));
+        { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::allNotesOff (1), 0); proc.processBlock (buf, m); }
+        ed->openDoorForTest (0);
+        frames = 0;
+        while (fx->isVisible() && frames < 60) { ed->tickForTest(); ++frames; }
+        check (! fx->isVisible(), "the FX door rolls up again (" + juce::String (frames) + " frames)");
+        for (int i = 0; i < 40; ++i) ed->tickForTest();
+    }
+
     // ---- SEQ and LAB doors: one door at a time, both roll down over the modules
     {
         auto settle = [&] { for (int i = 0; i < 40; ++i) ed->tickForTest(); pump(); };
@@ -514,6 +560,19 @@ int main (int argc, char** argv)
         check (ed->closeKey().isVisible() && ed->seqDoorView()->getBounds().contains (ed->closeKey().getBounds().getCentre()),
                "an open door shows its CLOSE key on its bottom edge");
         snap (*ed, "front_seq.png");
+        {   // the VEL row's lanes (work order item 5): PROB and RATCH in the same places, one lane at a time
+            auto* sd = ed->seqDoorView();
+            const int v = sd->laneKnobCount (0), pr = sd->laneKnobCount (1), ra = sd->laneKnobCount (2);
+            sd->showLaneForTest (1);
+            int shown = 0;
+            for (auto& k : ed->allKnobs()) if (k->getParentComponent() == sd && k->isVisible() && k->paramId().endsWith (".prob")) ++shown;
+            int velShown = 0;
+            for (auto& k : ed->allKnobs()) if (k->getParentComponent() == sd && k->isVisible() && k->paramId().endsWith (".vel")) ++velShown;
+            snap (*ed, "front_seq_prob.png");
+            sd->showLaneForTest (0);
+            check (v == 16 && pr == 16 && ra == 16 && shown == 16 && velShown == 0,
+                   "SEQ lanes: VEL / PROB / RATCH " + juce::String (v) + " / " + juce::String (pr) + " / " + juce::String (ra) + " knobs; PROB shows 16, VEL hidden while it does");
+        }
         {   // CLEAR: a changed step goes back to its default
             auto* note = proc.apvts.getParameter ("seq.s3.note");
             jfui::setParamGesture (note, 7.0f);

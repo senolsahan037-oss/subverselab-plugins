@@ -168,6 +168,19 @@ void JingFangEditor::build()
         labDoor = std::make_unique<jfui::LabDoor> (proc, area.expanded (4));
         panel.addChildComponent (*labDoor);
         labDoor->snapOpen (false);
+        // the FX rack door: the same place; its key sits in the REVERB module's title bar (the panel's FX row)
+        fxDoor = std::make_unique<jfui::FxDoor> (proc, maker, area.expanded (4));
+        panel.addChildComponent (*fxDoor);
+        fxDoor->snapOpen (false);
+        for (auto& sct : sections)
+            if (sct.title == "REVERB")
+                fxBtn.setBounds (R (sct.r.getRight() - 92, sct.r.getY() + 3, 84, 19));
+        panel.addAndMakeVisible (fxBtn);
+        fxBtn.toBehind (&bay);                                 // under every door (they roll down over the REVERB module)
+        fxBtn.fontPx = 9.5f;
+        fxBtn.setTooltip ("Open the FX rack: EQ, compressor, chorus / flanger / phaser and the echo's type");
+        fxBtn.isOn = [this] { return fxDoor != nullptr && fxDoor->isOpenOrOpening(); };
+        fxBtn.onClick = [this] { openDoor (fxDoor != nullptr && fxDoor->isOpenOrOpening() ? 0 : 5); };
     }
 
     // ---- help: one popover per section
@@ -215,14 +228,18 @@ void JingFangEditor::build()
                             "the letters are the white keys, Shift sharpens; left / right arrow: octave.", keyboard.getBounds(), { keyboard.getX() + 14, keyboard.getY() + 12 } },
         { "Effects", "DRIVE warms and pushes the sound (TONE darkens or brightens it). ECHO repeats it in time with the song: TIME is the "
                      "note length, FEEDBACK how many repeats, DAMP darkens each repeat. REVERB puts it in a room or a hall: SIZE, DECAY, "
-                     "PRE (the gap before the room answers), DAMP. MIX sets how much of each you hear. The FX slot of the preset "
-                     "synthesizer takes all of these from one preset.", sec ("DRIVE"), mark ("DRIVE") },
+                     "PRE (the gap before the room answers), DAMP. MIX sets how much of each you hear. FX RACK opens the rest of the rack, in "
+                     "the order the sound passes: EQ (LOW and HIGH shelves, MID at its FREQ, the curve shows the result), COMP (THRESH, "
+                     "RATIO, ATTACK, RELEASE, MAKEUP; GR shows how much it turns down), then DRIVE, MOD (chorus, flanger or phaser: RATE, "
+                     "DEPTH, FDBK, MIX), ECHO (ping-pong, stereo, mono or tape) and REVERB. The FX slot of the preset synthesizer takes "
+                     "all of these from one preset.", sec ("DRIVE"), mark ("DRIVE") },
         { "FM", "Oscillator 2 bends the phase of oscillator 1, 3 or both: a bell, a tine, a growl. Turn oscillator 2's level down to "
                 "hear only what it does to the others.", sec ("FM"), mark ("FM") },
         { "Patch, sequencer, drums", "PATCH opens the cable compartment: three LFOs, the sources (top row) and the destinations. Drag "
                    "from a source to a destination to lay a cable; pull it out to move it, drop it anywhere else to remove it. SEQ opens "
                    "the arpeggiator and the 16-step sequencer: each step has its key, its NOTE, VEL and GATE knobs and its ROW, SLIDE and "
-                   "ACCENT switches; the sequencer follows the key you hold (HOLD) or runs on its own (FREE; PLAY starts it, again stops it). DRUM opens the drum "
+                   "ACCENT switches; the key at the VEL row's name turns that row into PROB (the chance a step plays) or RATCH (a step played "
+                   "1 to 4 times in its length), and the selector above step 1 sets the order: forward, reverse, bounce or random; the sequencer follows the key you hold (HOLD) or runs on its own (FREE; PLAY starts it, again stops it). DRUM opens the drum "
                    "machine: eight tracks, each playing a drum sound you pick, with 16 steps (click: on, again: accent; right-click: off); hold a "
                    "key to play the beat, or PLAY to run it on its own. CLEAR "
                    "on either door wipes its steps. Arps, sequences "
@@ -260,7 +277,8 @@ void JingFangEditor::openDoor (int which)
     if (seqDoor) seqDoor->setOpen (which == 2);
     if (labDoor) labDoor->setOpen (which == 3);
     if (drumDoor) drumDoor->setOpen (which == 4);
-    patchBtn.repaint(); seqBtn.repaint(); labBtn.repaint(); drumBtn.repaint();
+    if (fxDoor) fxDoor->setOpen (which == 5);
+    patchBtn.repaint(); seqBtn.repaint(); labBtn.repaint(); drumBtn.repaint(); fxBtn.repaint();
 }
 
 std::vector<std::pair<juce::String, juce::Rectangle<int>>> JingFangEditor::sectionsForTest() const
@@ -382,18 +400,19 @@ void JingFangEditor::SlotCell::mouseUp (const juce::MouseEvent& e)
     if (e.position.x < w / 3.0f) { proc.stepSection (section, -1); return; }
     if (e.position.x > w * 2.0f / 3.0f) { proc.stepSection (section, 1); return; }
     juce::PopupMenu m;
-    juce::String fam; juce::PopupMenu sub;
+    // category -> family -> preset, as the preset menu
+    juce::String cat, fam; juce::PopupMenu catMenu, sub;
     const auto& list = proc.presets();
+    auto closeFamily = [&] { if (fam.isNotEmpty()) catMenu.addSubMenu (fam, sub); sub = juce::PopupMenu(); };
+    auto closeCategory = [&] { closeFamily(); if (cat.isNotEmpty()) m.addSubMenu (cat, catMenu); catMenu = juce::PopupMenu(); };
     for (int i = 0; i < (int) list.size(); ++i)
     {
-        if (list[(size_t) i].family != fam)
-        {
-            if (fam.isNotEmpty()) m.addSubMenu (fam, sub);
-            fam = list[(size_t) i].family; sub = juce::PopupMenu();
-        }
+        const auto c = JingFangProcessor::categoryOf (list[(size_t) i].family);
+        if (c != cat) { closeCategory(); cat = c; fam = {}; }
+        if (list[(size_t) i].family != fam) { closeFamily(); fam = list[(size_t) i].family; }
         sub.addItem (i + 1, juce::String (i + 1).paddedLeft ('0', 3) + "  " + list[(size_t) i].name, true, i == proc.sectionSlot (section));
     }
-    if (fam.isNotEmpty()) m.addSubMenu (fam, sub);
+    closeCategory();
     juce::Component::SafePointer<SlotCell> safe (this);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [safe] (int r)
     {
@@ -470,12 +489,28 @@ void JingFangEditor::PresetFace::mouseUp (const juce::MouseEvent& e)
     if (! getLocalBounds().contains (e.getPosition())) return;
     juce::PopupMenu menu;
     const auto& list = proc.presets();
-    for (const auto& fam : proc.families())
+    // category -> family -> preset; a category with one family lists its presets directly
+    for (const auto& cat : proc.categories())
     {
-        juce::PopupMenu sub;
-        for (size_t i = 0; i < list.size(); ++i)
-            if (list[i].family == fam) sub.addItem ((int) i + 1, list[i].name + (list[i].factory ? "" : "  (yours)"), true, (int) i == proc.currentPresetIndex());
-        menu.addSubMenu (fam, sub, true, nullptr, fam == proc.currentFamily());
+        juce::StringArray fams;
+        for (const auto& fam : proc.families()) if (JingFangProcessor::categoryOf (fam) == cat) fams.add (fam);
+        auto items = [&] (juce::PopupMenu& sub, const juce::String& fam)
+        {
+            for (size_t i = 0; i < list.size(); ++i)
+                if (list[i].family == fam) sub.addItem ((int) i + 1, list[i].name + (list[i].factory ? "" : "  (yours)"), true, (int) i == proc.currentPresetIndex());
+        };
+        const bool here = JingFangProcessor::categoryOf (proc.currentFamily()) == cat;
+        if (fams.size() == 1 && cat == "Init") { items (menu, fams[0]); continue; }
+        juce::PopupMenu catMenu;
+        if (fams.size() == 1) items (catMenu, fams[0]);
+        else
+            for (const auto& fam : fams)
+            {
+                juce::PopupMenu sub;
+                items (sub, fam);
+                catMenu.addSubMenu (fam, sub, true, nullptr, fam == proc.currentFamily());
+            }
+        menu.addSubMenu (cat, catMenu, true, nullptr, here);
     }
     // owner 18 Oct: every preset can be deleted, factory ones included, and they do not come back
     static constexpr int kDelete = 100000, kUnhide = 100001;   // static: MSVC does not let the menu lambda use a local constexpr uncaptured
@@ -573,7 +608,7 @@ void JingFangEditor::stopEverything()
 bool JingFangEditor::anyDoorOpen() const
 {
     return bay.isOpenOrOpening() || (seqDoor && seqDoor->isOpenOrOpening()) || (drumDoor && drumDoor->isOpenOrOpening())
-        || (labDoor && labDoor->isOpenOrOpening());
+        || (labDoor && labDoor->isOpenOrOpening()) || (fxDoor && fxDoor->isOpenOrOpening());
 }
 
 bool JingFangEditor::keyStateChanged (bool down) { return keyboard.keyStateChanged (down); }
@@ -650,7 +685,7 @@ void JingFangEditor::timerCallback()
     // while LEARN is open the page keys only name their pages: dimmed, a click does nothing (openDoor refuses too)
     {
         const bool learnOpen = labDoor && labDoor->learnOpen();
-        for (auto* k : { &patchBtn, &seqBtn, &drumBtn, &labBtn, &closeBtn })
+        for (auto* k : { &patchBtn, &seqBtn, &drumBtn, &labBtn, &closeBtn, &fxBtn })
             if (k->isEnabled() == learnOpen)
             {
                 k->setEnabled (! learnOpen);
@@ -662,7 +697,8 @@ void JingFangEditor::timerCallback()
         juce::Component* door = bay.isOpenOrOpening() && bay.isVisible() ? static_cast<juce::Component*> (&bay)
                               : seqDoor && seqDoor->isOpenOrOpening() && seqDoor->isVisible() ? static_cast<juce::Component*> (seqDoor.get())
                               : drumDoor && drumDoor->isOpenOrOpening() && drumDoor->isVisible() ? static_cast<juce::Component*> (drumDoor.get())
-                              : labDoor && labDoor->isOpenOrOpening() && labDoor->isVisible() ? static_cast<juce::Component*> (labDoor.get()) : nullptr;
+                              : labDoor && labDoor->isOpenOrOpening() && labDoor->isVisible() ? static_cast<juce::Component*> (labDoor.get())
+                              : fxDoor && fxDoor->isOpenOrOpening() && fxDoor->isVisible() ? static_cast<juce::Component*> (fxDoor.get()) : nullptr;
         if (door != nullptr)
         {
             const auto b = door->getBounds();
@@ -680,6 +716,7 @@ void JingFangEditor::timerCallback()
     if (seqDoor) { const bool was = seqDoor->isVisible(); seqDoor->tick(); if (was != seqDoor->isVisible()) seqBtn.repaint(); }
     if (labDoor) { const bool was = labDoor->isVisible(); labDoor->tick(); if (was != labDoor->isVisible()) labBtn.repaint(); }
     if (drumDoor) { const bool was = drumDoor->isVisible(); drumDoor->tick(); if (was != drumDoor->isVisible()) drumBtn.repaint(); }
+    if (fxDoor) { const bool was = fxDoor->isVisible(); fxDoor->tick(); if (was != fxDoor->isVisible()) fxBtn.repaint(); }
     {
         const bool seqNow = proc.live().seqStep >= 0, drumNow = proc.drumStep() >= 0;
         if (seqNow != seqWasRunning) { seqWasRunning = seqNow; seqBtn.repaint(); }

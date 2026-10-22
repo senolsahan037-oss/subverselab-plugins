@@ -19,6 +19,7 @@ struct Entry
     const char* id;            // preset files refer to it: <labtuning a="rast"/>
     int commas[12];            // per key C..B: comma position above C (0..52), -1 = 12-equal against A
     int fallKey = -1, fallCommas = 0;   // one key that plays lower when the melody comes down onto it (rast: eviç -> acem)
+    bool anchorC = false;      // the tonic C (key 60) is 12-equal C4 and every key is given (21 Oct: the Indian 12-swara table); false = A4 = 440 on its comma
 };
 
 inline const std::vector<Entry>& entries()
@@ -32,6 +33,11 @@ inline const std::vector<Entry>& entries()
         { "Saba (53)",   "saba",   { 0,  5,  9, -1, 17, 22, -1, 31, 36, 40, -1, 48 } },
         { "Segah (53)",  "segah",  { 0, -1,  9, -1, 17, 22, 26, 31, -1, 40, 44, 48 } },
         { "Kurdi (53)",  "kurdi",  { 0, -1,  9, -1, 18, 22, -1, 31, -1, 40, 44, -1 } },
+        // 21 Oct (owner: Indian and Chinese instruments and their melodies). Values are the ratios snapped to the 53 commas (largest error 1.5 ct: 16/15, 6/5):
+        // the twelve swaras in just intonation, Sa = C (1, 16/15, 9/8, 6/5, 5/4, 4/3, 45/32, 3/2, 8/5, 5/3, 9/5, 15/8 -> 0 5 9 14 17 22 26 31 36 39 45 48), C anchored;
+        // the twelve lu as twelve stacked fifths (Pythagorean, 3/2 = 31 commas: 0 5 9 14 18 22 27 31 36 40 45 49), A4 = 440 like the others.
+        { "Shruti (53)", "shruti", { 0,  5,  9, 14, 17, 22, 26, 31, 36, 39, 45, 48 }, -1, 0, true },
+        { "Lu (53)",     "lu",     { 0,  5,  9, 14, 18, 22, 27, 31, 36, 40, 45, 49 } },
     };
     return e;
 }
@@ -53,6 +59,11 @@ inline Tuning make (const Entry& en)
         t.fall[(size_t) en.fallKey - 1] = en.fallCommas * kComma;
     }
     t.mapSize = 0; t.middleKey = 60; t.refKey = 69; t.refHz = 440.0;
+    if (en.anchorC)
+    {   // every key is given: cents above C, C = 12-equal C4
+        for (int k = 1; k < 12; ++k) t.cents[(size_t) k - 1] = en.commas[k] * kComma;
+        t.refKey = 60; t.refHz = 440.0 * std::pow (2.0, -9.0 / 12.0);
+    }
     return t;
 }
 

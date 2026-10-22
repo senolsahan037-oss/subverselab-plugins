@@ -12,6 +12,7 @@
 // Output: 24-bit PCM stereo WAV. Samples beyond full scale are clipped in the file and counted on stdout.
 #include "../Source/engine/SvlEngine.h"
 #include "../Source/engine/SvlPreset.h"
+#include "../Source/plugin/MpeState.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdarg>
@@ -1037,6 +1038,169 @@ static int selftest (const std::string& outDir)
         }
     }
 
+    // 8e2. the FX layer of 20 Oct (work order item 4): EQ, COMP, MOD (chorus / flanger / phaser), echo types
+    {
+        R.line ("\n8e2. FX layer (EQ -> COMP -> DRIVE -> MOD -> ECHO -> REVERB)");
+        auto sineAt = [] (double hz, float dbfs)
+        {
+            svl::ParamSet p = initParams(); p[svl::oscParam (0, svl::O_TYPE)] = (float) svl::OscType::sine; p[svl::FLT_CUTOFF] = 20000;
+            p[svl::MASTER] = dbfs + 3.0f; p[svl::V_VELAMP] = 0; p[svl::AENV_A] = 0.001f; p[svl::AENV_S] = 1;
+            return std::make_pair (p, 69.0f + 12.0f * (float) std::log2 (hz / 440.0));
+        };
+        auto rmsDb = [] (const Buf& b, double t0, double t1)
+        {
+            double a = 0; size_t n = 0;
+            for (size_t i = (size_t) (t0 * SR); i < std::min (b.size(), (size_t) (t1 * SR)); ++i, ++n) a += (double) b[i] * b[i];
+            return 10 * std::log10 (a / std::max<size_t> (1, n) + 1e-30);
+        };
+        RenderOpts e1; e1.tail = 0; e1.minLen = 1.0;
+        // 1. neutral = not run: every other knob of the new stages moved, bit for bit the same
+        {
+            std::vector<Note> nn; loadNotes (gRoot + "/notes/pluck.txt", nn);
+            RenderOpts o; o.tail = 2;
+            svl::ParamSet a = presetParams (kPresetFiles[2]);
+            svl::ParamSet b = a;
+            b[svl::FXQ_MIDF] = 3000; b[svl::FXC_THRESH] = -35; b[svl::FXC_ATTACK] = 0.05f; b[svl::FXC_RELEASE] = 0.8f;
+            b[svl::FXM_RATE] = 5; b[svl::FXM_DEPTH] = 1; b[svl::FXM_FB] = 0.8f; b[svl::FXM_MIX] = 1;
+            if (a[svl::FXE_MIX] == 0) b[svl::FXE_TYPE] = 3;
+            auto x = render (a, nn, o), y = render (b, nn, o);
+            double d = x.l.size() == y.l.size() ? 0 : 1;
+            for (size_t i = 0; i < std::min (x.l.size(), y.l.size()); ++i) d = std::max (d, (double) std::fabs (x.l[i] - y.l[i]) + std::fabs (x.r[i] - y.r[i]));
+            R.line ("  EQ 0 dB, ratio 1 / makeup 0, MOD off, other knobs moved: max difference %.3g", d);
+            R.check (d == 0, "new stages neutral = bit-identical (a 1.0 preset sounds the same)");
+        }
+        // 2. EQ: +12 dB on each band, the gain where it should be and none where it should not
+        {
+            struct T { int band; double hz; double lo, hi; const char* what; };
+            const T tests[] = { { 0, 30, 11.0, 12.5, "low shelf +12 at 30 Hz" }, { 0, 3000, -0.5, 0.5, "low shelf +12 at 3 kHz" },
+                                { 1, 1000, 11.5, 12.5, "mid +12 @ 1 kHz at 1 kHz" }, { 1, 100, -0.5, 1.0, "mid +12 @ 1 kHz at 100 Hz" },
+                                { 2, 16000, 11.0, 12.5, "high shelf +12 at 16 kHz" }, { 2, 300, -0.5, 0.5, "high shelf +12 at 300 Hz" } };
+            bool ok = true;
+            for (auto& t : tests)
+            {
+                auto [p, key] = sineAt (t.hz, -30);
+                auto dry = render (p, { { key, 127, 0.0, 1.0 } }, e1);
+                p[t.band == 0 ? svl::FXQ_LOW : (t.band == 1 ? svl::FXQ_MID : svl::FXQ_HIGH)] = 12; p[svl::FXQ_MIDF] = 1000;
+                auto wet = render (p, { { key, 127, 0.0, 1.0 } }, e1);
+                const double g = rmsDb (wet.l, 0.4, 0.9) - rmsDb (dry.l, 0.4, 0.9);
+                R.line ("  EQ %s: %+.2f dB", t.what, g);
+                ok = ok && g >= t.lo && g <= t.hi;
+            }
+            R.check (ok, "EQ bands boost where they should (+11..+12.5 dB) and leave the rest (within 0.5 / 1 dB)");
+        }
+        // 3. COMP: ratio 4 at -20 dB on a steady sine, output peak = T + (x - T) / 4
+        {
+            bool ok = true;
+            for (float lvl : { -6.0f, -12.0f })
+            {
+                auto [p, key] = sineAt (220, lvl);
+                auto dry = render (p, { { key, 127, 0.0, 1.0 } }, e1);
+                p[svl::FXC_RATIO] = 4; p[svl::FXC_THRESH] = -20; p[svl::FXC_ATTACK] = 0.001f; p[svl::FXC_RELEASE] = 0.05f;
+                auto wet = render (p, { { key, 127, 0.0, 1.0 } }, e1);
+                float px = 0, py = 0;
+                for (size_t i = (size_t) (0.6 * SR); i < (size_t) (0.9 * SR); ++i) { px = std::max (px, std::fabs (dry.l[i])); py = std::max (py, std::fabs (wet.l[i])); }
+                const double x = 20 * std::log10 (px), y = 20 * std::log10 (py), want = -20 + (x + 20) / 4;
+                R.line ("  comp 4:1 at -20 dB: in %.2f dBFS peak -> out %.2f (expected %.2f)", x, y, want);
+                ok = ok && std::fabs (y - want) < 1.0;
+            }
+            auto [p, key] = sineAt (220, -12);
+            p[svl::FXC_RATIO] = 1; p[svl::FXC_MAKEUP] = 6;
+            auto dry = render (sineAt (220, -12).first, { { key, 127, 0.0, 1.0 } }, e1), wet = render (p, { { key, 127, 0.0, 1.0 } }, e1);
+            const double mk = rmsDb (wet.l, 0.5, 0.9) - rmsDb (dry.l, 0.5, 0.9);
+            R.line ("  makeup 6 dB at ratio 1: %+.2f dB", mk);
+            R.check (ok && std::fabs (mk - 6) < 0.1, "COMP: 4:1 above the threshold within 1 dB; makeup exact within 0.1 dB");
+        }
+        // 4. MOD: each type changes the sound, keeps the level (+-4 dB at mix 1), stays finite
+        {
+            bool ok = true;
+            svl::ParamSet base = initParams(); base[svl::FLT_CUTOFF] = 8000;
+            const std::vector<Note> chord = { { 48, 100, 0.0, 1.5 }, { 55, 100, 0.0, 1.5 }, { 64, 100, 0.0, 1.5 } };
+            RenderOpts o; o.tail = 0; o.minLen = 1.5;
+            auto dry = render (base, chord, o);
+            for (int type : { 1, 2, 3 })
+            {
+                svl::ParamSet p = base; p[svl::FXM_TYPE] = (float) type; p[svl::FXM_MIX] = 1; p[svl::FXM_DEPTH] = 0.7f; p[svl::FXM_FB] = 0.5f; p[svl::FXM_RATE] = 1;
+                auto wet = render (p, chord, o);
+                double diff = 0; bool fin = true;
+                for (size_t i = 0; i < std::min (dry.l.size(), wet.l.size()); ++i) { diff = std::max (diff, (double) std::fabs (dry.l[i] - wet.l[i])); fin = fin && std::isfinite (wet.l[i]) && std::isfinite (wet.r[i]); }
+                const double lv = rmsDb (wet.l, 0.3, 1.4) - rmsDb (dry.l, 0.3, 1.4);
+                double side = 0; for (size_t i = (size_t) (0.3 * SR); i < (size_t) (1.4 * SR); ++i) side = std::max (side, (double) std::fabs (wet.l[i] - wet.r[i]));
+                R.line ("  %s: level %+.2f dB vs dry, largest change %.3f, L-R difference %.3f", svl::kModFxNames[type], lv, diff, side);
+                ok = ok && fin && diff > 0.01 && std::fabs (lv) < 4.0 && side > 0.001;
+            }
+            R.check (ok, "MOD: chorus, flanger, phaser change the sound and the stereo image, level within 4 dB");
+        }
+        // 5. a MOD type change mid-note fades out and in: no step bigger than the steady signal's own
+        {
+            auto [p, key] = sineAt (220, -12);
+            p[svl::FXM_TYPE] = 1; p[svl::FXM_MIX] = 1;
+            svl::Engine e; e.setParams (p, true); e.prepare (SR);
+            e.noteOn ((int) std::lround (key), 1.0f, 0);
+            Buf L ((size_t) (2 * SR)), Rr ((size_t) (2 * SR));
+            for (long i = 0; i < 2 * SR; i += 256)
+            {
+                if (i == SR / 2) e.setParam (svl::FXM_TYPE, 2);
+                if (i == SR) e.setParam (svl::FXM_TYPE, 3);
+                if (i == 3 * SR / 2) e.setParam (svl::FXM_TYPE, 0);
+                e.process (L.data() + i, Rr.data() + i, 256);
+            }
+            double steady = 0, worst = 0;
+            for (long i = 1; i < 2 * SR; ++i)
+            {
+                const double d = std::fabs (L[(size_t) i] - L[(size_t) i - 1]);
+                if (i > SR / 4 && i < SR / 2 - 100) steady = std::max (steady, d); else if (i >= SR / 2 - 100) worst = std::max (worst, d);
+            }
+            R.line ("  type changes chorus -> flanger -> phaser -> off mid-note: largest step %.4f (steady chorus %.4f)", worst, steady);
+            R.check (worst < steady * 2.5, "a MOD type change does not click");
+        }
+        // 6. echo types: stereo (each side its own line), mono and tape (one line, the same both sides; tape wavers)
+        {
+            svl::ParamSet p = initParams(); p[svl::oscParam (0, svl::O_TYPE)] = (float) svl::OscType::off; p[svl::CLICK_LEVEL] = 1;
+            p[svl::CLICK_DECAY] = 0.0005f; p[svl::FXE_MIX] = 1; p[svl::FXE_FB] = 0.5f; p[svl::FXE_DAMP] = 0;
+            RenderOpts e; e.tail = 0; e.minLen = 1.2;
+            auto peakAt = [&] (const Buf& b, double t0, double t1) { size_t best = (size_t) (t0 * SR); for (size_t i = best; i < (size_t) (t1 * SR); ++i) if (std::fabs (b[i]) > std::fabs (b[best])) best = i; return std::make_pair ((double) best / SR, std::fabs (b[best])); };
+            bool ok = true;
+            for (int type : { 1, 2, 3 })
+            {
+                p[svl::FXE_TYPE] = (float) type;
+                auto s = render (p, { { 60, 127, 0.0, 0.01 } }, e);
+                const auto l1 = peakAt (s.l, 0.2, 0.55), r1 = peakAt (s.r, 0.2, 0.55);
+                double lr = 0; for (size_t i = (size_t) (0.2 * SR); i < s.l.size(); ++i) lr = std::max (lr, (double) std::fabs (s.l[i] - s.r[i]));
+                R.line ("  echo %s: first echo L %.4f s / R %.4f s, largest L-R difference %.4f", svl::kEchoTypeNames[type], l1.first, r1.first, lr);
+                const bool both = std::fabs (l1.first - 0.375) < (type == 3 ? 0.004 : 0.002) && std::fabs (r1.first - 0.375) < (type == 3 ? 0.004 : 0.002);
+                ok = ok && both && lr < 1e-6;   // the click is the same on both sides: every type keeps L = R for it
+            }
+            R.check (ok, "echo types: stereo, mono and tape echo on the grid on both sides (tape within its wow)");
+        }
+        // 7. real time and CPU: every new stage on, no allocation in process(); cost against the rack off
+        {
+            auto cost = [&] (bool on)
+            {
+                svl::ParamSet p = initParams();
+                if (on)
+                {
+                    p[svl::FXQ_LOW] = 3; p[svl::FXQ_MID] = -4; p[svl::FXQ_HIGH] = 2; p[svl::FXC_RATIO] = 4; p[svl::FXC_THRESH] = -24; p[svl::FXC_MAKEUP] = 4;
+                    p[svl::FXM_TYPE] = 3; p[svl::FXM_MIX] = 0.6f; p[svl::FXE_TYPE] = 3; p[svl::FXE_MIX] = 0.3f;
+                }
+                svl::Engine e; e.setParams (p, true); e.prepare (SR);
+                Buf L (512), Rr (512);
+                for (int k = 0; k < 16; ++k) e.noteOn (36 + k * 3, 0.8f, 0);
+                const int blocks = 10 * SR / 512;
+                if (on) { gAllocs = 0; gCountAllocs = true; }
+                auto t0 = std::chrono::steady_clock::now();
+                for (int b = 0; b < blocks; ++b) e.process (L.data(), Rr.data(), 512);
+                const double pct = 100.0 * std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count() / (blocks * 512.0 / SR);
+                gCountAllocs = false;
+                return pct;
+            };
+            const double off = cost (false), on = cost (true);
+            const long allocs = gAllocs.load();
+            R.line ("  CPU (one core, 16 voices): rack off %.2f %%, EQ + COMP + phaser + tape echo on %.2f %% (+%.2f points); heap allocations %ld",
+                    off, on, on - off, allocs);
+            R.check (allocs == 0, "FX layer: no heap allocation on the audio thread");
+        }
+    }
+
     // 8f. arpeggiator + step sequencer (SvlArpSeq.h)
     {
         R.line ("\n8f. Arpeggiator + step sequencer");
@@ -1347,6 +1511,85 @@ static int selftest (const std::string& outDir)
             const double sec = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
             R.line ("  generator alone, 1/32 arp + seq, 8 keys, 60 s of audio: %.3f %% of one core (%ld events)", 100.0 * sec / 60.0, notes);
             R.check (sec / 60.0 < 0.001, "generator under 0.1 % of a core");
+        }
+    }
+
+    // 8f2. the sequencer's lanes of 20 Oct (work order item 5): direction, probability, ratchet
+    {
+        R.line ("\n8f2. Sequencer lanes: direction, probability, ratchet");
+        // a free sequence on the own clock at 120 BPM, 1/16: the onsets (sample, key) of n samples, rendered in blocks of `block`
+        struct On { long at; int key; };
+        auto runSeq = [] (svl::ParamSet p, long n, int block)
+        {
+            p[svl::SEQ_ON] = 1; p[svl::SEQ_MODE] = 1; p[svl::SEQ_RATE] = 3;
+            svl::NoteGen g; g.prepare (44100); g.setTempo (120); g.setParams (p);
+            std::vector<On> ons; std::map<int, long> openAt; long overlaps = 0;
+            long pos = 0;
+            while (pos < n)
+            {
+                const long blockEnd = std::min (n, (pos / block + 1) * block);
+                svl::GenNote gn;
+                while (g.pop (gn))
+                {
+                    if (gn.kind != svl::GenNote::off) { ons.push_back ({ pos, gn.key }); openAt[gn.id] = pos; }
+                    else openAt.erase (gn.id);
+                }
+                overlaps = std::max (overlaps, (long) openAt.size());
+                const long end = std::min (blockEnd, pos + std::max (1, g.samplesToNext()));
+                g.advance ((int) (end - pos)); pos = end;
+            }
+            return std::make_pair (ons, overlaps);
+        };
+        auto pattern = [] (int len)
+        {
+            svl::ParamSet p = initParams(); p[svl::SEQ_LEN] = (float) len;
+            for (int st = 0; st < 16; ++st) { p[svl::stepParam (st, svl::S_NOTE)] = (float) st; p[svl::stepParam (st, svl::S_GATE)] = 0.5f; }
+            return p;
+        };
+        const long step = 44100 / 8;   // a 1/16 at 120 BPM: 5512.5 samples
+        // 1. direction
+        {
+            auto keysOf = [&] (int dir, int count)
+            {
+                svl::ParamSet p = pattern (4); p[svl::SEQ_DIR] = (float) dir;
+                auto r = runSeq (p, (long) (step * count + 10), 512);
+                std::string k; for (int i = 0; i < count && i < (int) r.first.size(); ++i) k += std::to_string (r.first[(size_t) i].key - 60);
+                return k;
+            };
+            const auto fw = keysOf (0, 8), bw = keysOf (1, 8), pp = keysOf (2, 10), rnd = keysOf (3, 32);
+            const auto rnd2 = [&] { svl::ParamSet p = pattern (4); p[svl::SEQ_DIR] = 3; auto r = runSeq (p, step * 32 + 10, 37);
+                                    std::string k; for (int i = 0; i < 32 && i < (int) r.first.size(); ++i) k += std::to_string (r.first[(size_t) i].key - 60); return k; }();
+            bool all4 = true; for (char c : { '0', '1', '2', '3' }) all4 = all4 && rnd.find (c) != std::string::npos;
+            R.line ("  4 steps (notes 0 1 2 3): forward %s, reverse %s, bounce %s, random %s (blocks of 37: %s)", fw.c_str(), bw.c_str(), pp.c_str(), rnd.c_str(), rnd2.c_str());
+            R.check (fw == "01230123" && bw == "32103210" && pp == "0123210123" && rnd.size() == 32 && all4 && rnd == rnd2,
+                     "direction: forward, reverse, bounce exact; random uses every step and is the same for any block size");
+        }
+        // 2. probability: 0 never, 1 always, 0.5 about half, the same for any block size
+        {
+            auto count = [&] (float prob, int block)
+            {
+                svl::ParamSet p = pattern (16);
+                for (int st = 0; st < 16; ++st) p[svl::stepProbParam (st)] = prob;
+                auto r = runSeq (p, step * 128, block);
+                std::string sig; for (auto& o : r.first) sig += std::to_string (o.at) + ",";
+                return std::make_pair ((int) r.first.size(), sig);
+            };
+            const auto p0 = count (0, 512), p1 = count (1, 512), ph = count (0.5f, 512), ph2 = count (0.5f, 64);
+            R.line ("  probability over 128 steps: 0 -> %d hits, 1 -> %d, 0.5 -> %d (blocks of 64: %d, same onsets: %s)", p0.first, p1.first, ph.first, ph2.first,
+                    ph.second == ph2.second ? "yes" : "no");
+            R.check (p0.first == 0 && p1.first == 128 && ph.first > 44 && ph.first < 84 && ph.second == ph2.second,
+                     "probability: 0 / 1 exact, 0.5 within 44..84 of 128, the same hits for any block size");
+        }
+        // 3. ratchet: 3 hits inside step 1, evenly, each ended before the next starts; other steps once
+        {
+            svl::ParamSet p = pattern (4);
+            p[svl::stepRatchetParam (0)] = 3; p[svl::stepParam (0, svl::S_GATE)] = 2.0f;   // a long gate is cut to its share
+            auto r = runSeq (p, step * 8 - 10, 512);
+            std::string at; for (size_t i = 0; i < std::min<size_t> (6, r.first.size()); ++i) at += std::to_string (r.first[i].at) + " ";
+            const bool ok = r.first.size() == 12 && r.first[0].at == 0 && std::labs (r.first[1].at - step / 3) <= 1 && std::labs (r.first[2].at - 2 * step / 3) <= 1
+                            && r.first[3].at == (long) std::ceil (44100.0 / 8.0) && r.second <= 1;
+            R.line ("  ratchet 3 on step 1 of 4, two cycles: %zu hits, first onsets %s; most notes sounding at once %ld", r.first.size(), at.c_str(), r.second);
+            R.check (ok, "ratchet: 3 even hits in the step's length, never overlapping, then the next step on the grid");
         }
     }
 
@@ -1678,6 +1921,143 @@ static int selftest (const std::string& outDir)
         R.check (ok == total && total > 0, what);
         std::snprintf (what, sizeof what, "%d/%d sound presets carry no arp / seq / drums", plain, plainTotal);
         R.check (plain == plainTotal && plainTotal > 0, what);
+    }
+
+    // ---- output ceiling: below -0.18 dBFS untouched, never above full scale (owner 21 Oct)
+    R.line ("\noutput ceiling");
+    {
+        svl::ParamSet loud = initParams(); loud[svl::MASTER] = 24; loud[svl::FLT_CUTOFF] = 20000;
+        auto render1 = [&] (const svl::ParamSet& p)
+        {
+            svl::Engine e; e.setParams (p, true); e.prepare (SR);
+            for (int k : { 48, 55, 60, 64, 67, 72 }) e.noteOn (k, 1.0f, 0);
+            Stereo s; s.l.assign ((size_t) SR, 0); s.r.assign ((size_t) SR, 0);
+            for (int i = 0; i < SR; i += 256) e.process (s.l.data() + i, s.r.data() + i, std::min (256, SR - i));
+            return s;
+        };
+        const auto s = render1 (loud);
+        float pk = 0; for (size_t i = 0; i < s.l.size(); ++i) pk = std::max ({ pk, std::fabs (s.l[i]), std::fabs (s.r[i]) });
+        svl::ParamSet q1 = initParams(), q2 = initParams(); q1[svl::MASTER] = -30; q2[svl::MASTER] = -24; q1[svl::FLT_CUTOFF] = q2[svl::FLT_CUTOFF] = 20000;
+        const auto a = render1 (q1), b = render1 (q2);
+        double worst = 0; for (size_t i = (size_t) SR / 2; i < a.l.size(); ++i) worst = std::max (worst, std::fabs ((double) b.l[i] - 1.9952623 * (double) a.l[i]));
+        R.line ("  six keys at +24 dB master: peak %.5f (full scale 1.0); quiet signal at -30 / -24 dB: largest deviation from a pure 6 dB gain %.2e", pk, worst);
+        R.check (pk <= 1.0f && pk > 0.98f, "a loud patch reaches the ceiling and never passes full scale");
+        R.check (worst < 1.0e-6, "below the ceiling the signal is untouched");
+    }
+
+    // ---- the drum machine and the sequencer on their own clock: the second PLAY joins the first one's grid (owner 21 Oct: "iki sequencer farklı çalışıyor")
+    R.line ("\ndrum machine + sequencer lock (own clock)");
+    {
+        auto run = [&] (bool drumsFirst, int rateD, int rateS)
+        {
+            svl::Engine e; svl::ParamSet p = initParams(); p[svl::DRUMS_MODE] = 1; p[svl::SEQ_MODE] = 1; p[svl::DRUMS_RATE] = (float) rateD; p[svl::SEQ_RATE] = (float) rateS;
+            e.setParams (p, true); e.prepare (SR);
+            std::vector<float> L (16), Rr (16);
+            const int blocks1 = (int) (0.7 * SR / 16);   // 0.7 s = 1.4 beats: not on a step line
+            e.setParam (drumsFirst ? svl::DRUMS_ON : svl::SEQ_ON, 1);
+            for (int b = 0; b < blocks1; ++b) e.process (L.data(), Rr.data(), 16);
+            e.setParam (drumsFirst ? svl::SEQ_ON : svl::DRUMS_ON, 1);
+            int bad = 0, changes = 0, prevD = -2, prevS = -2;
+            for (int b = 0; b < (int) (3.0 * SR / 16); ++b)
+            {
+                e.process (L.data(), Rr.data(), 16);
+                const int d = e.drumStep(), g = e.noteGen().currentStep();
+                if (prevD != -2 && g >= 0 && d >= 0)
+                {
+                    if ((d != prevD) != (g != prevS) && prevS >= 0) ++bad;   // one steps without the other
+                    changes += d != prevD;
+                }
+                prevD = d; prevS = g;
+            }
+            return std::make_pair (bad, changes);
+        };
+        const auto a = run (true, 3, 3), b = run (false, 3, 3);
+        R.line ("  drums first, seq 0.7 s later: %d steps out of line in %d; seq first, drums later: %d in %d", a.first, a.second, b.first, b.second);
+        R.check (a.first == 0 && a.second > 10 && b.first == 0 && b.second > 10, "drum machine and sequencer, started at different times on the own clock, step together (same rate)");
+    }
+
+    // ---- MPE (work order 1.x item 8): per-note bend, pressure and slide
+    R.line ("\nMPE: per-note pitch bend, pressure, slide");
+    {
+        auto hold = [&] (const svl::ParamSet& p, const std::vector<std::pair<int, int>>& keyChan, const std::function<void (svl::Engine&)>& pre, int len)
+        {
+            svl::Engine e; e.setParams (p, true); e.prepare (SR); pre (e);
+            Stereo s; s.l.assign ((size_t) len, 0); s.r.assign ((size_t) len, 0);
+            for (auto& kc : keyChan) { if (kc.second > 0) e.noteOnMpe (kc.first, 0.8f, kc.second, 0); else e.noteOn (kc.first, 0.8f, 0); }
+            for (int i = 0; i < len; i += 256) e.process (s.l.data() + i, s.r.data() + i, std::min (256, len - i));
+            return s;
+        };
+        auto semiHz = [] (int key) { return 440.0 * std::pow (2.0, (key - 69) / 12.0); };
+        auto rmsOf = [] (const Stereo& s) { double a = 0; const size_t n = s.l.size(), b = n / 2; for (size_t i = b; i < n; ++i) a += (double) s.l[i] * s.l[i]; return 10 * std::log10 (a / (double) (n - b) + 1e-30); };
+        svl::ParamSet sine = initParams(); sine[svl::oscParam (0, svl::O_TYPE)] = (float) svl::OscType::sine; sine[svl::FLT_CUTOFF] = 20000;
+        sine[svl::AENV_S] = 1.0f;
+        auto freqNear = [&] (const Stereo& s, double f) { return peakFreq (s.l.data() + 8192, 32768, SR, f); };   // 8192 + 32768 < 1 s
+        {   // key 57 on channel 2 bent +12 st, key 64 on channel 3 unbent, key 72 a plain (non-MPE) note, all in one engine
+            auto s = hold (sine, { { 57, 2 }, { 64, 3 }, { 72, 0 } }, [] (svl::Engine& e) { e.setMemberBend (2, 12.0f); }, SR);
+            const double c1 = cents (freqNear (s, semiHz (69)), semiHz (69)), c2 = cents (freqNear (s, semiHz (64)), semiHz (64)), c3 = cents (freqNear (s, semiHz (72)), semiHz (72));
+            R.line ("  ch2 key 57 bent +12 st -> %+.2f ct from 440 Hz; ch3 key 64 -> %+.2f ct from its pitch; plain key 72 -> %+.2f ct", c1, c2, c3);
+            R.check (std::fabs (c1) < 2.0 && std::fabs (c2) < 2.0 && std::fabs (c3) < 2.0, "per-note bend: only the bent channel's note moves (+12 st exact within 2 ct), others stay");
+        }
+        {   // the same key on two channels is two notes, each with its own bend; releasing one leaves the other
+            svl::Engine e; e.setParams (sine, true); e.prepare (SR); e.setMemberBend (2, 0.0f); e.setMemberBend (3, 7.0f);
+            e.noteOnMpe (60, 0.8f, 2, 0); e.noteOnMpe (60, 0.8f, 3, 0);
+            Stereo s; s.l.assign ((size_t) SR, 0); s.r.assign ((size_t) SR, 0);
+            for (int i = 0; i < SR; i += 256) e.process (s.l.data() + i, s.r.data() + i, std::min (256, SR - i));
+            const double c1 = cents (freqNear (s, semiHz (60)), semiHz (60)), c2 = cents (freqNear (s, semiHz (67)), semiHz (67));
+            const int both = e.activeVoices (true);
+            e.noteOffMpe (60, 3, 0);
+            Stereo t; t.l.assign ((size_t) SR, 0); t.r.assign ((size_t) SR, 0);
+            for (int i = 0; i < SR; i += 256) e.process (t.l.data() + i, t.r.data() + i, std::min (256, SR - i));
+            R.line ("  key 60 on ch2 (+0) and ch3 (+7): %d voices, %+.2f / %+.2f ct; after ch3 off: %d voice gate-held", both, c1, c2, e.activeVoices (false));
+            R.check (both == 2 && std::fabs (c1) < 2.0 && std::fabs (c2) < 2.0 && e.activeVoices (false) == 1, "same key on two channels: two voices, independent bends, one off leaves the other");
+        }
+        {   // pressure: level, up to +3.52 dB; the unpressed note is unchanged
+            auto p0 = hold (sine, { { 60, 2 } }, [] (svl::Engine&) {}, SR), p1 = hold (sine, { { 60, 2 } }, [] (svl::Engine& e) { e.setMemberPressure (2, 1.0f); }, SR);
+            auto pl = hold (sine, { { 60, 0 } }, [] (svl::Engine&) {}, SR);
+            const double d = rmsOf (p1) - rmsOf (p0), same = rmsOf (p0) - rmsOf (pl);
+            R.line ("  pressure 1 vs 0: %+.2f dB (expected +3.52); channel note at rest vs a plain note: %+.3f dB", d, same);
+            R.check (std::fabs (d - 3.52) < 0.1 && std::fabs (same) < 0.01, "pressure: +3.52 dB at full, an unpressed MPE note equals a plain note");
+        }
+        {   // slide: brightness, a saw through a 1 kHz filter; 0.5 is neutral
+            svl::ParamSet saw = initParams(); saw[svl::oscParam (0, svl::O_TYPE)] = (float) svl::OscType::saw; saw[svl::FLT_CUTOFF] = 1000; saw[svl::AENV_S] = 1.0f;
+            auto lo = hold (saw, { { 48, 2 } }, [] (svl::Engine& e) { e.setMemberSlide (2, 0.0f); }, SR);
+            auto mid = hold (saw, { { 48, 2 } }, [] (svl::Engine&) {}, SR);
+            auto hi = hold (saw, { { 48, 2 } }, [] (svl::Engine& e) { e.setMemberSlide (2, 1.0f); }, SR);
+            auto pl = hold (saw, { { 48, 0 } }, [] (svl::Engine&) {}, SR);
+            auto above2k = [&] (const Stereo& x)   // power above 2 kHz in dB (the brightness the slide moves)
+            {
+                const size_t N = 16384; auto P = powerSpectrum (x.l.data() + 16384, N); double a = 0;
+                for (size_t b = (size_t) (2000.0 * N / SR); b < P.size(); ++b) a += P[b];
+                return 10 * std::log10 (a + 1e-30);
+            };
+            const double dl = above2k (lo) - above2k (mid), dh = above2k (hi) - above2k (mid), dp = above2k (mid) - above2k (pl);
+            R.line ("  slide 0 / 0.5 / 1 (saw, 1 kHz filter): power above 2 kHz %+.2f / 0 / %+.2f dB; slide 0.5 vs a plain note %+.3f dB", dl, dh, dp);
+            R.check (dl < -6.0 && dh > 6.0 && std::fabs (dp) < 0.01, "slide: brighter when up, darker when down, neutral at the rest value");
+        }
+        {   // a plain note ignores member state; global bend still moves plain notes only
+            svl::Engine e; e.setParams (sine, true); e.prepare (SR); e.setMemberBend (2, 12.0f); e.setMemberPressure (2, 1.0f); e.setPitchBend (0.0f);
+            e.noteOn (69, 0.8f, 0);
+            Stereo s; s.l.assign ((size_t) SR, 0); s.r.assign ((size_t) SR, 0);
+            for (int i = 0; i < SR; i += 256) e.process (s.l.data() + i, s.r.data() + i, std::min (256, SR - i));
+            const double c = cents (freqNear (s, 440.0), 440.0);
+            R.check (std::fabs (c) < 2.0, "a non-MPE note ignores the member channels' state");
+        }
+        {   // MpeState: configuration messages, zones, bend ranges
+            MpeState m; bool z = false;
+            R.check (! m.active() && ! m.isMember (2) && ! m.isMaster (1), "MPE off by default: no master, no member");
+            m.controller (1, 101, 0, z); m.controller (1, 100, 6, z); m.controller (1, 6, 7, z);
+            R.check (z && m.lower == 7 && m.isMaster (1) && ! m.isMaster (16) && m.isMember (2) && m.isMember (8) && ! m.isMember (9) && ! m.isMember (1),
+                     "MCM on channel 1 with 7: lower zone, members 2..8");
+            R.check (m.bendRange (2) == 48.0f && m.bendRange (1) == 2.0f, "member bend range 48, master 2");
+            z = false; m.controller (16, 101, 0, z); m.controller (16, 100, 6, z); m.controller (16, 6, 4, z);
+            R.check (z && m.upper == 4 && m.isMember (15) && m.isMember (12) && ! m.isMember (11) && m.isMaster (16), "MCM on channel 16 with 4: upper zone, members 12..15");
+            m.controller (3, 101, 0, z); m.controller (3, 100, 0, z); m.controller (3, 6, 24, z);
+            R.check (m.bendRange (3) == 24.0f, "RPN 0 sets that channel's bend range (24)");
+            z = false; m.controller (1, 101, 0, z); m.controller (1, 100, 6, z); m.controller (1, 6, 0, z);
+            R.check (z && ! m.isMember (2) && m.isMember (15), "MCM 0 on channel 1 turns the lower zone off, the upper stays");
+            bool used = m.controller (5, 7, 100, z);
+            R.check (! used, "other controllers are not consumed");
+        }
     }
 
     R.line ("\nselftest: %d passed, %d failed", R.pass, R.fail);

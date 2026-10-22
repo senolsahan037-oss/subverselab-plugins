@@ -37,6 +37,7 @@ juce::String valueText (const svl::ParamDef& d, float v)
     const juce::String id (d.id);
     if (id.endsWith (".unison")) return juce::String (juce::roundToInt (v)) + (juce::roundToInt (v) == 1 ? "" : " x");
     if (id == "fm.amount") return juce::String (v, 2);
+    if (id == "fx.comp.ratio") return juce::String (v, v < 10.0f ? 1 : 0) + ":1";
     return juce::String (juce::roundToInt (v * 100.0f)) + " %";
 }
 
@@ -51,6 +52,7 @@ juce::NormalisableRange<float> rangeFor (const svl::ParamDef& d)
     auto centre = [&] (float c) { if (c > d.min && c < d.max) r.setSkewForCentre (c); };
     if (u == "Hz") centre (id == "filter.cutoff" ? 640.0f : (id == "click.tone" ? 2000.0f : ((id == "drift.rate" || id.endsWith (".rate")) ? 2.0f : d.min * 4.0f)));
     if (id == "fm.amount") centre (1.5f);
+    else if (id == "fx.comp.ratio") centre (4.0f);
     else if (u == "s") centre (d.max >= 10.0f ? 1.0f : (d.max >= 1.0f ? d.max * 0.1f : d.max * 0.1f));
     return r;
 }
@@ -145,6 +147,7 @@ void JingFangProcessor::prepareToPlay (double sampleRate, int)
     engine.prepare (sampleRate);
     labSr = sampleRate;
     labTime = 0;
+    labTableSent = -2;   // prepare put the engine's tuning table back to 12-equal: the next block sends the Lab's table (or 12-equal) again
     lab.allOff();
     for (auto& h : labHeld) h.store (-1.0f);
     prepared = true;
@@ -227,6 +230,18 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
                 if (auto q = pos->getPpqPosition()) ppq = *q; else has = false;
                 if (auto bpm = pos->getBpm()) bpmNow = *bpm;
             }
+        // in a host the DAW is the boss (owner 20 Oct: "daw çalarken eklenti içinde play olmamalı"): a free SEQ / DRUM run (the
+        // panel's PLAY) is only a preview while the host is stopped; when the host plays it goes back to HOLD, so the DAW's notes
+        // drive the units on its grid and nothing runs on its own on top of the DAW. The host is told by the timer.
+        if (has && playing && ! isStandalone())
+            for (int i : { (int) svl::SEQ_MODE, (int) svl::DRUMS_MODE })
+                if (exact[(size_t) i] > 0.5f)
+                {
+                    exact[(size_t) i] = 0.0f;
+                    engine.setParam (i, 0.0f);
+                    exactShared[(size_t) i].store (0.0f);
+                    modeToHost.store (true);
+                }
         // the tempo: the host's when it has one, else the panel's TEMPO (owner 18 Oct: "bpm tempo nereden geliyor belli değil")
         hostBpm.store ((float) bpmNow, std::memory_order_relaxed);
         engine.setTempo (bpmNow > 0 ? bpmNow : (double) userBpm.load (std::memory_order_relaxed));
@@ -306,7 +321,29 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     {
         const auto m = meta.getMessage();
         const int pos = juce::jlimit (0, n, meta.samplePosition);
-        if (m.isNoteOn())
+        const int ch = m.getChannel();
+        const bool member = mpe.isMember (ch);
+        if (m.isController() && (m.getControllerNumber() == 101 || m.getControllerNumber() == 100 || m.getControllerNumber() == 6 || m.getControllerNumber() == 38)
+            && [&] { bool zones = false; const bool used = mpe.controller (ch, m.getControllerNumber(), m.getControllerValue(), zones);
+                     if (zones) for (int c = 1; c <= 16; ++c) engine.resetMember (c);
+                     return used; }())
+        {}   // RPN: MPE zone configuration and the bend range
+        else if (member && m.isController() && m.getControllerNumber() == 74)
+        {
+            if (pos > done) { engine.process (L + done, R + done, pos - done); done = pos; }
+            engine.setMemberSlide (ch, (float) m.getControllerValue() / 127.0f);
+        }
+        else if (member && (m.isChannelPressure() || m.isAftertouch()))
+        {
+            if (pos > done) { engine.process (L + done, R + done, pos - done); done = pos; }
+            engine.setMemberPressure (ch, (float) (m.isChannelPressure() ? m.getChannelPressureValue() : m.getAfterTouchValue()) / 127.0f);
+        }
+        else if (member && m.isPitchWheel())
+        {
+            if (pos > done) { engine.process (L + done, R + done, pos - done); done = pos; }
+            engine.setMemberBend (ch, (float) (m.getPitchWheelValue() - 8192) / 8192.0f * mpe.bendRange (ch));
+        }
+        else if (m.isNoteOn())
         {
             const int key = m.getNoteNumber();
             if (hostNowPlaying)
@@ -321,6 +358,7 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
                         sourceToHost.store (true);
                     }
             if (labNow) labNoteOn (key, (float) m.getVelocity() / 127.0f, pos - done, labTime + pos / labSr);
+            else if (member) engine.noteOnMpe (key, (float) m.getVelocity() / 127.0f, ch, pos - done);
             else engine.noteOn (key, (float) m.getVelocity() / 127.0f, pos - done);   // as `svl render`: velocity / 127
             const int ksLow = (int) exact[svl::KSW_LOW];
             const bool keyswitch = micro && exact[svl::KSW_MODE] > 0.5f && key >= ksLow && key < ksLow + 24;   // never sounds
@@ -332,7 +370,7 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         else if (m.isNoteOff())
         {
             const int key = m.getNoteNumber();
-            engine.noteOff (key, pos - done);
+            if (member) engine.noteOffMpe (key, ch, pos - done); else engine.noteOff (key, pos - done);
             if (labNow) { lab.noteOff (key); labHeld[(size_t) key].store (-1.0f); }
             if (midiRow[(size_t) key] >= 0) bumpLit (midiRow[(size_t) key], key, -1);
             midiRow[(size_t) key] = -1;
@@ -365,6 +403,7 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     }
     if (n > done) engine.process (L + done, R + done, n - done);
     labTime += n / labSr;
+    liveGr.store (engine.fxReductionDb(), std::memory_order_relaxed);
     liveSeqStep.store (engine.noteGen().currentStep(), std::memory_order_relaxed);
     updateSounding();
     liveDrumStep.store (engine.drumStep(), std::memory_order_relaxed);
@@ -406,6 +445,9 @@ void JingFangProcessor::timerCallback()
 {
     if (sourceToHost.exchange (false))                       // the audio thread switched a unit to MIDI: tell the host
         for (int i : { (int) svl::SEQ_SOURCE, (int) svl::DRUMS_SOURCE })
+            if (juce::roundToInt (raw[(size_t) i]->load()) != juce::roundToInt (exactShared[(size_t) i].load())) setHostValue (i, exactShared[(size_t) i].load());
+    if (modeToHost.exchange (false))                         // the host started: a free run went back to HOLD
+        for (int i : { (int) svl::SEQ_MODE, (int) svl::DRUMS_MODE })
             if (juce::roundToInt (raw[(size_t) i]->load()) != juce::roundToInt (exactShared[(size_t) i].load())) setHostValue (i, exactShared[(size_t) i].load());
     if (rowsDirty.exchange (false))
         for (int pc = 0; pc < 12; ++pc)
@@ -460,6 +502,41 @@ juce::File JingFangProcessor::userPresetFolder()
         .getChildFile ("SubverseLab").getChildFile ("JING FANG").getChildFile ("Presets");
 }
 
+// the preset list's categories (owner 20 Oct: a clear structure in a sensible order). A category groups families; the family
+// stays the preset's identity ("Family/Name" in saved projects, slots and drum kits), so no saved reference changes.
+namespace
+{
+struct CategoryDef { const char* name; std::vector<const char*> families; };
+const std::vector<CategoryDef>& categoryDefs()
+{
+    static const std::vector<CategoryDef> defs {
+        { "Init", { "Init" } },
+        { "Keys", { "Piano", "Keys - E-Piano", "Organ", "Mallet", "Bell" } },
+        { "Pads", { "Pad", "Strings", "Choir" } },
+        { "Leads", { "Lead", "Brass", "Winds" } },
+        { "Bass", { "Bass", "Bass - 808" } },
+        { "Plucks", { "Pluck", "Guitar" } },
+        { "Arps", { "Arp - Classic", "Arp - Chord", "Arp - Rhythmic", "Arp - Wide" } },
+        { "Sequences", { "Sequence - Melodic", "Sequence - Bass", "Sequence - Acid", "Sequence - Pulse", "Sequence - Micro", "Sequence - Drums" } },
+        { "Maqam", { "Kanun", "Zurna", "Sitar", "Bansuri", "Guzheng", "Erhu", "Dizi", "Sequence - Lab" } },
+        { "Drums", { "Drum Machine", "Drums - Kick", "Drums - Snare", "Drums - Clap", "Drums - Hat", "Drums - Perc" } },
+        { "FX", { "FX" } },
+    };
+    return defs;
+}
+// category rank * 100 + the family's place in it; a family no category lists (the user's own) sorts after them, by name
+int familyRank (const juce::String& family)
+{
+    const auto& defs = categoryDefs();
+    for (size_t c = 0; c < defs.size(); ++c)
+    {
+        int f = 0;
+        for (auto* name : defs[c].families) { if (family == name) return (int) c * 100 + f; ++f; }
+    }
+    return 100000;
+}
+} // namespace
+
 void JingFangProcessor::rescanPresets()
 {
     presetList.clear();
@@ -489,8 +566,8 @@ void JingFangProcessor::rescanPresets()
     }
     std::stable_sort (presetList.begin(), presetList.end(), [] (const PresetEntry& a, const PresetEntry& b)
     {
-        const bool ai = a.family == "Init", bi = b.family == "Init";
-        if (ai != bi) return ai;
+        const int ra = familyRank (a.family), rb = familyRank (b.family);
+        if (ra != rb) return ra < rb;                     // Init, Keys, Pads, Leads, Bass, Plucks, Arps, Sequences, Maqam, Drums, FX, yours
         if (a.family != b.family) return a.family.compareNatural (b.family) < 0;
         if (a.factory != b.factory) return ! a.factory;   // yours first: a name you saved over a factory one finds yours
         return a.name.compareNatural (b.name) < 0;
@@ -498,6 +575,20 @@ void JingFangProcessor::rescanPresets()
     currentIndex = -1;
     for (size_t i = 0; i < presetList.size(); ++i)
         if (presetList[i].family == juce::String (loadedMeta.family) && presetList[i].name == juce::String (loadedMeta.name)) { currentIndex = (int) i; break; }
+}
+
+
+juce::String JingFangProcessor::categoryOf (const juce::String& family)
+{
+    const int r = familyRank (family);
+    return r >= 100000 ? juce::String ("Yours") : juce::String (categoryDefs()[(size_t) (r / 100)].name);
+}
+
+juce::StringArray JingFangProcessor::categories() const
+{
+    juce::StringArray c;
+    for (const auto& p : presetList) c.addIfNotAlreadyThere (categoryOf (p.family));
+    return c;
 }
 
 juce::StringArray JingFangProcessor::families() const
@@ -737,7 +828,10 @@ void JingFangProcessor::setStateInformation (const void* data, int size)
     if (auto* mm = juce::MessageManager::getInstanceWithoutCreating(); mm != nullptr && ! mm->isThisTheMessageThread())
     {   // some hosts restore from a worker thread: the preset list, the kit and the Lab belong to the message thread
         std::weak_ptr<int> alive = labAlive;
-        juce::MessageManager::callAsync ([this, xml, alive] { if (! alive.expired()) applyStateXml (xml); });
+        auto done = std::make_shared<juce::WaitableEvent>();
+        juce::MessageManager::callAsync ([this, xml, alive, done] { if (! alive.expired()) applyStateXml (xml); done->signal(); });
+        done->wait (400);   // a host that reads the values back right after (pluginval's state restoration, 20 Oct AU run) sees them; a busy
+                            // message thread cannot deadlock us: after 400 ms we return and the restore still happens
         return;
     }
     applyStateXml (xml);

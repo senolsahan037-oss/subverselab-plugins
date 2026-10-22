@@ -16,8 +16,11 @@
     Exit code 0 only if every check held.
 */
 #include <set>
+#include <thread>
+#include <atomic>
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "MidiClip.h"
 #include <cstdio>
 
 namespace
@@ -586,7 +589,9 @@ int main (int argc, char** argv)
             check (stoppedNoSwitch && p.exactValue (svl::SEQ_SOURCE) > 0.5f && ! p.clipArmed (0) && host > 0.5f,
                    "an armed SEQ switches to MIDI on the first note while the host plays (not while it is stopped); the host sees it");
         }
-        // PLAY in a stopped host previews; the host's start carries on without a cut; its stop ends it (RU-8 rule 2)
+        // PLAY in a stopped host previews; in a playing host the DAW is the boss (owner 20 Oct: "daw çalarken eklenti içinde play
+        // olmamalı"): the host's start ends the preview and puts the unit back on HOLD (the host is told), a FREE switch while the
+        // host plays goes back to HOLD at once, and the DAW's notes are heard (they were "swallowed" by a free sequence)
         {
             JingFangProcessor p; Head head; p.setPlayHead (&head); p.prepareToPlay (48000, 512);
             setP (p, "seq.on", 1); setP (p, "seq.mode", 1);
@@ -599,13 +604,36 @@ int main (int argc, char** argv)
             const bool previewing = p.engineForTest().noteGen().isRunning();
             head.playing = true;
             run (20);
-            const bool carried = p.engineForTest().noteGen().isRunning() && ! p.engineForTest().previewing (false);
+            p.runMessageWorkForTest();
+            const bool held = p.exactValue (svl::SEQ_MODE) < 0.5f && p.apvts.getRawParameterValue ("seq.mode")->load() < 0.5f
+                              && ! p.engineForTest().noteGen().isRunning();
+            setP (p, "seq.mode", 1); setP (p, "drums.on", 1); setP (p, "drums.mode", 1);   // PLAY / automation while the host plays
+            run (3);
+            p.runMessageWorkForTest();
+            const bool refused = p.exactValue (svl::SEQ_MODE) < 0.5f && p.exactValue (svl::DRUMS_MODE) < 0.5f
+                                 && p.apvts.getRawParameterValue ("drums.mode")->load() < 0.5f && ! p.engineForTest().noteGen().isRunning();
             head.playing = false;
-            run (5);
-            const bool stopped = ! p.engineForTest().noteGen().isRunning();
             run (40);
-            check (silentBefore && previewing && carried && stopped && ! p.engineForTest().noteGen().isRunning(),
-                   "in a host: a free sequence waits; PLAY previews while stopped; the host's start carries on, its stop ends it (and it stays stopped)");
+            check (silentBefore && previewing && held && refused && ! p.engineForTest().noteGen().isRunning(),
+                   "in a host: a free sequence waits; PLAY previews while stopped; the host's start ends it (back to HOLD, host told); "
+                   "FREE while the host plays goes back to HOLD");
+        }
+        // a FREE sequence running (Standalone PLAY) no longer swallows the keys: a key plays its own voice on top
+        {
+            JingFangProcessor p; p.prepareToPlay (48000, 512);
+            p.loadPresetXml (root.getChildFile ("presets/Init/Init.xml").loadFileAsString());
+            setP (p, "seq.on", 1); setP (p, "seq.mode", 1);
+            juce::AudioBuffer<float> buf (2, 512);
+            for (int b = 0; b < 10; ++b) { juce::MidiBuffer none; p.processBlock (buf, none); }
+            const bool seqRuns = p.engineForTest().noteGen().isRunning();
+            { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 79, (juce::uint8) 100), 0); p.processBlock (buf, m); }
+            bool keyVoice = false;
+            for (int v = 0; v < svl::kVoicePool; ++v)
+            {
+                const auto vi = p.engineForTest().voiceInfo (v);
+                keyVoice |= vi.active && vi.gate && std::abs (vi.pitch - 79.0f) < 0.01f;
+            }
+            check (seqRuns && keyVoice, "a key played over a FREE sequence sounds on its own pitch (not swallowed)");
         }
     }
 
@@ -807,7 +835,12 @@ int main (int argc, char** argv)
         { for (size_t i = 0; i < p.presets().size(); ++i) if (p.presets()[i].family == fam && p.presets()[i].name == name) return (int) i; return -1; };
         const auto labDir = root.getChildFile ("presets/Sequence - Lab");
         const auto files = labDir.findChildFiles (juce::File::findFiles, false, "*.xml");
-        check (files.size() == (int) jflab::builtin::entries().size(), "Sequence - Lab: one preset per built-in tuning (" + juce::String (files.size()) + ")");
+        {
+            std::set<std::string> used;
+            for (const auto& f : files) { const auto lt = svl::detail::elements (f.loadFileAsString().toStdString(), "labtuning"); if (! lt.empty()) used.insert (svl::detail::attr (lt.front(), "a")); }
+            int missing = 0; for (auto& en : jflab::builtin::entries()) missing += used.count (en.id) ? 0 : 1;
+            check (missing == 0 && files.size() >= (int) jflab::builtin::entries().size(), "Sequence - Lab: every built-in tuning has a preset (" + juce::String (files.size()) + " presets, " + juce::String (missing) + " tunings without)");
+        }
         for (const auto& f : files)
         {
             const auto xml = f.loadFileAsString();
@@ -827,18 +860,21 @@ int main (int argc, char** argv)
             setP (p, "seq.mode", 1);
             const auto tab = want.table();
             std::set<int> wantP, gotP;
-            for (int s = 0; s < 16; ++s)
+            const int seqLen = juce::roundToInt (p.apvts.getRawParameterValue ("seq.length")->load());   // steps past the length never play (the ethnic phrases are 6 .. 16 long)
+            for (int s = 0; s < juce::jlimit (1, 16, seqLen); ++s)
                 {
                     const auto* on = p.apvts.getRawParameterValue (("seq.s" + juce::String (s + 1) + ".on").toRawUTF8());
                     const auto* nt = p.apvts.getRawParameterValue (("seq.s" + juce::String (s + 1) + ".note").toRawUTF8());
                     if (on != nullptr && nt != nullptr && on->load() > 0.5f) wantP.insert (juce::roundToInt (tab[(size_t) (60 + juce::roundToInt (nt->load()))] * 1000.0f));
                 }
+            static const double kRateBeats[] = { 1.0, 0.5, 1.0 / 3, 0.25, 1.0 / 6, 0.125 };   // seq.rate: 1/4 .. 1/32, in beats; 120 BPM = 0.5 s a beat
+            const double phraseSec = juce::jlimit (1, 16, seqLen) * kRateBeats[juce::jlimit (0, 5, juce::roundToInt (p.apvts.getRawParameterValue ("seq.rate")->load()))] * 0.5;
             juce::AudioBuffer<float> buf (2, 512);
             // JF_LAB_WAV=<dir>: also write 8.5 s of the phrase as a listening file (2 cycles at 120 BPM + the tail)
             const juce::File wavDir (juce::SystemStats::getEnvironmentVariable ("JF_LAB_WAV", {}));
             juce::AudioBuffer<float> rec (2, (int) (8.5 * sr) + 512);
             int recAt = 0;
-            for (int b = 0; b < (int) ((wavDir != juce::File() ? 8.5 : 5.0) * sr / 512); ++b)
+            for (int b = 0; b < (int) ((wavDir != juce::File() ? 8.5 : juce::jmax (5.0, 1.3 * phraseSec + 1.0)) * sr / 512); ++b)
             {
                 juce::MidiBuffer m;
                 p.processBlock (buf, m);
@@ -865,7 +901,12 @@ int main (int argc, char** argv)
             }
             juce::String txt;
             for (int g : gotP) txt << juce::String (g / 1000.0, 3) << " ";
-            check (! wantP.empty() && gotP == wantP, f.getFileNameWithoutExtension() + ": the phrase plays the tuning's pitches (" + txt.trim() + ")");
+            // the Indian / Chinese melodies (tag "world") glide and slide between their notes (legato, slides): there every table pitch of the phrase must be
+            // reached exactly; the makam phrases stay strict: nothing else may sound
+            const bool world = xml.contains (",world");
+            bool reached = ! wantP.empty(); juce::String missed;
+            for (int w : wantP) if (gotP.count (w) == 0) { reached = false; missed << juce::String (w / 1000.0, 3) << " "; }
+            check (world ? reached : (! wantP.empty() && gotP == wantP), f.getFileNameWithoutExtension() + ": the phrase plays the tuning's pitches" + (world ? " (each reached; glides allowed; missed: " + missed.trim() + ") " : " (") + txt.trim().substring (0, 600) + ")");
             // an ordinary preset afterwards: the Lab goes off
             p.loadPresetIndex (indexOf (p, "Winds", "Oboe"));
             check (! p.labState().on && ! p.labFromPreset(), f.getFileNameWithoutExtension() + ": the next ordinary preset turns the Lab off");
@@ -887,6 +928,86 @@ int main (int argc, char** argv)
             check (restored && ! b.labState().on, "state round trip: the preset's Lab comes back (with its falling F#) and still yields to the next preset");
         }
         jflab::Lab::setUnlockedForTests (false);
+    }
+
+    // ---- the sequencer's lanes reach the MIDI clip (work order 20 Oct, item 5): the drag-out runs the same NoteGen
+    {
+        auto onsets = [&] (const char* fam, const char* name)
+        {
+            JingFangProcessor p;
+            int idx = -1;
+            for (size_t i = 0; i < p.presets().size(); ++i) if (p.presets()[i].family == fam && p.presets()[i].name == name) idx = (int) i;
+            if (idx < 0) return std::make_pair (-1, -1);
+            p.loadPresetIndex (idx);
+            juce::AudioBuffer<float> buf (2, 512); juce::MidiBuffer none; p.prepareToPlay (48000, 512); p.processBlock (buf, none);
+            const auto mf = jfclip::make (p, 0);
+            int n = 0;
+            if (auto* t = mf.getTrack (0)) for (auto* e : *t) n += e->message.isNoteOn() ? 1 : 0;
+            return std::make_pair (n, jfclip::bars (p, 0));
+        };
+        const auto base = onsets ("Sequence - Acid", "Busy Acid"), rat = onsets ("Sequence - Acid", "Ratchet Acid");
+        check (base.first > 0 && rat.first > base.first && rat.second == base.second,
+               "MIDI clip carries the ratchets: Busy Acid " + juce::String (base.first) + " notes, Ratchet Acid " + juce::String (rat.first)
+                   + " (" + juce::String (rat.second) + " bar(s))");
+    }
+
+    // ---- AU state restoration (pluginval strictness 6+): a host that calls setStateInformation from a worker thread and reads the values
+    // back at once (pluginval does for AU; for VST3 it calls on the message thread). The message thread keeps pumping, as in a host.
+    {
+        JingFangProcessor p;
+        p.loadPresetXml (root.getChildFile ("presets/Pluck/Saw Pluck.xml").loadFileAsString());
+        p.setRateAndBufferSizeDetails (sr, 512); p.prepareToPlay (sr, 512);
+        auto pump = [] (int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil (ms); };
+        pump (50);
+        juce::MemoryBlock state; p.getStateInformation (state);
+        auto* par = p.apvts.getParameter ("osc3.string_decay");
+        const float original = par->getValue();
+        par->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, original > 0.5f ? original - 0.4f : original + 0.4f));
+        pump (50);
+        std::atomic<bool> done { false };
+        std::thread worker ([&] { p.setStateInformation (state.getData(), (int) state.getSize()); done = true; });
+        std::this_thread::sleep_for (std::chrono::milliseconds (100));   // the message thread is busy for a moment, then pumps
+        while (! done.load()) pump (5);
+        const float after = par->getValue();   // read at once, no further message-thread work
+        worker.join();
+        check (std::abs (after - original) < 0.01f, "setStateInformation from a worker thread: the host value is back at once (" + juce::String (original, 3) + " -> " + juce::String (after, 3) + ")");
+    }
+
+    // ---- MPE (work order 1.x item 8): the MIDI input's zones and per-note expression, through the plug-in
+    {
+        const juce::File initXml = root.getChildFile ("presets/Saw Pluck.xml").existsAsFile() ? root.getChildFile ("presets/Saw Pluck.xml") : root.getChildFile ("presets/Pluck/Saw Pluck.xml");
+        svl::Preset pr; svl::loadPreset (initXml.getFullPathName().toStdString(), pr);
+        auto viaPlugin = [&] (bool mcm)
+        {
+            JingFangProcessor p;
+            p.loadPresetXml (initXml.loadFileAsString());
+            p.setRateAndBufferSizeDetails (sr, 512); p.prepareToPlay (sr, 512);
+            juce::MidiBuffer m;
+            if (mcm) { m.addEvent (juce::MidiMessage::controllerEvent (1, 101, 0), 0); m.addEvent (juce::MidiMessage::controllerEvent (1, 100, 6), 0); m.addEvent (juce::MidiMessage::controllerEvent (1, 6, 15), 0); }
+            m.addEvent (juce::MidiMessage::pitchWheel (2, 12288), 0);                // +0.5 of the range
+            m.addEvent (juce::MidiMessage::channelPressureChange (2, 100), 0);
+            m.addEvent (juce::MidiMessage::controllerEvent (2, 74, 100), 0);
+            m.addEvent (juce::MidiMessage::noteOn (2, 48, (juce::uint8) 100), 0);
+            std::vector<float> out;
+            juce::AudioBuffer<float> buf (2, 512);
+            for (int b = 0; b < 40; ++b) { p.processBlock (buf, m); m.clear(); out.insert (out.end(), buf.getReadPointer (0), buf.getReadPointer (0) + 512); }
+            return out;
+        };
+        auto viaEngine = [&] (bool mpe)
+        {
+            svl::Engine e; e.setParams (pr.params, true); e.prepare (sr);
+            if (mpe) { e.setMemberBend (2, 0.5f * 48.0f); e.setMemberPressure (2, 100.0f / 127.0f); e.setMemberSlide (2, 100.0f / 127.0f); e.noteOnMpe (48, 100.0f / 127.0f, 2, 0); }
+            else { e.setPitchBend (0.5f); e.setAftertouch (100.0f / 127.0f); e.noteOn (48, 100.0f / 127.0f, 0); }
+            std::vector<float> out, L (512), R (512);
+            for (int b = 0; b < 40; ++b) { e.process (L.data(), R.data(), 512); out.insert (out.end(), L.begin(), L.end()); }
+            return out;
+        };
+        auto maxd = [] (const std::vector<float>& a, const std::vector<float>& b) { float d = 0; for (size_t i = 0; i < a.size(); ++i) d = std::max (d, std::abs (a[i] - b[i])); return d; };
+        const auto mpeOut = viaPlugin (true), plainOut = viaPlugin (false);
+        const float dMpe = maxd (mpeOut, viaEngine (true)), dPlain = maxd (plainOut, viaEngine (false)), dApart = maxd (mpeOut, plainOut);
+        check (dMpe == 0.0f, "MPE zone on (MCM 15 members): channel 2's bend / pressure / slide / note = the engine's member state (max diff " + juce::String (dMpe) + ")");
+        check (dPlain == 0.0f, "no MCM: the same messages keep the old global behaviour (max diff " + juce::String (dPlain) + ")");
+        check (dApart > 0.01f, "the two paths sound different (max diff " + juce::String (dApart) + ")");
     }
 
     std::printf ("\nplugin_check: %d passed, %d failed\n", gPass, gFail);

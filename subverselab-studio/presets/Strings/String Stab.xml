@@ -176,4 +176,9 @@
   <param id="fx.reverb.predelay" value="21.639"/>
   <param id="fx.reverb.damp" value="0.451"/>
   <param id="fx.reverb.mix" value="0.258"/>
+  <param id="fx.mod.mix" value="0.19"/>
+  <param id="fx.mod.rate" value="0.337"/>
+  <param id="fx.mod.depth" value="0.305"/>
+  <param id="fx.mod.type" value="chorus"/>
+  <param id="fx.mod.feedback" value="0.0"/>
 </svlpreset>

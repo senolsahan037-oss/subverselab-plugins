@@ -1,3 +1,4 @@
+#include <map>
 // Tuning Lab checks (SPEC.md "Tuning Lab"). No JUCE: c++ -std=c++17 -O2 -I Source/plugin/tuning tests/tuning_check.cpp
 #include "TuningLearn.h"
 #include "TuningBuiltin.h"
@@ -217,7 +218,7 @@ int main()
             { "segah",  { 71, 72, 74, 76, 78, 79, 81, 82, 83 }, { 5, 9, 8, 9, 5, 9, 4, 4 } },     // segah 5li S T K T
             { "kurdi",  { 69, 70, 72, 74, 76, 77, 79, 81 },     { 4, 9, 9, 9, 4, 9, 9 } },        // kurdi 4li + buselik 5li
         };
-        check (builtin::entries().size() == want.size(), "builtin: " + std::to_string (builtin::entries().size()) + " tunings");
+        check (builtin::entries().size() == want.size() + 2, "builtin: " + std::to_string (builtin::entries().size()) + " tunings (seven makam tunings + the Indian and Chinese tables)");
         for (auto& w : want)
         {
             Tuning t;
@@ -246,6 +247,73 @@ int main()
             const auto rt = r.table();
             bool same = true; for (int k = 0; k < 128; ++k) same = same && near (rt[(size_t) k], tab[(size_t) k], 1e-4);
             check (same, std::string ("builtin: ") + w.id + " .scl/.kbm round trip");
+        }
+        // the Indian 12-swara table (C anchored, just ratios snapped to 53 commas) and the Chinese 12-lu table (Pythagorean, A4 = 440)
+        {
+            struct Ex { const char* id; double ratio[12]; bool c; };
+            const Ex ex[] = {
+                { "shruti", { 1, 16.0 / 15, 9.0 / 8, 6.0 / 5, 5.0 / 4, 4.0 / 3, 45.0 / 32, 3.0 / 2, 8.0 / 5, 5.0 / 3, 9.0 / 5, 15.0 / 8 }, true },
+                { "lu",     { 1, 2187.0 / 2048, 9.0 / 8, 19683.0 / 16384, 81.0 / 64, 4.0 / 3, 729.0 / 512, 3.0 / 2, 6561.0 / 4096, 27.0 / 16, 59049.0 / 32768, 243.0 / 128 }, false } };
+            for (auto& e : ex)
+            {
+                Tuning t; const bool found = builtin::find (e.id, t); check (found, std::string ("builtin: ") + e.id + " found");
+                if (! found) continue;
+                const auto tab = t.table(); double worst = 0;
+                for (int k = 0; k < 12; ++k)
+                {
+                    const double c = 1200.0 * (tab[(size_t) (60 + k)] - tab[60]) / 12.0, want = 1200.0 * std::log2 (e.ratio[k]);
+                    worst = std::max (worst, std::fabs (c - want));
+                }
+                check (worst < 2.0, std::string ("builtin: ") + e.id + " twelve keys within " + f2 (worst) + " ct of their ratios (the 53-comma grid)");
+                if (e.c) check (near (tab[60], 60.0, 1e-4), std::string ("builtin: ") + e.id + " C4 = 12-equal C4 (Sa anchored)");
+                else check (near (tab[69], 69.0, 1e-4), std::string ("builtin: ") + e.id + " A4 = 440 Hz");
+                Tuning r; scala::readScl (scala::writeScl (t), r); scala::readKbm (scala::writeKbm (t), r);
+                const auto rt = r.table(); bool same = true; for (int k = 0; k < 128; ++k) same = same && near (rt[(size_t) k], tab[(size_t) k], 1e-4);
+                check (same, std::string ("builtin: ") + e.id + " .scl/.kbm round trip");
+            }
+        }
+        // every perde at its AEU position, named (independent of the step lists above; 20 Oct, work order item 3). Positions in
+        // commas above cargah (C): the AEU perde table; per makam the perde each key carries (TDV entries / AEU tetrachords)
+        {
+            const std::map<std::string, int> aeu { { "cargah", 0 }, { "nim hicaz", 4 }, { "hicaz", 5 }, { "neva", 9 }, { "hisar", 14 },
+                                                   { "dik hisar", 17 }, { "huseyni", 18 }, { "acem", 22 }, { "evic", 26 }, { "gerdaniye", 31 },
+                                                   { "sehnaz", 36 }, { "muhayyer", 40 }, { "kurdi", 44 }, { "dik kurdi", 45 }, { "segah", 48 } };
+            struct Perdes { const char* id; std::vector<std::pair<int, const char*>> keys; };   // key 60..71 -> perde
+            const std::vector<Perdes> want = {
+                { "rast",   { { 60, "cargah" }, { 62, "neva" }, { 64, "huseyni" }, { 65, "acem" }, { 66, "evic" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 71, "segah" } } },
+                { "ussak",  { { 60, "cargah" }, { 62, "neva" }, { 64, "huseyni" }, { 65, "acem" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 71, "segah" } } },
+                { "hicaz",  { { 60, "cargah" }, { 61, "nim hicaz" }, { 62, "neva" }, { 64, "huseyni" }, { 65, "acem" }, { 66, "evic" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 70, "dik kurdi" } } },
+                { "huzzam", { { 60, "cargah" }, { 62, "neva" }, { 63, "hisar" }, { 64, "huseyni" }, { 66, "evic" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 70, "kurdi" }, { 71, "segah" } } },
+                { "saba",   { { 60, "cargah" }, { 61, "hicaz" }, { 62, "neva" }, { 64, "dik hisar" }, { 65, "acem" }, { 67, "gerdaniye" }, { 68, "sehnaz" }, { 69, "muhayyer" }, { 71, "segah" } } },
+                { "segah",  { { 60, "cargah" }, { 62, "neva" }, { 64, "dik hisar" }, { 65, "acem" }, { 66, "evic" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 70, "kurdi" }, { 71, "segah" } } },
+                { "kurdi",  { { 60, "cargah" }, { 62, "neva" }, { 64, "huseyni" }, { 65, "acem" }, { 67, "gerdaniye" }, { 69, "muhayyer" }, { 70, "kurdi" } } },
+            };
+            for (auto& w : want)
+            {
+                Tuning t; builtin::find (w.id, t);
+                const auto tab = t.table();
+                double worst = 0; std::string bad;
+                for (auto& [k, perde] : w.keys)
+                {
+                    const double c = 100.0 * (tab[(size_t) k] - tab[60]) / builtin::kComma;
+                    const double e = std::fabs (c - aeu.at (perde));
+                    if (e > worst) worst = e;
+                    if (e > 0.01) bad += std::string (" ") + perde;
+                }
+                check (bad.empty(), std::string ("builtin: ") + w.id + " " + std::to_string (w.keys.size()) + " perdes at their AEU positions (largest error "
+                                        + f2 (worst) + " commas)" + bad);
+            }
+            // the upper tetrachords the sources name: hicaz on evic in segah and huzzam (TDV; the A# key carries kurdi, the yeden, so
+            // the hicaz reads S A13 B = 5 13 4), hicaz on neva in huzzam (S A S = 5 12 5)
+            auto steps = [] (const char* id, std::vector<int> keys)
+            {
+                Tuning t; builtin::find (id, t); const auto tab = t.table(); std::string g;
+                for (size_t i = 0; i + 1 < keys.size(); ++i) g += (i ? " " : "") + f2 (100.0 * (tab[(size_t) keys[i + 1]] - tab[(size_t) keys[i]]) / builtin::kComma);
+                return g;
+            };
+            check (steps ("segah", { 78, 79, 82, 83 }) == "5.00 13.00 4.00", "builtin: segah hicaz on evic " + steps ("segah", { 78, 79, 82, 83 }));
+            check (steps ("huzzam", { 78, 79, 82, 83 }) == "5.00 13.00 4.00", "builtin: huzzam hicaz on evic " + steps ("huzzam", { 78, 79, 82, 83 }));
+            check (steps ("huzzam", { 74, 75, 78, 79 }) == "5.00 12.00 5.00", "builtin: huzzam hicaz on neva " + steps ("huzzam", { 74, 75, 78, 79 }));
         }
         Tuning rast; builtin::find ("rast", rast);
         // G4 = 440 Hz * 2^(-9 commas / 53)

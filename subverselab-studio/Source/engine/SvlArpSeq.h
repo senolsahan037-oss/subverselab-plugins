@@ -50,7 +50,7 @@ public:
 
     void reset()
     {
-        numHeld = numLatched = numOffs = numQ = 0;
+        numHeld = numLatched = numOffs = numQ = numSubs = 0;
         running = false; setBeat (0); nextStep = 0; stoppedBeat = -1.0e301; arpPos = 0; chordCycle = 0; lastOnId = -1; pressCount = 0; slidePending = false;
         hostPlaying = false; preview = false;
     }
@@ -66,9 +66,11 @@ public:
         seqLen = std::max (1, std::min (kSeqSteps, (int) std::lround (p[SEQ_LEN])));
         seqFree = p[SEQ_MODE] > 0.5f;
         rowUp = p[ROW_UP] * 12.0f / p[TUNE_EDO]; rowDown = p[ROW_DOWN] * 12.0f / p[TUNE_EDO];
+        seqDir = (int) p[SEQ_DIR];
         for (int s = 0; s < kSeqSteps; ++s)
         {
             Step& st = steps[(size_t) s];
+            st.prob = p[stepProbParam (s)]; st.ratchet = std::max (1, std::min (4, (int) std::lround (p[stepRatchetParam (s)])));
             st.on = p[stepParam (s, S_ON)] > 0.5f; st.note = (int) std::lround (p[stepParam (s, S_NOTE)]);
             st.row = (int) p[stepParam (s, S_ROW)]; st.vel = p[stepParam (s, S_VEL)]; st.gate = p[stepParam (s, S_GATE)];
             st.slide = p[stepParam (s, S_SLIDE)] > 0.5f; st.accent = p[stepParam (s, S_ACCENT)] > 0.5f;
@@ -82,6 +84,9 @@ public:
     }
 
     bool active() const { return arpOn || seqOn; }
+    // the keys are its input: the arp, or a seq that follows the held key (HOLD). A FREE seq alone plays from C4 and ignores
+    // keys, so the keys play the voices on top of it (owner 20 Oct: the plug-in "swallowed" the DAW's notes)
+    bool takesKeys() const { return arpOn || (seqOn && ! seqFree); }
     bool needsService() const { return active() || numOffs > 0 || numQ > 0; }
 
     void setTempo (double bpm) { const double b = beat(); tempo = bpm; spb = sr * 60.0 / bpm; setBeat (b); }
@@ -97,7 +102,7 @@ public:
         {
             const bool jump = ! was || std::fabs (ppq - beat()) > 1.0e-3;
             setBeat (ppq);
-            if (jump && running) nextStep = firstStepAtOrAfter (ppq);
+            if (jump && running) { nextStep = firstStepAtOrAfter (ppq); if (! was || std::fabs (ppq - beat()) > 1.0e-3) numSubs = 0; }
         }
         else if (was && seqOn && seqFree && ! arpOn) { endAll(); running = false; }   // host stopped: a free sequence stops
     }
@@ -130,6 +135,7 @@ public:
         double best = 1 << 30;
         for (int i = 0; i < numOffs; ++i) best = std::min (best, (double) offs[(size_t) i].left);
         if (running) best = std::min (best, std::max (0.0, samplesUntil (onsetBeat (nextStep))));
+        for (int i = 0; i < numSubs; ++i) best = std::min (best, std::max (0.0, samplesUntil (subs[(size_t) i].beat)));
         return (int) std::max (0.0, best);
     }
 
@@ -139,6 +145,14 @@ public:
         {
             updateRunning();
             if (running && samplesUntil (onsetBeat (nextStep)) <= 0) fireStep();
+            for (int i = 0; i < numSubs && numQ < kMaxQ - 4;)
+                if (samplesUntil (subs[(size_t) i].beat) <= 0)
+                {
+                    const Sub sb = subs[(size_t) i];
+                    subs[(size_t) i] = subs[(size_t) --numSubs];
+                    emitOn (sb.key, sb.semis, sb.add, sb.vel, sb.gateBeats, false);
+                }
+                else ++i;
             if (numQ == 0)
                 for (int i = 0; i < numOffs; ++i)
                     if (offs[(size_t) i].left <= 0)
@@ -161,14 +175,42 @@ public:
     }
 
     // ---- inspection (tests, the panel)
-    int currentStep() const { return running ? (int) (((nextStep - 1) % seqLen + seqLen) % seqLen) : -1; }
+    int currentStep() const { return running ? stepIndex (nextStep - 1) : -1; }
     bool isRunning() const { return running; }
+    // the beat the own clock is at (a running unit's grid); the drum machine locks its start to it (owner 21 Oct: two PLAYs ran out of step)
+    double beatNow() const { return beat(); }
+    void setPeer (bool running, double beatOfPeer) { peerRunning = running; peerBeat = beatOfPeer; }
     int soundingNotes() const { return numOffs; }
 
 private:
     static constexpr int kMaxKeys = 32, kMaxList = kMaxKeys * 5 * 4, kMaxOffs = 160, kMaxQ = 96;
     struct Key { int id = -1, key = -1; float pitch = 0, vel = 1; int64_t order = 0; };
-    struct Step { bool on = true; int note = 0, row = 1; float vel = 0.8f, gate = 0.6f; bool slide = false, accent = false; };
+    struct Step { bool on = true; int note = 0, row = 1; float vel = 0.8f, gate = 0.6f; bool slide = false, accent = false; float prob = 1; int ratchet = 1; };
+    // the step a grid position k plays (direction lane); random and the probability are hashes of k, so they never depend on
+    // the block size or on where a render starts, and a bar plays the same way every time it comes round
+    static uint64_t mix64 (uint64_t x) { x += 0x9E3779B97F4A7C15ull; x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull; x = (x ^ (x >> 27)) * 0x94D049BB133111EBull; return x ^ (x >> 31); }
+    int stepIndex (int64_t k) const
+    {
+        const int64_t L = seqLen;
+        switch (seqDir)
+        {
+            case 1: return (int) (L - 1 - ((k % L) + L) % L);
+            case 2: { if (L == 1) return 0; const int64_t P = 2 * L - 2, r = ((k % P) + P) % P; return (int) (r < L ? r : P - r); }
+            case 3: return (int) (mix64 ((uint64_t) k * 2654435761u + 0x51u) % (uint64_t) L);
+            default: return (int) (((k % L) + L) % L);
+        }
+    }
+    bool stepPlays (int64_t k, float prob) const
+    {
+        if (prob >= 1.0f) return true;
+        if (prob <= 0.0f) return false;
+        return (double) (mix64 ((uint64_t) k ^ 0xA5A5A5A5u) >> 11) * (1.0 / 9007199254740992.0) < (double) prob;
+    }
+    // ratchet repeats waiting for their time (a step's 2nd..4th hit, for each chord key)
+    struct Sub { double beat; Key key; int semis; float add, vel; double gateBeats; };
+    static constexpr int kMaxSubs = 64;
+    std::array<Sub, kMaxSubs> subs {}; int numSubs = 0;
+    int seqDir = 0;
     struct Off { int id; int64_t left; };
     struct Elem { int k; int oct; };   // index into the sorted / played set, octave
 
@@ -210,6 +252,11 @@ private:
             const double catchBeats = std::min (0.04 * tempo / 60.0, 0.25 * stepLen);
             nextStep = (k > 0 && b - onsetBeat (k - 1) < catchBeats) ? k - 1 : k;
         }
+        else if (peerRunning)
+        {   // own clock, the drum machine already runs: join its grid at the next step, so the two never drift apart
+            setBeat (peerBeat);
+            nextStep = firstStepAtOrAfter (peerBeat);
+        }
         else if (stoppedBeat > -1.0e300 && beat() - stoppedBeat < 4.0)
         {   // own clock, restarted within a bar of the last stop: keep the pattern's place in the bar (short, detached keys
             // still reach the off-beat steps), the step that began a moment ago plays late at once
@@ -222,7 +269,7 @@ private:
         stoppedBeat = -1.0e301;
     }
 
-    void endAll() { for (int i = 0; i < numOffs; ++i) offs[(size_t) i].left = 0; }
+    void endAll() { for (int i = 0; i < numOffs; ++i) offs[(size_t) i].left = 0; numSubs = 0; }
 
     void removeHeld (int id)
     {
@@ -332,26 +379,33 @@ private:
         curDur = dur;
         if (seqOn)
         {
-            const Step& st = steps[(size_t) (((k % seqLen) + seqLen) % seqLen)];
-            if (! st.on) { slidePending = false; return; }
+            const Step& st = steps[(size_t) stepIndex (k)];
+            if (! st.on || ! stepPlays (k, st.prob)) { slidePending = false; return; }
             const float addRow = st.row == 0 ? -rowDown : (st.row == 2 ? rowUp : 0.0f);
             const float velS = st.vel + (st.accent ? 0.25f : 0.0f);
-            const double gateB = (st.slide ? std::max (1.0f, st.gate) : st.gate) * dur;
+            // RATCHET: r hits inside the step, each a gate's share of 1 / r of it (never tied, no slide)
+            const int r = st.ratchet;
+            const double gateB = r > 1 ? std::min (0.95f, st.gate) * dur / r : (st.slide ? std::max (1.0f, st.gate) : st.gate) * dur;
+            const double onset = onsetBeat (k);
+            curDur = r > 1 ? dur / r : dur;
+            auto hit = [&] (const Key& key, int semis, float add, float vel, bool slide)
+            {
+                emitOn (key, semis, add, vel, gateB, r > 1 ? false : slide);
+                for (int i = 1; i < r && numSubs < kMaxSubs; ++i) subs[(size_t) numSubs++] = { onset + dur * i / r, key, semis, add, vel, gateB };
+            };
             if (arpOn && arpMode == 5)
             {   // arp chord + seq: every step that is on plays all the keys, in the step's rhythm (a gated chord)
                 if (rebuild) buildList();
                 if (numSorted == 0) return;
                 const int o = (int) (chordCycle++ % arpOct);
-                for (int i = 0; i < numSorted; ++i) emitOn (exp[(size_t) sorted[(size_t) i]], st.note, addRow + 12.0f * (float) o, velS, gateB, false);
+                for (int i = 0; i < numSorted; ++i) hit (exp[(size_t) sorted[(size_t) i]], st.note, addRow + 12.0f * (float) o, velS, false);
                 return;
             }
             Key base; int oct = 0;
             if (arpOn) { if (! nextArp (base, oct)) return; }
             else if (seqFree) { base.key = 60; }
             else { if (setSize() == 0) return; base = set()[setSize() - 1]; }   // the last key pressed
-            const float add = st.row == 0 ? -rowDown : (st.row == 2 ? rowUp : 0.0f);
-            curDur = dur;
-            emitOn (base, st.note, add + 12.0f * (float) oct, st.vel + (st.accent ? 0.25f : 0.0f), (st.slide ? std::max (1.0f, st.gate) : st.gate) * dur, st.slide);
+            hit (base, st.note, addRow + 12.0f * (float) oct, velS, st.slide);
             return;
         }
         if (arpMode == 5)
@@ -375,6 +429,7 @@ private:
     int64_t nextStep = 0, arpPos = 0, chordCycle = 0, pressCount = 0;
     bool arpOn = false, seqOn = false, latch = false, seqFree = false, running = false, rebuild = true;
     bool hasHost = false, hostPlaying = false, preview = false;
+    bool peerRunning = false; double peerBeat = 0;
     int arpMode = 0, arpOct = 1, seqLen = 16, arpChord = 0;
     float arpGate = 0.6f, rowUp = 0, rowDown = 0;
     std::array<Step, kSeqSteps> steps {};

@@ -8,6 +8,7 @@
 #include <JuceHeader.h>
 #include "SvlEngine.h"
 #include "SvlPreset.h"
+#include "MpeState.h"
 #include "tuning/TuningLearn.h"
 #include "tuning/TuningBuiltin.h"
 
@@ -44,7 +45,9 @@ public:
     // ---- presets (message thread)
     struct PresetEntry { juce::String family, name, xml; juce::File file; bool factory = true; };
     const std::vector<PresetEntry>& presets() const noexcept { return presetList; }
-    juce::StringArray families() const;
+    juce::StringArray families() const;                           // in list order
+    juce::StringArray categories() const;                         // in list order: Init, Keys, Pads, Leads, Bass, Plucks, Arps, ...
+    static juce::String categoryOf (const juce::String& family);  // a family no category lists: "Yours"
     void rescanPresets();
     bool deletePreset (int index);                                // yours: to the bin; factory: hidden for good (hidden.txt)
     void showHiddenPresets();
@@ -91,6 +94,7 @@ public:
 
     // ---- live view for the panel's screens (written by the audio thread once per block, read at 30 Hz)
     struct Live { float level = 0, pitch = 60, ampStage = 0; int voices = 0, seqStep = -1; };
+    float fxReductionDb() const noexcept { return liveGr.load (std::memory_order_relaxed); }   // COMP's gain reduction, for the FX door
     Live live() const noexcept { return { liveLevel.load(), livePitch.load(), (float) liveStage.load(), liveVoices.load(), liveSeqStep.load() }; }
     /** the last kScopeLen output samples (mono), oldest first */
     static constexpr int kScopeLen = 2048;
@@ -180,6 +184,7 @@ private:
     std::array<std::atomic<double>, 128> soundOnMs {}, soundOffMs {};
     void updateSounding() noexcept;
     std::array<int, 128> midiRow {};
+    MpeState mpe;                                              // audio thread: the MIDI input's MPE zones (work order 1.x item 8)
     std::array<int, 128> uiLitRow {};                          // the row a panel / computer key was lit on (message thread)                           // the row a sounding MIDI key was lit on
 
     std::vector<PresetEntry> presetList;
@@ -191,7 +196,7 @@ private:
     svl::PresetMeta loadedMeta;
     svl::ParamSet loadedBase;
     std::atomic<juce::int64> glideUntil { 0 };
-    std::atomic<float> liveLevel { 0.0f }, livePitch { 60.0f };
+    std::atomic<float> liveLevel { 0.0f }, livePitch { 60.0f }, liveGr { 0.0f };
     std::atomic<int> liveStage { 0 }, liveVoices { 0 }, liveSeqStep { -1 };   // seq step: set once the engine has a sequencer
     std::array<std::atomic<float>, kScopeLen> scopeBuf {};
     std::atomic<int> scopeWrite { 0 };
@@ -199,7 +204,7 @@ private:
     std::array<juce::String, kDrumTracks> drumKit;             // "Family/Name" per track, empty = svl::kDefaultDrumKit
     std::atomic<int> liveDrumStep { -1 };
     std::atomic<float> userBpm { 120.0f }, hostBpm { -1.0f };
-    std::atomic<bool> hostHas { false }, hostPlay { false }, sourceToHost { false };
+    std::atomic<bool> hostHas { false }, hostPlay { false }, sourceToHost { false }, modeToHost { false };
     bool hostNowPlaying = false;                               // audio thread
     std::atomic<bool> wantSeqPreview { false }, wantDrumPreview { false };
     std::atomic<int> previewSerial { 0 };

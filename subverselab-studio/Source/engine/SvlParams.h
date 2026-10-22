@@ -17,6 +17,9 @@ inline const char* const kVoiceModeNames[] = { "poly", "mono", "legato" };
 inline const char* const kOffOnNames[] = { "off", "on" };
 inline const char* const kFmTargetNames[] = { "osc1", "osc3", "both" };
 inline const char* const kEchoTimeNames[] = { "1/16", "1/8", "1/8D", "1/4", "1/4D", "1/2" };
+inline const char* const kModFxNames[] = { "off", "chorus", "flanger", "phaser" };
+inline const char* const kEchoTypeNames[] = { "ping_pong", "stereo", "mono", "tape" };
+inline const char* const kSeqDirNames[] = { "forward", "reverse", "bounce", "random" };
 inline const char* const kTuneModeNames[] = { "normal", "micro" };
 inline const char* const kRowNames[] = { "low", "mid", "high" };
 inline const char* const kPitchClassIds[] = { "c", "db", "d", "eb", "e", "f", "gb", "g", "ab", "a", "bb", "b" };
@@ -65,6 +68,16 @@ enum Param : int
     DRUM_STEP_BASE, DRUM_STEP_END = DRUM_STEP_BASE + 8 * 16 - 1,     // 8 tracks x 16 steps (off / on / accent)
     SEQ_SOURCE, DRUMS_SOURCE,
     MASTER,
+    // the FX rack's second layer (work order 20 Oct, item 4): EQ -> COMP -> DRIVE -> MOD -> ECHO -> REVERB. Appended, so every
+    // earlier index keeps its number; a preset without them has them at their defaults (all off: the rack is bit-identical)
+    FXQ_LOW, FXQ_MID, FXQ_MIDF, FXQ_HIGH,
+    FXC_THRESH, FXC_RATIO, FXC_ATTACK, FXC_RELEASE, FXC_MAKEUP,
+    FXM_TYPE, FXM_RATE, FXM_DEPTH, FXM_FB, FXM_MIX,
+    FXE_TYPE,
+    // the sequencer's 2.0 lanes (work order 20 Oct, item 5): the play direction (forward, reverse, bounce, random), and per step a probability and a ratchet
+    SEQ_DIR,
+    SEQ_PROB_BASE, SEQ_PROB_END = SEQ_PROB_BASE + 16 - 1,
+    SEQ_RATCH_BASE, SEQ_RATCH_END = SEQ_RATCH_BASE + 16 - 1,
     kNumParams
 };
 
@@ -79,6 +92,8 @@ constexpr int modParam (int slot, ModField f) { return MOD_BASE + slot * kModFie
 constexpr int kSeqSteps = 16;
 enum StepField : int { S_ON, S_NOTE, S_ROW, S_VEL, S_GATE, S_SLIDE, S_ACCENT, kStepFields };
 constexpr int stepParam (int step, StepField f) { return SEQ_STEP_BASE + step * kStepFields + f; }
+constexpr int stepProbParam (int step) { return SEQ_PROB_BASE + step; }
+constexpr int stepRatchetParam (int step) { return SEQ_RATCH_BASE + step; }
 constexpr int kDrumTracks = 8, kDrumSteps = 16;
 enum DrumTrackField : int { DT_LEVEL, DT_PAN, DT_TUNE, DT_DECAY, DT_MUTE, kDrumTrackFields };
 constexpr int drumTrackParam (int track, DrumTrackField f) { return DRUM_TRACK_BASE + track * kDrumTrackFields + f; }
@@ -278,6 +293,35 @@ inline const std::array<ParamDef, kNumParams>& paramDefs()
         E (SEQ_SOURCE, "daw.seq", kSourceNames, 2, 0);        // midi: the arp and the seq are off, the DAW's notes play the voices
         E (DRUMS_SOURCE, "daw.drums", kSourceNames, 2, 0);    // midi: the pattern is silent, notes 36..43 hit tracks 1..8
         F (MASTER, "master.level", -60, 6, -6, "dB");
+        // EQ: low shelf 120 Hz, a peak (Q 0.9) at mid_freq, high shelf 6 kHz; 0 dB everywhere = not run
+        F (FXQ_LOW, "fx.eq.low", -12, 12, 0, "dB");
+        F (FXQ_MID, "fx.eq.mid", -12, 12, 0, "dB");
+        F (FXQ_MIDF, "fx.eq.mid_freq", 200, 8000, 1000, "Hz");
+        F (FXQ_HIGH, "fx.eq.high", -12, 12, 0, "dB");
+        // COMP: a stereo-linked feed-forward compressor (soft knee 6 dB); ratio 1 and makeup 0 = not run
+        F (FXC_THRESH, "fx.comp.threshold", -40, 0, -12, "dB");
+        F (FXC_RATIO, "fx.comp.ratio", 1, 20, 1, "");
+        F (FXC_ATTACK, "fx.comp.attack", 0.0005f, 0.1f, 0.01f, "s");
+        F (FXC_RELEASE, "fx.comp.release", 0.02f, 1.0f, 0.15f, "s");
+        F (FXC_MAKEUP, "fx.comp.makeup", 0, 24, 0, "dB");
+        // MOD: chorus / flanger / phaser; off = not run
+        E (FXM_TYPE, "fx.mod.type", kModFxNames, 4, 0);
+        F (FXM_RATE, "fx.mod.rate", 0.05f, 8, 0.6f, "Hz");
+        F (FXM_DEPTH, "fx.mod.depth", 0, 1, 0.5f, "");
+        F (FXM_FB, "fx.mod.feedback", 0, 0.9f, 0.3f, "");
+        F (FXM_MIX, "fx.mod.mix", 0, 1, 0.5f, "");
+        // ECHO type: ping-pong (the 1.0 echo), stereo (two lines), mono, tape (mono, wow and a darker loop)
+        E (FXE_TYPE, "fx.echo.type", kEchoTypeNames, 4, 0);
+        // the sequencer's lanes: direction (backward, ping-pong, random by the step's number, so a bar plays the same on every
+        // render); PROB = the chance a step that is on plays (decided by the step's number too); RATCHET = the step plays 1..4
+        // times in its own length. Defaults (forward, 1, 1) = the 1.0 sequencer exactly.
+        E (SEQ_DIR, "seq.direction", kSeqDirNames, 4, 0);
+        for (int st = 0; st < kSeqSteps; ++st)
+        {
+            const std::string p = "seq.s" + std::to_string (st + 1) + ".";
+            F (stepProbParam (st), p + "prob", 0, 1, 1, "");
+            F (stepRatchetParam (st), p + "ratchet", 1, 4, 1, "x");
+        }
         return d;
     }();
     return defs;

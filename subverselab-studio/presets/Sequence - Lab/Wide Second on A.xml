@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svlpreset version="1">
-  <meta name="Wide Second on A" family="Sequence - Lab" author="SubverseLab" tags="lab,tuning,53,seq"/>
+  <meta name="Wide Second on A" family="Sequence - Lab" author="SubverseLab" tags="lab,tuning,53,seq,world,usul9"/>
   <param id="osc1.type" value="square"/>
-  <param id="osc1.level" value="0.7"/>
+  <param id="osc1.level" value="0.8"/>
   <param id="osc1.octave" value="0"/>
   <param id="osc1.semi" value="0"/>
   <param id="osc1.fine" value="0"/>
-  <param id="osc1.pw" value="0.14"/>
+  <param id="osc1.pw" value="0.038"/>
   <param id="osc1.pan" value="0"/>
   <param id="osc1.string_decay" value="3"/>
   <param id="osc1.string_tone" value="0.5"/>
@@ -15,8 +15,8 @@
   <param id="osc1.unison_detune" value="20"/>
   <param id="osc1.unison_spread" value="0.7"/>
   <param id="osc2.type" value="off"/>
-  <param id="osc2.level" value="0.8"/>
-  <param id="osc2.octave" value="0"/>
+  <param id="osc2.level" value="0.15"/>
+  <param id="osc2.octave" value="1"/>
   <param id="osc2.semi" value="0"/>
   <param id="osc2.fine" value="0"/>
   <param id="osc2.pw" value="0.5"/>
@@ -27,8 +27,8 @@
   <param id="osc2.unison" value="1"/>
   <param id="osc2.unison_detune" value="20"/>
   <param id="osc2.unison_spread" value="0.7"/>
-  <param id="osc3.type" value="off"/>
-  <param id="osc3.level" value="0.8"/>
+  <param id="osc3.type" value="noise_pink"/>
+  <param id="osc3.level" value="0.02"/>
   <param id="osc3.octave" value="0"/>
   <param id="osc3.semi" value="0"/>
   <param id="osc3.fine" value="0"/>
@@ -41,16 +41,16 @@
   <param id="osc3.unison_detune" value="20"/>
   <param id="osc3.unison_spread" value="0.7"/>
   <param id="filter.mode" value="bp"/>
-  <param id="filter.cutoff" value="1500"/>
+  <param id="filter.cutoff" value="1100"/>
   <param id="filter.reso" value="0.3"/>
-  <param id="filter.drive" value="4"/>
-  <param id="filter.keytrack" value="0.7"/>
+  <param id="filter.drive" value="0.0"/>
+  <param id="filter.keytrack" value="0"/>
   <param id="filter.env_amount" value="0"/>
   <param id="filter.vel_amount" value="0"/>
-  <param id="amp_env.attack" value="0.03"/>
-  <param id="amp_env.decay" value="0.4"/>
-  <param id="amp_env.sustain" value="0.9"/>
-  <param id="amp_env.release" value="0.12"/>
+  <param id="amp_env.attack" value="0.06"/>
+  <param id="amp_env.decay" value="1"/>
+  <param id="amp_env.sustain" value="1"/>
+  <param id="amp_env.release" value="0.09"/>
   <param id="amp_env.attack_curve" value="0"/>
   <param id="amp_env.decay_curve" value="0.5"/>
   <param id="amp_env.release_curve" value="0.5"/>
@@ -61,13 +61,13 @@
   <param id="filter_env.attack_curve" value="0"/>
   <param id="filter_env.decay_curve" value="0.5"/>
   <param id="filter_env.release_curve" value="0.5"/>
-  <param id="voice.mode" value="mono"/>
+  <param id="voice.mode" value="legato"/>
   <param id="voice.polyphony" value="16"/>
-  <param id="voice.glide" value="0"/>
-  <param id="voice.vel_to_amp" value="0.5"/>
+  <param id="voice.glide" value="0.03"/>
+  <param id="voice.vel_to_amp" value="0.4"/>
   <param id="voice.bend_range" value="2"/>
-  <param id="pitch_env.amount" value="0"/>
-  <param id="pitch_env.decay" value="0.05"/>
+  <param id="pitch_env.amount" value="-0.6"/>
+  <param id="pitch_env.decay" value="0.09"/>
   <param id="click.level" value="0"/>
   <param id="click.decay" value="0.006"/>
   <param id="click.tone" value="3000"/>
@@ -75,17 +75,20 @@
   <param id="drum.pitch" value="36"/>
   <param id="drum.keytrack" value="0"/>
   <param id="voice.choke" value="0"/>
+  <param id="drum.one_shot" value="off"/>
+  <param id="pitch_env.velocity" value="0"/>
+  <param id="click.velocity" value="0.6"/>
   <param id="drift.pitch" value="0"/>
-  <param id="drift.level" value="2.5"/>
-  <param id="drift.rate" value="4"/>
-  <param id="noise.floor" value="0.05"/>
-  <param id="fm.amount" value="0"/>
+  <param id="drift.level" value="1"/>
+  <param id="drift.rate" value="3"/>
+  <param id="noise.floor" value="0.02"/>
+  <param id="fm.amount" value="0.31"/>
   <param id="fm.target" value="osc1"/>
   <param id="lfo1.shape" value="sine"/>
   <param id="lfo1.rate" value="5.2"/>
   <param id="lfo1.sync" value="free"/>
   <param id="lfo1.retrigger" value="on"/>
-  <param id="lfo1.fade" value="0.4"/>
+  <param id="lfo1.fade" value="0.9"/>
   <param id="lfo2.shape" value="sine"/>
   <param id="lfo2.rate" value="2"/>
   <param id="lfo2.sync" value="free"/>
@@ -98,10 +101,10 @@
   <param id="lfo3.fade" value="0"/>
   <param id="mod1.source" value="lfo1"/>
   <param id="mod1.destination" value="pitch"/>
-  <param id="mod1.amount" value="0.005"/>
-  <param id="mod2.source" value="none"/>
-  <param id="mod2.destination" value="none"/>
-  <param id="mod2.amount" value="0"/>
+  <param id="mod1.amount" value="0.012"/>
+  <param id="mod2.source" value="mod_wheel"/>
+  <param id="mod2.destination" value="cutoff"/>
+  <param id="mod2.amount" value="0.35"/>
   <param id="mod3.source" value="none"/>
   <param id="mod3.destination" value="none"/>
   <param id="mod3.amount" value="0"/>
@@ -163,63 +166,48 @@
   <param id="tuning.row.b" value="mid"/>
   <param id="tuning.keyswitch" value="off"/>
   <param id="tuning.keyswitch_low" value="24"/>
-  <param id="master.level" value="-3.7"/>
-  <param id="fx.drive.amount" value="0"/>
-  <param id="fx.drive.tone" value="0.5"/>
-  <param id="fx.drive.mix" value="1"/>
-  <param id="fx.echo.time" value="1/4"/>
-  <param id="fx.echo.feedback" value="0.3"/>
-  <param id="fx.echo.damp" value="0.6"/>
-  <param id="fx.echo.mix" value="0.084"/>
-  <param id="fx.reverb.size" value="0.455"/>
-  <param id="fx.reverb.decay" value="1.9"/>
-  <param id="fx.reverb.predelay" value="21.747"/>
-  <param id="fx.reverb.damp" value="0.587"/>
-  <param id="fx.reverb.mix" value="0.198"/>
+  <param id="master.level" value="-6.8"/>
+  <param id="fx.eq.low" value="0.0"/>
+  <param id="fx.eq.mid" value="7.3"/>
+  <param id="fx.eq.mid_freq" value="1179"/>
+  <param id="fx.eq.high" value="6"/>
+  <param id="fx.reverb.size" value="0.25"/>
+  <param id="fx.reverb.decay" value="0.9"/>
+  <param id="fx.reverb.mix" value="0.08"/>
   <param id="seq.s1.note" value="9"/>
   <param id="seq.s1.gate" value="0.9"/>
-  <param id="seq.s1.vel" value="0.85"/>
+  <param id="seq.s1.vel" value="0.75"/>
+  <param id="seq.s1.accent" value="on"/>
   <param id="seq.s2.note" value="10"/>
   <param id="seq.s2.gate" value="0.9"/>
   <param id="seq.s2.vel" value="0.75"/>
   <param id="seq.s3.note" value="13"/>
   <param id="seq.s3.gate" value="0.9"/>
   <param id="seq.s3.vel" value="0.75"/>
+  <param id="seq.s3.accent" value="on"/>
   <param id="seq.s4.note" value="14"/>
-  <param id="seq.s4.gate" value="1.9"/>
+  <param id="seq.s4.gate" value="0.9"/>
   <param id="seq.s4.vel" value="0.75"/>
-  <param id="seq.s5.on" value="off"/>
-  <param id="seq.s6.note" value="16"/>
+  <param id="seq.s5.note" value="16"/>
+  <param id="seq.s5.gate" value="0.9"/>
+  <param id="seq.s5.vel" value="0.75"/>
+  <param id="seq.s5.accent" value="on"/>
+  <param id="seq.s6.note" value="14"/>
   <param id="seq.s6.gate" value="0.9"/>
   <param id="seq.s6.vel" value="0.75"/>
-  <param id="seq.s7.note" value="14"/>
+  <param id="seq.s7.note" value="13"/>
   <param id="seq.s7.gate" value="0.9"/>
   <param id="seq.s7.vel" value="0.75"/>
-  <param id="seq.s8.note" value="13"/>
+  <param id="seq.s7.accent" value="on"/>
+  <param id="seq.s8.note" value="10"/>
   <param id="seq.s8.gate" value="0.9"/>
   <param id="seq.s8.vel" value="0.75"/>
-  <param id="seq.s9.note" value="10"/>
+  <param id="seq.s9.note" value="9"/>
   <param id="seq.s9.gate" value="0.9"/>
   <param id="seq.s9.vel" value="0.75"/>
-  <param id="seq.s10.note" value="13"/>
-  <param id="seq.s10.gate" value="0.9"/>
-  <param id="seq.s10.vel" value="0.75"/>
-  <param id="seq.s11.note" value="10"/>
-  <param id="seq.s11.gate" value="0.9"/>
-  <param id="seq.s11.vel" value="0.75"/>
-  <param id="seq.s12.note" value="9"/>
-  <param id="seq.s12.gate" value="0.9"/>
-  <param id="seq.s12.vel" value="0.75"/>
-  <param id="seq.s13.note" value="7"/>
-  <param id="seq.s13.gate" value="0.9"/>
-  <param id="seq.s13.vel" value="0.75"/>
-  <param id="seq.s14.note" value="9"/>
-  <param id="seq.s14.gate" value="2.9"/>
-  <param id="seq.s14.vel" value="0.75"/>
-  <param id="seq.s15.on" value="off"/>
-  <param id="seq.s16.on" value="off"/>
   <param id="seq.rate" value="1/8"/>
-  <param id="seq.length" value="16"/>
+  <param id="seq.length" value="9"/>
+  <param id="seq.swing" value="0.0"/>
   <param id="seq.on" value="on"/>
   <labtuning a="hicaz"/>
 </svlpreset>

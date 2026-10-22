@@ -167,6 +167,8 @@ public:
 
     int currentStep() const { return running ? current : -1; }
     bool isRunning() const { return running; }
+    double beatNow() const { return beat(); }
+    void setPeer (bool running, double beatOfPeer) { peerRunning = running; peerBeat = beatOfPeer; }
     int soundingTracks() const { int c = 0; for (int t = 0; t < kDrumTracks; ++t) c += ! voice[(size_t) t].idle(); return c; }
     void allOff() { numHeld = 0; for (int t = 0; t < kDrumTracks; ++t) { voice[(size_t) t].allNotesOff (0); offLeft[(size_t) t] = -1; } }
 
@@ -223,7 +225,12 @@ private:
             running = true;
             const double b = beat();
             const bool keepPlace = hostPlaying || (holdMode && b - stoppedBeat < 4.0);
-            if (keepPlace)
+            if (! hostPlaying && peerRunning)
+            {   // own clock, the arp / seq already runs: join its grid at the next step (owner 21 Oct: two PLAYs ran out of step)
+                setBeat (peerBeat);
+                nextStep = firstStepAtOrAfter (peerBeat);
+            }
+            else if (keepPlace)
             {
                 const int64_t k = firstStepAtOrAfter (b);
                 const double catchBeats = std::min (0.04 * tempo / 60.0, 0.25 * stepLen);
@@ -257,6 +264,7 @@ private:
     bool on = false, keys = false, running = false, hasHost = false, hostPlaying = false, holdMode = true, midiSrc = false, preview = false;
     std::array<int, 64> heldIds {}; int numHeld = 0;
     double stoppedBeat = -1.0e301;
+    bool peerRunning = false; double peerBeat = 0;
     float masterGain = 1, octSemis = 0;
 };
 

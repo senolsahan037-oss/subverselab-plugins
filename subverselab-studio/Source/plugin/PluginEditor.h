@@ -8,6 +8,7 @@
 #include "Scopes.h"
 #include "AnalogDoor.h"
 #include "LabDoor.h"
+#include "FxDoor.h"
 
 class JingFangEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -40,6 +41,8 @@ public:
     jfui::PanelKey& closeKey() noexcept { return closeBtn; }
     jfui::PanelKey& seqKey() noexcept { return seqBtn; }
     jfui::LabDoor* labDoorView() noexcept { return labDoor.get(); }
+    jfui::FxDoor* fxDoorView() noexcept { return fxDoor.get(); }
+    void openDoorForTest (int which) { openDoor (which); }
     jfui::PanelKey& labKey() noexcept { return labBtn; }
     void tickForTest() { timerCallback(); }
     struct SaveTarget { juce::String family, name; bool fixed = false; };   // where SAVE puts a preset now (the open door decides)
@@ -129,12 +132,14 @@ private:
     DragonLayer dragon;
     std::unique_ptr<jfui::AnalogDoor> seqDoor, drumDoor;
     std::unique_ptr<jfui::LabDoor> labDoor;
+    std::unique_ptr<jfui::FxDoor> fxDoor;
+    jfui::PanelKey fxBtn { "FX RACK" };
     bool anyDoorOpen() const;
     juce::Rectangle<int> doorArea;                   // where the SEQ / DRUM / LAB doors roll down (help hides what they cover)
     void stopEverything();                                     // Esc on the panel
     bool seqWasRunning = false, drumWasRunning = false;
     juce::String seqScratchFor;                                // the loaded preset the SEQ door last cleared for
-    void openDoor (int which);                                 // 0 none, 1 PATCH, 2 SEQ, 3 LAB, 4 DRUM: one door at a time
+    void openDoor (int which);                                 // 0 none, 1 PATCH, 2 SEQ, 3 LAB, 4 DRUM, 5 FX: one door at a time
     std::vector<std::unique_ptr<SlotCell>> slotCells;
     juce::String lastSlots, lastReadouts;
     int probeTick = 0, probeGaps = 0, probeStalls = 0;

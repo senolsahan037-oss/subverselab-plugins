@@ -116,7 +116,7 @@ private:
 };
 
 /** ◀ name ▶ for any choice parameter: arrows step, the name opens the list. For an oscillator type, a small drawing of the wave. */
-class TypeStepper : public juce::Component
+class TypeStepper : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     TypeStepper (JingFangProcessor&, const juce::String& paramId);

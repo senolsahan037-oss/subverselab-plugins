@@ -49,5 +49,11 @@ private:
     std::vector<PanelKey*> playKeys;
     std::vector<std::pair<PanelKey*, int>> sourceKeys;      // PATTERN / MIDI key, unit (0 SEQ, 1 DRUM)
     std::vector<std::pair<ValueKnob*, juce::Point<float>>> tempoKnobs;   // knob, where its BPM is printed
+    std::array<std::vector<Knob*>, 3> lanes;                // SEQ: the VEL row's lanes (VEL, PROB, RATCH), one shown at a time
+    int shownLane = 0;
+    PanelKey* laneKey = nullptr;
+public:
+    void showLaneForTest (int l) { while (shownLane != l && laneKey != nullptr) laneKey->onClick(); }
+    int laneKnobCount (int l) const { return (int) lanes[(size_t) l].size(); }
 };
 } // namespace jfui
