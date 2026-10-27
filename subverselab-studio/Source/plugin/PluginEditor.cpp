@@ -237,11 +237,14 @@ void JingFangEditor::build()
                 "hear only what it does to the others.", sec ("FM"), mark ("FM") },
         { "Patch, sequencer, drums", "PATCH opens the cable compartment: three LFOs, the sources (top row) and the destinations. Drag "
                    "from a source to a destination to lay a cable; pull it out to move it, drop it anywhere else to remove it. SEQ opens "
-                   "the arpeggiator and the 16-step sequencer: each step has its key, its NOTE, VEL and GATE knobs and its ROW, SLIDE and "
-                   "ACCENT switches; the key at the VEL row's name turns that row into PROB (the chance a step plays) or RATCH (a step played "
-                   "1 to 4 times in its length), and the selector above step 1 sets the order: forward, reverse, bounce or random; the sequencer follows the key you hold (HOLD) or runs on its own (FREE; PLAY starts it, again stops it). DRUM opens the drum "
+                   "the arpeggiator and the 16-step sequencer, drawn as a piano roll: click a note to select its step (its NOTE, VEL, GATE, PROB "
+                   "and RATCH knobs and ROW, SLIDE and ACC switches appear on the right), click an empty place to add a note, drag to move it, "
+                   "double-click to remove it, shift-click to add a chord note; the selector at the left sets the order: forward, reverse, bounce or "
+                   "random; the sequencer follows the key you hold (HOLD) or runs on its own (FREE; PLAY starts it, again stops it). GENERATE writes "
+                   "a pattern for the loaded sound (ROLL: all new, RHYTHM: new rhythm, NOTES: new notes; DENSITY, COMPLEX, MUTATE, RANGE, MICRO; the "
+                   "arrows step through your recent rolls). DRUM opens the drum "
                    "machine: eight tracks, each playing a drum sound you pick, with 16 steps (click: on, again: accent; right-click: off); hold a "
-                   "key to play the beat, or PLAY to run it on its own. CLEAR "
+                   "key to play the beat, or PLAY to run it on its own; ROLL writes a new beat for the kit. CLEAR "
                    "on either door wipes its steps. Arps, sequences "
                    "and beats are part of a preset: SAVE keeps yours, and the SEQ and DRUMS slots take them from any preset.", patchBtn.getBounds(), { drumBtn.getRight() + 16, drumBtn.getBounds().getCentreY() } } });
 }

@@ -1010,6 +1010,26 @@ int main (int argc, char** argv)
         check (dApart > 0.01f, "the two paths sound different (max diff " + juce::String (dApart) + ")");
     }
 
+    // ---- a switched-off FX stage keeps no memory (28 Oct, found by the learn film at 6:30): VA Lead's echo / reverb ring, a
+    // preset without them loads, VA Lead loads again: before the fix the old tail came back at -27 dBFS with no key held
+    {
+        auto idxOf = [] (JingFangProcessor& p, const char* fam, const char* name) { for (size_t i = 0; i < p.presets().size(); ++i) if (p.presets()[i].family == fam && p.presets()[i].name == name) return (int) i; return -1; };
+        float worst = 0;
+        for (const char* mid : { "Init", "Boom Bap" })
+        {
+            JingFangProcessor p; p.setRateAndBufferSizeDetails (sr, 512); p.prepareToPlay (sr, 512);
+            juce::AudioBuffer<float> b (2, 512);
+            auto run = [&] (int blocks, juce::MidiBuffer m = {}) { float pk = 0; for (int n = 0; n < blocks; ++n) { p.processBlock (b, m); m.clear(); pk = std::max (pk, b.getMagnitude (0, 512)); } return pk; };
+            p.loadPresetIndex (idxOf (p, "Lead", "VA Lead")); run (10);
+            juce::MidiBuffer on; on.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0); run (180, on);
+            juce::MidiBuffer off; off.addEvent (juce::MidiMessage::noteOff (1, 60), 0); run (1, off);
+            p.loadPresetIndex (std::string (mid) == "Init" ? idxOf (p, "Init", "Init") : idxOf (p, "Drum Machine", "Boom Bap")); run (2800);
+            p.loadPresetIndex (idxOf (p, "Lead", "VA Lead"));
+            worst = std::max (worst, run (28));
+        }
+        check (worst < 1.0e-5f, "a preset with echo / reverb after one without: no old tail with no key held (peak " + juce::String (juce::Decibels::gainToDecibels (worst, -240.0f), 1) + " dBFS)");
+    }
+
     std::printf ("\nplugin_check: %d passed, %d failed\n", gPass, gFail);
     return gFail == 0 ? 0 : 1;
 }

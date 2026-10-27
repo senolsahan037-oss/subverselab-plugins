@@ -117,8 +117,12 @@ public:
                 L[i] *= g; R[i] *= g;
             }
         }
-        // DRIVE
-        if (sDriveMix.cur > 0 || sDriveMix.target > 0)
+        // DRIVE (a stage that starts running again starts from silence: a skipped stage keeps its memory, and a later preset that
+        // turned it back on played what was left in it, e.g. -10 dBFS of an old echo with no key held; found by the learn film, 28 Oct)
+        const bool driveRuns = sDriveMix.cur > 0 || sDriveMix.target > 0;
+        if (driveRuns && ! driveRan) drive->instanceClear();
+        driveRan = driveRuns;
+        if (driveRuns)
         {
             float dl[kMax], dr[kMax];
             std::memcpy (dl, L, sizeof (float) * (size_t) n); std::memcpy (dr, R, sizeof (float) * (size_t) n);
@@ -131,7 +135,10 @@ public:
             }
         }
         // MOD
-        if (sModMix.cur > 0 || sModMix.target > 0)
+        const bool modRuns = sModMix.cur > 0 || sModMix.target > 0;
+        if (modRuns && ! modRan) resetMod();
+        modRan = modRuns;
+        if (modRuns)
         {
             const float rate = st.modRate, depth = st.modDepth, fb = std::fmin (0.9f, st.modFb);
             for (int i = 0; i < n; ++i)
@@ -173,7 +180,14 @@ public:
             }
         }
         // ECHO
-        if (sEchoMix.cur > 0 || sEchoMix.target > 0)
+        const bool echoRuns = sEchoMix.cur > 0 || sEchoMix.target > 0;
+        if (echoRuns && ! echoRan)
+        {
+            std::fill (lineL.begin(), lineL.end(), 0.0f); std::fill (lineR.begin(), lineR.end(), 0.0f);
+            dampL = dampR = 0;
+        }
+        echoRan = echoRuns;
+        if (echoRuns)
         {
             const float glide = 1.0f - std::exp (-1.0f / (0.08f * sr));   // 80 ms to a new tempo
             const int type = st.echoType;
@@ -214,7 +228,10 @@ public:
             }
         }
         // REVERB
-        if (sRevMix.cur > 0 || sRevMix.target > 0)
+        const bool revRuns = sRevMix.cur > 0 || sRevMix.target > 0;
+        if (revRuns && ! revRan) reverb->instanceClear();
+        revRan = revRuns;
+        if (revRuns)
         {
             float wl[kMax], wr[kMax];
             float* in[2] = { L, R }; float* out[2] = { wl, wr };
@@ -298,6 +315,7 @@ private:
     bool compOn = false; float compEnv = 0, compAtkA = 0.99f, compRelA = 0.999f;
     std::vector<float> modL, modR; int modMask = 0, modW = 0, modType = 0;
     float modPhase = 0, phZL[6] {}, phZR[6] {}, phFbL = 0, phFbR = 0, wowPhase = 0;
+    bool driveRan = false, modRan = false, echoRan = false, revRan = false;   // the stage ran in the last block
 };
 
 } // namespace svl

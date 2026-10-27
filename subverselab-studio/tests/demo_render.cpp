@@ -23,6 +23,7 @@ namespace
 constexpr int kFps = 30, kSr = 48000, kSpf = kSr / kFps;
 int W = 1920, H = 1080;
 bool vertical = false;
+bool wideExplainer = false;                                      // a narrated film in 16:9 (YouTube long form): camera + caption band
 int introMode = 0;                                               // 1 wide 1600 x 900, 2 tall 720 x 1280 (the site's opening film),
                                                                  // 3 face: the device body's face at 200 %, no dragons (the 3D intro's texture)
 juce::Rectangle<int> faceRect, stripRect;                         // window units: the device body (red sides included), the preset strip
@@ -764,6 +765,370 @@ void e10 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
     f.cam (L[5], [&ed] { return genView (ed).getUnion (inEditor (ed, ed.seqDoorView()).withHeight (60)).expanded (10); });
 }
 
+// the long one (owner 27 Oct: "uzun anlatım videosu çek, süre mühim değil, generate bölümü bitene kadar"): 16:9, every part of GENERATE
+void e11 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L; auto& E = f.E;
+    p.genSeedRandomForTest (2811);
+    auto load = [&p] (const char* fam, const char* name) { return [&p, fam, name] { p.loadPresetIndex (presetIndex (p, fam, name)); }; };
+    auto roll = [&ed] (const char* k) { return [&ed, k] { genPanel (ed)->key (k)->onClick(); }; };
+    auto gpR = [&ed] { auto* g = genPanel (ed); return g != nullptr ? inEditor (ed, g) : whole(); };
+    auto strip = [gpR] { const auto g = gpR(); return Rect (g.getX(), g.getY(), g.getWidth(), 80.0f).expanded (10, 30); };
+    auto lcd = [gpR] { const auto g = gpR(); return Rect (g.getX() + 600.0f, g.getY(), 546.0f, 72.0f).expanded (20, 40); };
+    auto column = [gpR] { const auto g = gpR(); return Rect (g.getX() + 700.0f, g.getY() + 60.0f, 446.0f, 340.0f); };
+    auto hold = [&f] (double t0, double t1, int key) { if (t1 > t0 + 0.1) f.note (t0, t1 - t0, key, 100); };
+    auto expectRole = [&f, &p] (double t, juce::String want) { f.expect (t, "WRITES " + want, [&p, want] { return p.genWrites (0).startsWith (want) ? juce::String() : p.genWrites (0); }); };
+
+    f.at (0, load ("Lead", "Bright Saw Lead"));
+    f.cam (0, [] { return whole(); });
+    // 2: the door
+    f.at (L[2] + 0.4, [&ed] { ed.seqKey().onClick(); });
+    f.expect (L[2] + 1.0, "SEQ door open", doorOpen (ed, "SEQ"));
+    f.cam (L[2] + 1.0, [&ed] { return genView (ed); });
+    // 3-4: a lead: ROLL, hold a key, then another key
+    f.cam (L[4], strip);
+    f.at (L[4] + 0.6, roll ("ROLL"));
+    expectRole (L[4] + 0.9, "MELODY");
+    f.cam (L[4] + 1.5, [&ed] { return genView (ed); });
+    hold (L[4] + 1.0, E[4] + 2.6, 60);
+    hold (E[4] + 2.7, E[4] + 5.0, 65);
+    // 5: the readout
+    f.cam (L[5], lcd);
+    hold (L[5] + 0.2, E[5] + 1.3, 60);
+    // 6: RHYTHM, 7: NOTES
+    f.cam (L[6], [&ed] { return genView (ed); });
+    auto nBefore = std::make_shared<int> (-1), rBefore = std::make_shared<int> (-1);
+    f.at (L[6] + 0.4, [&p, &ed, nBefore] { *nBefore = p.genUnit (0).n; genPanel (ed)->key ("RHYTHM")->onClick(); });
+    f.expect (L[6] + 0.7, "RHYTHM kept the NOTES seed", [&p, nBefore] { return p.genUnit (0).n == *nBefore ? juce::String() : "N changed"; });
+    hold (L[6] + 0.6, E[6] + 3.3, 60);
+    f.at (L[7] + 0.4, [&p, &ed, rBefore] { *rBefore = p.genUnit (0).r; genPanel (ed)->key ("NOTES")->onClick(); });
+    f.expect (L[7] + 0.7, "NOTES kept the RHYTHM seed", [&p, rBefore] { return p.genUnit (0).r == *rBefore ? juce::String() : "R changed"; });
+    hold (L[7] + 0.6, E[7] + 3.3, 60);
+    // 8: no repeats: two rolls, each differs
+    auto prev = std::make_shared<svl::gen::SeqPattern>();
+    f.at (L[8] + 0.3, [&p, prev] { *prev = p.genCurrentSeq(); });
+    f.at (L[8] + 0.5, roll ("ROLL"));
+    f.expect (L[8] + 0.8, "the roll differs from the one before", [&p, prev] { const float d = svl::gen::distance (*prev, p.genCurrentSeq()); return d >= svl::gen::kMinDistance ? juce::String() : "distance " + num (d); });
+    f.at (E[8] + 1.2, roll ("ROLL"));
+    hold (L[8] + 0.6, E[8] + 3.3, 60);
+    // 9: back, back, forward
+    auto cur = std::make_shared<svl::gen::SeqPattern>();
+    f.at (L[9] + 0.2, [&p, cur] { *cur = p.genCurrentSeq(); });
+    f.cam (L[9], lcd);
+    f.at (L[9] + 0.6, [&p] { p.genHistory (0, -1); });
+    f.at (L[9] + 2.0, [&p] { p.genHistory (0, -1); });
+    f.at (E[9] + 1.4, [&p] { p.genHistory (0, +1); p.genHistory (0, +1); });
+    f.expect (E[9] + 1.7, "forward twice is the roll we left", [&p, cur] { return p.genCurrentSeq() == *cur ? juce::String() : juce::String ("different"); });
+    hold (L[9] + 0.7, E[9] + 3.3, 60);
+    // 10: DENSITY sweep
+    f.cam (L[10], [&ed] { return genView (ed); });
+    for (int k = 0; k <= 16; ++k)
+    {
+        const double t = L[10] + 0.5 + k * 0.4;
+        const float v = k <= 6 ? 0.5f + 0.07f * (float) k : (k <= 13 ? 0.92f - 0.09f * (float) (k - 6) : 0.29f + 0.07f * (float) (k - 13));
+        f.at (t, [&p, v] { setP (p, "gen.density", juce::jlimit (0.0f, 1.0f, v)); });
+    }
+    hold (L[10] + 0.3, E[10] + 4.3, 60);
+    // 11: COMPLEX up, roll
+    f.at (L[11] + 0.4, [&p] { setP (p, "gen.complexity", 0.85f); });
+    f.at (L[11] + 1.0, roll ("ROLL"));
+    hold (L[11] + 1.1, E[11] + 3.8, 60);
+    f.at (E[11] + 3.9, [&p] { setP (p, "gen.complexity", 0.4f); });
+    // 12: RANGE narrow then wide (the same seeds rewritten)
+    f.at (L[12] + 0.4, [&p] { setP (p, "gen.range", 5.0f); });
+    f.at (E[12] + 0.8, [&p] { setP (p, "gen.range", 20.0f); });
+    f.at (E[12] + 3.4, [&p] { setP (p, "gen.range", 12.0f); });
+    hold (L[12] + 0.5, E[12] + 3.3, 60);
+    // 13: MUTATE low: two small changes
+    f.at (L[13] + 0.4, [&p] { setP (p, "gen.mutate", 0.2f); });
+    auto before13 = std::make_shared<svl::gen::SeqPattern>();
+    f.at (L[13] + 0.9, [&p, before13] { *before13 = p.genCurrentSeq(); });
+    f.at (L[13] + 1.1, roll ("ROLL"));
+    f.expect (L[13] + 1.4, "MUTATE 0.2 changed a few steps, not all", [&p, before13]
+    {
+        int ch = 0; const auto n = p.genCurrentSeq(); for (int s = 0; s < 16; ++s) ch += ! (n.s[(size_t) s] == before13->s[(size_t) s]);
+        return ch >= 1 && ch <= 8 ? juce::String() : juce::String (ch) + " steps changed";
+    });
+    f.at (E[13] + 1.2, roll ("ROLL"));
+    f.at (E[13] + 4.3, [&p] { setP (p, "gen.mutate", 1.0f); });
+    hold (L[13] + 1.2, E[13] + 4.2, 60);
+    // 14: a fixed scale
+    f.cam (L[14], [gpR] { const auto g = gpR(); return Rect (g.getX() + 600.0f, g.getY(), 546.0f, 72.0f).expanded (20, 40); });
+    f.at (L[14] + 0.6, [&p] { setP (p, "gen.scale", 2.0f); });
+    f.at (L[14] + 1.2, roll ("ROLL"));
+    expectRole (L[14] + 1.5, "MELODY");
+    f.expect (L[14] + 1.5, "the fixed scale shows: DORIAN", [&p] { return p.genWrites (0).containsIgnoreCase ("dorian") ? juce::String() : p.genWrites (0); });
+    f.at (E[14] + 3.4, [&p] { setP (p, "gen.scale", 0.0f); });
+    hold (L[14] + 1.3, E[14] + 3.3, 60);
+    // 15: bass
+    f.cam (L[15], [&ed] { return genView (ed); });
+    f.at (L[15] + 0.2, load ("Bass", "Round Mono"));
+    f.at (L[15] + 0.6, roll ("ROLL"));
+    expectRole (L[15] + 0.9, "BASS");
+    hold (L[15] + 0.8, E[15] + 4.3, 48);
+    // 16: pad chords
+    f.at (L[16] + 0.2, load ("Pad", "Warm Pad"));
+    f.at (L[16] + 0.6, roll ("ROLL"));
+    expectRole (L[16] + 0.9, "CHORDS");
+    hold (L[16] + 0.8, E[16] + 4.8, 60);
+    // 17: arp rhythm
+    f.at (L[17] + 0.2, load ("Arp - Classic", "Up Down Two Octaves"));
+    f.at (L[17] + 0.6, roll ("ROLL"));
+    expectRole (L[17] + 0.9, "ARP RHYTHM");
+    f.chord (L[17] + 0.8, E[17] + 4.3 - (L[17] + 0.8), { 60, 64, 67 }, 96);
+    // 18: the selected step's column
+    f.at (L[18] + 0.1, load ("Lead", "Bright Saw Lead"));
+    f.at (L[18] + 0.4, roll ("ROLL"));
+    f.cam (L[18] + 0.8, column);
+    f.at (L[18] + 1.2, [&ed] { genPanel (ed)->selectStep (2); });
+    f.at (L[18] + 3.0, [&ed] { genPanel (ed)->selectStep (6); });
+    f.at (E[18] + 1.0, [&ed] { genPanel (ed)->selectStep (10); });
+    // 19: hand edits (what the clicks do): add a note, move it, a chord note, remove one
+    f.cam (L[19], [&ed] { return inEditor (ed, &genPanel (ed)->roll()).expanded (20); });
+    f.at (L[19] + 0.8, [&p, &ed] { setP (p, "seq.s16.on", 1.0f); setP (p, "seq.s16.note", 7.0f); genPanel (ed)->selectStep (15); });
+    f.at (L[19] + 2.4, [&p] { setP (p, "seq.s16.note", 9.0f); });
+    f.at (L[19] + 4.0, [&p] { setP (p, "seq.s16.c1", 4.0f); });
+    f.at (L[19] + 5.6, [&p] { setP (p, "seq.s16.c1", 0.0f); setP (p, "seq.s16.on", 0.0f); });
+    hold (L[19] + 0.6, E[19] + 4.3, 60);
+    // 20: MICRO
+    f.cam (L[20], [] { return whole(); });
+    f.at (L[20] + 0.2, [&p, &ed] { p.loadPresetIndex (presetIndex (p, "Winds", "Breathy Flute")); ed.microKey().onClick(); setP (p, "gen.micro", 1.0f); });
+    f.cam (L[20] + 1.5, [&ed] { return genView (ed); });
+    f.at (L[20] + 1.0, [&p, &ed] { for (int i = 0; i < 12; ++i) { genPanel (ed)->key ("ROLL")->onClick(); if (microSteps (p) > 0) break; } });
+    f.expect (L[20] + 1.3, "MICRO: raised / lowered notes written", [&p] { return microSteps (p) > 0 ? juce::String() : juce::String ("none"); });
+    hold (L[20] + 1.2, E[20] + 4.8, 62);
+    f.at (E[20] + 4.9, [&ed] { ed.normalKey().onClick(); });
+    // 21: LAB
+    f.at (L[21] + 0.2, load ("Sequence - Lab", "Guzheng Running Water"));
+    f.at (L[21] + 0.8, roll ("ROLL"));
+    f.expect (L[21] + 1.1, "the Lab is on and the roll uses it", [&p] { return p.labActive() && p.genWrites (0).contains ("LAB") ? juce::String() : "lab " + juce::String ((int) p.labActive()) + " " + p.genWrites (0); });
+    hold (L[21] + 0.9, E[21] + 3.3, 60);
+    // 22: the drum door
+    f.at (L[22] + 0.2, [&p, &ed] { p.loadPresetIndex (presetIndex (p, "Init", "Init")); ed.drumKey().onClick(); });
+    f.cam (L[22] + 0.6, [&ed] { return inEditor (ed, ed.drumDoorView()).expanded (10); });
+    f.at (L[22] + 1.2, [&ed] { ed.drumDoorView()->drumGenView()->rollKey()->onClick(); });
+    f.at (L[22] + 5.0, [&ed] { ed.drumDoorView()->drumGenView()->rollKey()->onClick(); });
+    f.at (E[22] + 3.0, [&p] { p.genHistory (1, -1); });
+    hold (L[22] + 1.3, E[22] + 5.3, 60);
+    // 23: CLIP, 24: SAVE
+    f.at (L[23] + 0.2, [&p, &ed] { p.loadPresetIndex (presetIndex (p, "Lead", "Bright Saw Lead")); ed.seqKey().onClick(); });
+    f.at (L[23] + 0.8, roll ("ROLL"));
+    f.cam (L[23] + 0.8, [&ed] { return inEditor (ed, ed.seqDoorView()).withHeight (190.0f).expanded (10); });
+    hold (L[23] + 0.9, E[23] + 2.3, 60);
+    f.at (L[24] + 0.8, [&p] { p.saveUserPreset ("Lead", "My Generated Line"); });
+    f.expect (L[24] + 1.1, "saved as Lead / My Generated Line", savedAs (p, "Lead", "My Generated Line"));
+    f.expect (L[24] + 1.2, "the saved preset carries its seeds", [&p]
+    {
+        const auto file = JingFangProcessor::userPresetFolder().getChildFile ("Lead").getChildFile ("My Generated Line.xml");
+        return file.loadFileAsString().contains ("<gen unit=\"0\"") ? juce::String() : juce::String ("no <gen> line");
+    });
+    f.cam (L[24] + 1.0, [] { return whole(); });
+}
+
+// the learn film (owner 28 Oct: "jing fang'i komple anlatan bir video çek, bir tür learn videosu gibi"): 16:9, the whole instrument
+void e12 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L; auto& E = f.E;
+    p.genSeedRandomForTest (2810);
+    auto load = [&p] (const char* fam, const char* name) { return [&p, fam, name] { p.loadPresetIndex (presetIndex (p, fam, name)); }; };
+    // the names are copied into the camera (an initializer_list kept in a lambda points at a dead temporary: the 28 Oct crash at 64 s)
+    auto sec = [&ed] (std::initializer_list<const char*> names)
+    {
+        std::vector<juce::String> ns (names.begin(), names.end());
+        return [&ed, ns] { Rect r; for (auto& n : ns) r = r.isEmpty() ? section (ed, n) : r.getUnion (section (ed, n)); return r.expanded (30); };
+    };
+    auto loaded = [&f, &p] (double t, juce::String fam, juce::String name) { f.expect (t, name + " is loaded", presetIs (p, fam, name)); };
+    auto chords = [&f] (double t0, double t1, double every, std::initializer_list<std::initializer_list<int>> prog, int vel = 88)
+    {
+        std::vector<std::vector<int>> pr; for (auto& c : prog) pr.push_back (c);
+        int i = 0; for (double t = t0; t < t1 - 0.4; t += every, ++i) { const auto& c = pr[(size_t) i % pr.size()]; for (int k : c) f.note (t, std::min (every - 0.1, t1 - t), k, vel); }
+    };
+    auto line = [&f] (double t0, double t1, double every, std::initializer_list<int> keys, int vel = 96)
+    {
+        std::vector<int> ks (keys); int i = 0; for (double t = t0; t < t1 - 0.2; t += every, ++i) f.note (t, every * 0.85, ks[(size_t) i % ks.size()], vel);
+    };
+    auto drag = [&ed] (juce::Point<float> from, juce::Point<float> to)
+    {
+        auto& bay = ed.patchBay();
+        const auto t0 = juce::Time::getCurrentTime();
+        auto src = juce::Desktop::getInstance().getMainMouseSource();
+        bay.mouseDown (juce::MouseEvent (src, from, {}, 1.0f, 0, 0, 0, 0, &bay, &bay, t0, from, t0, 1, false));
+        for (int s = 1; s <= 4; ++s) { const auto q = from + (to - from) * (float) s / 4.0f; bay.mouseDrag (juce::MouseEvent (src, q, {}, 1.0f, 0, 0, 0, 0, &bay, &bay, t0, from, t0, 1, false)); }
+        bay.mouseUp (juce::MouseEvent (src, to, {}, 1.0f, 0, 0, 0, 0, &bay, &bay, t0, from, t0, 1, false));
+    };
+
+    // 1: intro
+    f.at (0, load ("Pad", "Warm Pad"));
+    f.cam (0, [] { return whole(); });
+    chords (0.9, E[1] + 1.4, 2.0, { { 50, 57, 62, 65 }, { 46, 53, 58, 62 }, { 48, 55, 60, 64 }, { 45, 52, 57, 60 } });
+    // 2: presets: the arrows
+    f.cam (L[2], [] { return strip(); });
+    f.at (L[2] + 1.2, [&p] { p.stepPreset (1); });
+    f.at (L[2] + 3.0, [&p] { p.stepPreset (1); });
+    f.at (E[2] + 1.6, [&p] { p.stepPreset (-2); });
+    chords (L[2] + 0.2, E[2] + 3.9, 1.8, { { 50, 57, 62, 65 }, { 48, 55, 60, 64 } });
+    // 3: categories: a sound of each
+    struct V { const char* fam; const char* name; std::initializer_list<int> keys; };
+    static const V tour[] = { { "Lead", "Bright Saw Lead", { 69 } }, { "Pad", "Glass Pad", { 57, 64, 69 } }, { "Keys - E-Piano", "Night EP", { 57, 60, 64 } },
+                              { "Bass", "Round Mono", { 38 } }, { "Pluck", "Harp Pluck", { 62, 69 } }, { "Strings", "Orchestral Strings", { 50, 57, 62 } },
+                              { "Bell", "FM Bell", { 74 } }, { "Drums - Kick", "Punch Kick", { 36 } }, { "Kanun", "Kanun", { 62 } }, { "Sitar", "Sitar", { 57 } }, { "Guzheng", "Guzheng", { 64 } } };
+    {
+        const double step = (E[3] + 4.8 - L[3]) / 11.0;
+        for (int k = 0; k < 11; ++k)
+        {
+            const double t = L[3] + k * step;
+            f.at (t, load (tour[k].fam, tour[k].name));
+            for (int key : tour[k].keys) f.note (t + 0.1, step - 0.25, key, 96);
+        }
+        loaded (L[3] + 0.3, "Lead", "Bright Saw Lead");
+    }
+    // 4-5: the preset synthesizer
+    f.at (L[4] + 0.1, load ("Keys - E-Piano", "Tine EP"));
+    f.cam (L[4], [] { return strip(); });
+    chords (L[4] + 0.3, E[5] + 4.8, 2.0, { { 50, 57, 60, 65 }, { 48, 55, 59, 64 }, { 45, 52, 57, 60 }, { 47, 53, 57, 62 } });
+    f.at (L[5] + 0.6, [&p] { p.loadSection (0, presetIndex (p, "Lead", "Supersaw Lead")); });
+    f.at (L[5] + 2.2, [&p] { p.loadSection (4, presetIndex (p, "Pad", "Slow Pad")); });
+    f.at (L[5] + 3.8, [&p] { p.loadSection (3, presetIndex (p, "Bass", "Acid Line")); });
+    f.expect (L[5] + 4.1, "three panels from three presets", [&p]
+    {
+        return p.sectionSlot (0) == presetIndex (p, "Lead", "Supersaw Lead") && p.sectionSlot (4) == presetIndex (p, "Pad", "Slow Pad")
+            && p.sectionSlot (3) == presetIndex (p, "Bass", "Acid Line") ? juce::String() : juce::String ("slots not set");
+    });
+    // 6-8: oscillators, unison, FM
+    f.at (L[6] + 0.1, load ("Lead", "Bright Saw Lead"));
+    f.cam (L[6], sec ({ "OSC 1", "OSC 2", "OSC 3" }));
+    line (L[6] + 0.3, E[8] + 3.9, 0.45, { 62, 65, 69, 72, 69, 65 });
+    f.cam (L[7], sec ({ "OSC 1" }));
+    f.at (L[7] + 0.5, [&p] { setP (p, "osc1.unison", 1.0f); });
+    f.at (L[7] + 2.0, [&p] { setP (p, "osc1.unison", 7.0f); setP (p, "osc1.unison_detune", 40.0f); });
+    f.cam (L[8], sec ({ "FM", "OSC 2" }));
+    f.at (L[8] + 0.2, load ("Bell", "FM Bell"));
+    for (int k = 0; k <= 10; ++k) f.at (L[8] + 0.6 + k * 0.3, [&p, k] { setP (p, "fm.amount", 0.1f * (float) k); });
+    // 9: filter sweep
+    f.at (L[9] + 0.1, load ("Bass", "Acid Line"));
+    f.cam (L[9], sec ({ "FILTER" }));
+    line (L[9] + 0.3, E[9] + 3.9, 0.22, { 38, 38, 50, 38, 45, 38, 48, 50 }, 100);
+    for (int k = 0; k <= 16; ++k) f.at (L[9] + 0.4 + k * 0.35, [&p, k] { setP (p, "filter.cutoff", 200.0f * std::pow (2.0f, (float) (k <= 8 ? k : 16 - k) * 0.6f)); });
+    // 10: envelopes
+    f.at (L[10] + 0.1, load ("Pad", "Slow Pad"));
+    f.cam (L[10], sec ({ "AMP ENVELOPE", "FILTER ENVELOPE" }));
+    chords (L[10] + 0.3, E[10] + 3.9, 2.4, { { 50, 57, 62 }, { 48, 55, 60 } });
+    f.at (L[10] + 2.6, [&p] { setP (p, "amp_env.attack", 0.01f); });
+    // 11: pitch, click, drum
+    f.at (L[11] + 0.1, load ("Drums - Kick", "Punch Kick"));
+    f.cam (L[11], sec ({ "PITCH  CLICK  DRUM" }));
+    loaded (L[11] + 0.3, "Drums - Kick", "Punch Kick");
+    line (L[11] + 0.3, E[11] + 3.4, 0.5, { 36 }, 110);
+    // 12: drift, floor
+    f.at (L[12] + 0.1, load ("Pad", "Warm Drift Pad"));
+    f.cam (L[12], sec ({ "DRIFT  FLOOR" }));
+    f.chord (L[12] + 0.3, E[12] + 2.6 - L[12], { 50, 57, 62, 65 }, 90);
+    // 13: voice: legato glide
+    f.at (L[13] + 0.1, load ("Lead", "Glide Sine Lead"));
+    f.cam (L[13], sec ({ "VOICE  OUTPUT" }));
+    { static const int g[] = { 62, 69, 67, 74, 72, 69, 67, 62 }; for (int k = 0; k < 8; ++k) f.note (L[13] + 0.3 + k * 0.6, 0.75, g[k], 96); }
+    // 14: effects
+    f.at (L[14] + 0.1, load ("Pluck", "Glass Pluck"));
+    f.cam (L[14], sec ({ "DRIVE", "ECHO", "REVERB" }));
+    line (L[14] + 0.3, E[14] + 3.9, 0.5, { 62, 69, 74, 72, 69, 65 });
+    f.at (L[14] + 1.0, [&p] { setP (p, "fx.echo.mix", 0.45f); setP (p, "fx.echo.feedback", 0.5f); });
+    f.at (L[14] + 2.6, [&p] { setP (p, "fx.reverb.mix", 0.4f); });
+    // 15: FX RACK
+    f.at (L[15] + 0.2, [&ed] { ed.openDoorForTest (5); });
+    f.cam (L[15] + 0.6, [&ed] { return ed.fxDoorView() != nullptr ? inEditor (ed, ed.fxDoorView()).expanded (20) : whole(); });
+    f.at (L[15] + 1.6, [&p] { setP (p, "fx.mod.type", 1.0f); setP (p, "fx.mod.mix", 0.5f); });
+    f.at (L[15] + 3.2, [&p] { setP (p, "fx.comp.ratio", 4.0f); setP (p, "fx.comp.threshold", -20.0f); });
+    line (L[15] + 0.3, E[15] + 3.9, 0.5, { 62, 69, 74, 72, 69, 65 });
+    // 16-17: PATCH
+    f.at (L[16] + 0.1, [&ed] { ed.closeKey().onClick(); });
+    f.at (L[16] + 0.2, load ("Lead", "VA Lead"));
+    f.at (L[16] + 0.6, [&ed] { ed.patchKey().onClick(); });
+    f.expect (L[16] + 1.3, "PATCH door open", doorOpen (ed, "PATCH"));
+    f.cam (L[16] + 0.6, [&ed] { return inEditor (ed, &ed.patchBay()); });
+    chords (L[16] + 0.3, E[17] + 3.9, 1.8, { { 57, 64 }, { 59, 66 }, { 61, 68 } });
+    auto cables = std::make_shared<int> (0);
+    f.at (L[17] + 0.4, [&ed, cables] { *cables = ed.patchBay().cableCount(); });
+    f.at (L[17] + 0.6, [&ed, drag] { drag (ed.patchBay().jack (true, (int) svl::ModSrc::lfo1 - 1), ed.patchBay().jack (false, (int) svl::ModDst::cutoff - 1)); });
+    f.expect (L[17] + 0.9, "a dragged cable is one more cable", [&ed, cables] { return ed.patchBay().cableCount() == *cables + 1 ? juce::String() : "cables " + juce::String (ed.patchBay().cableCount()); });
+    f.at (L[17] + 1.0, [&p] { for (int m = 1; m <= svl::kNumModSlots; ++m) if (juce::roundToInt (raw (p, "mod" + juce::String (m) + ".destination")) == (int) svl::ModDst::cutoff) { setP (p, "mod" + juce::String (m) + ".amount", 0.8f); break; } setP (p, "lfo1.rate", 4.0f); });
+    f.at (E[17] + 2.8, [&ed, drag] { const auto j = ed.patchBay().jack (false, (int) svl::ModDst::cutoff - 1); drag (j, j + juce::Point<float> (-160.0f, 120.0f)); });
+    // 18-21: the keyboard and tuning
+    f.at (L[18] + 0.1, [&ed] { ed.closeKey().onClick(); });
+    f.at (L[18] + 0.2, load ("Strings", "Legato Strings"));
+    f.cam (L[18] + 0.3, [&ed] { return inEditor (ed, &ed.keyboardView()).expanded (30, 60); });
+    { static const int mk[] = { 62, 64, 65, 67, 69, 71, 72, 74, 72, 71, 69, 67, 65, 64, 62, 64 }; int i = 0; for (double t = L[18] + 0.4; t < E[21] + 3.2; t += 0.55, ++i) f.note (t, 0.5, mk[i % 16], 96); }
+    f.at (L[19] + 0.2, [&ed] { ed.normalKey().onClick(); });
+    f.at (L[20] + 0.3, [&ed] { ed.microKey().onClick(); });
+    f.expect (L[20] + 0.6, "MICRO is on", paramIs (p, "tuning.mode", 1.0f));
+    f.at (L[20] + 1.5, [&p] { setP (p, "tuning.row.e", 0.0f); });
+    f.at (L[20] + 3.0, [&p] { setP (p, "tuning.row.b", 0.0f); });
+    f.cam (L[21], sec ({ "TUNING" }));
+    f.at (E[21] + 3.3, [&p, &ed] { setP (p, "tuning.row.e", 1.0f); setP (p, "tuning.row.b", 1.0f); ed.normalKey().onClick(); });
+    // 22-23: the Tuning Lab, a Lab melody with its tuning, morph
+    f.at (L[22] + 0.2, [&ed] { ed.labKey().onClick(); });
+    f.expect (L[22] + 0.9, "LAB door open", doorOpen (ed, "LAB"));
+    f.cam (L[22] + 0.3, [&ed] { return inEditor (ed, ed.labDoorView()); });
+    line (L[22] + 0.4, E[22] + 3.3, 0.5, { 62, 63, 66, 67, 69, 67, 66, 63 });
+    f.at (L[23] + 0.1, [&ed] { ed.closeKey().onClick(); });
+    f.at (L[23] + 0.2, load ("Sequence - Lab", "Guzheng Running Water"));
+    f.expect (L[23] + 0.6, "the Lab melody switched the Lab on", [&p] { return p.labActive() ? juce::String() : juce::String ("lab off"); });
+    f.cam (L[23] + 0.3, [] { return strip(); });
+    f.note (L[23] + 0.5, E[23] + 5.2 - (L[23] + 0.5), 60, 100);
+    f.at (L[23] + 3.0, [&p] { auto ls = p.labState(); ls.b = jflab::Tuning(); ls.morph = 0; p.setLabState (ls); });
+    for (int k = 0; k < 12; ++k) f.at (L[23] + 3.2 + k * 0.25, [&p, k] { auto ls = p.labState(); ls.morph = (float) (k + 1) / 12.0f; p.setLabState (ls); });
+    // 24-28: SEQ: arp, sequencer, HOLD / PLAY, GENERATE
+    f.at (L[24] + 0.1, [&p] { auto ls = p.labState(); ls.on = false; ls.morph = 0; p.setLabState (ls); });
+    f.at (L[24] + 0.2, load ("Arp - Classic", "Up Down Two Octaves"));
+    f.at (L[24] + 0.5, [&ed] { ed.seqKey().onClick(); });
+    f.expect (L[24] + 1.2, "SEQ door open", doorOpen (ed, "SEQ"));
+    f.cam (L[24] + 0.5, [&ed] { return inEditor (ed, ed.seqDoorView()); });
+    f.chord (L[25] + 0.2, E[25] + 4.8 - (L[25] + 0.2), { 60, 64, 67 }, 96);
+    f.at (L[26] + 0.1, load ("Sequence - Melodic", "Lead Riff"));
+    f.cam (L[26] + 0.3, [&ed] { return inEditor (ed, &genPanel (ed)->roll()).expanded (20); });
+    f.note (L[26] + 0.4, E[26] + 4.8 - (L[26] + 0.4), 60, 100);
+    f.at (L[27] + 0.5, [&ed] { if (auto* k = doorKey (ed.seqDoorView(), "PLAY")) k->onClick(); });
+    f.expect (L[27] + 1.5, "PLAY runs the sequence with no key", [&p] { return p.engineForTest().noteGen().isRunning() ? juce::String() : "not running"; });
+    f.at (E[27] + 3.6, [&ed] { if (auto* k = doorKey (ed.seqDoorView(), "PLAY")) k->onClick(); });
+    f.cam (L[28], [&ed] { return genView (ed); });
+    f.at (L[28] + 0.5, [&ed] { genPanel (ed)->key ("ROLL")->onClick(); });
+    f.at (E[28] + 1.5, [&ed] { genPanel (ed)->key ("ROLL")->onClick(); });
+    f.note (L[28] + 0.6, E[28] + 4.8 - (L[28] + 0.6), 60, 100);
+    // 29-31: DRUM
+    f.at (L[29] + 0.1, load ("Drum Machine", "Boom Bap"));
+    f.at (L[29] + 0.3, [&ed] { ed.drumKey().onClick(); });
+    f.expect (L[29] + 1.0, "DRUM door open", doorOpen (ed, "DRUM"));
+    f.cam (L[29] + 0.3, [&ed] { return inEditor (ed, ed.drumDoorView()); });
+    f.at (L[30] + 0.4, [&ed] { if (auto* k = stepKey (ed.drumDoorView(), "drums.t3.s4")) click (*k); });
+    f.at (L[30] + 1.6, [&ed] { if (auto* k = stepKey (ed.drumDoorView(), "drums.t3.s4")) click (*k); });
+    f.at (L[30] + 3.0, [&p] { setP (p, "drums.t1.tune", -3.0f); });
+    f.note (L[30] + 0.3, E[30] + 4.3 - (L[30] + 0.3), 60, 100);
+    f.note (L[31] + 0.3, E[31] + 4.8 - (L[31] + 0.3), 60, 100);
+    f.at (L[31] + 2.5, [&ed] { ed.drumDoorView()->drumGenView()->rollKey()->onClick(); });
+    f.expect (L[31] + 1.5, "holding a key runs the beat", [&p] { return drumsRunning (p) ? juce::String() : "not running"; });
+    // 32-34: the DAW
+    f.cam (L[32], [&ed] { return inEditor (ed, ed.drumDoorView()).withHeight (110.0f).expanded (10).getUnion (inEditor (ed, &ed.bpmReadout()).expanded (10)); });
+    f.at (L[33] + 0.8, [&p] { setP (p, "daw.drums", 1.0f); });
+    f.at (E[33] + 1.8, [&p] { setP (p, "daw.drums", 0.0f); });
+    f.cam (L[34], [&ed] { return inEditor (ed, ed.drumDoorView()).withHeight (110.0f).expanded (10); });
+    // 35: MPE (played as notes here; the controller's per-note bends are in plugin_check)
+    f.at (L[35] + 0.1, [&ed] { ed.closeKey().onClick(); });
+    f.at (L[35] + 0.2, load ("Lead", "VA Lead"));
+    f.cam (L[35] + 0.3, [&ed] { return inEditor (ed, &ed.keyboardView()).expanded (30, 60); });
+    line (L[35] + 0.4, E[35] + 3.3, 0.5, { 62, 65, 69, 72 });
+    // 36: SAVE
+    f.cam (L[36], [] { return strip(); });
+    f.at (L[36] + 0.8, [&p] { p.saveUserPreset ("Lead", "My Learn Sound"); });
+    f.expect (L[36] + 1.1, "saved as Lead / My Learn Sound", savedAs (p, "Lead", "My Learn Sound"));
+    // 37: help
+    f.at (L[37] + 0.3, [&ed] { ed.helpKey().onClick(); });
+    f.cam (L[37] + 0.3, [] { return whole(); });
+    f.expect (L[37] + 0.8, "help is open", [&ed] { return ed.helpOverlay().isOpen() ? juce::String() : juce::String ("closed"); });
+    f.at (E[37] + 3.5, [&ed] { ed.helpOverlay().close(); });
+    // 38: outro
+    f.at (L[38] + 0.1, load ("Pad", "Warm Pad"));
+    chords (L[38] + 0.2, E[38] + 3.0, 2.0, { { 50, 57, 62, 65 }, { 48, 55, 60, 64 } });
+}
+
 // ---------------------------------------------------------------- the site's opening film (19 Oct, the launch session for the owner:
 // "ru-8 intro sayfasından çıkarıyoruz, bu defa introya jing fang geliyor, benzer bir intro videosu çekelim"): 7.5 s, silent, no type
 // burned in. Close on the three-row keyboard while a line plays on the MICRO rows, then the camera glides back to the whole panel with
@@ -964,7 +1329,8 @@ int main (int argc, char** argv)
     if (argc < 3) { std::fprintf (stderr, "usage: demo_render <1|2|3|e1..e8> <out_dir> [--vertical]\n"); return 2; }
     const juce::String which (argv[1]);
     const bool isExplainer = which.startsWith ("e");
-    vertical = isExplainer || (argc > 3 && juce::String (argv[3]) == "--vertical");
+    wideExplainer = isExplainer && argc > 3 && juce::String (argv[3]) == "--wide";
+    vertical = (isExplainer && ! wideExplainer) || (argc > 3 && juce::String (argv[3]) == "--vertical");
     if (vertical) { W = 1080; H = 1920; }
     if (which == "intro") { introMode = argc > 3 && juce::String (argv[3]) == "tall" ? 2 : 1; vertical = false; W = introMode == 1 ? 1600 : 720; H = introMode == 1 ? 900 : 1280; }
     if (which == "site") { introMode = 5; vertical = false; W = 320; H = 180; siteOut = juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]); }
@@ -1001,9 +1367,9 @@ int main (int argc, char** argv)
         const auto script = juce::JSON::parse (juce::File::getCurrentWorkingDirectory().getChildFile ("marketing/explainers/script.json"));
         film.stem = which; film.explainer = true; film.name = script[which.toRawUTF8()]["title"].toString();
         const int n = which.getTrailingIntValue();
-        if (film.name.isEmpty() || n < 1 || n > 10) { std::fprintf (stderr, "no %s in script.json\n", which.toRawUTF8()); return 2; }
+        if (film.name.isEmpty() || n < 1 || n > 12) { std::fprintf (stderr, "no %s in script.json\n", which.toRawUTF8()); return 2; }
         explainerLines (film, script[which.toRawUTF8()]);
-        void (*fns[]) (Film&, JingFangProcessor&, JingFangEditor&) = { e1, e2, e3, e4, e5, e6, e7, e8, e9, e10 };
+        void (*fns[]) (Film&, JingFangProcessor&, JingFangEditor&) = { e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12 };
         fns[n - 1] (film, proc, *ed);
     }
     else
@@ -1032,7 +1398,7 @@ int main (int argc, char** argv)
     juce::Image frame (juce::Image::ARGB, W, H, true);
     const float devScale = 952.0f / (float) jfui::kH;                      // 16:9: the device 1460 x 952 above a 110 px caption band
     const int devW = juce::roundToInt ((float) jfui::kW * devScale), devX = (W - devW) / 2, devY = 14;
-    const Rect view (0, 290, (float) W, 900);                             // 9:16: the camera's window
+    const Rect view = wideExplainer ? Rect (0, 0, (float) W, (float) H - 170) : Rect (0, 290, (float) W, 900);   // the camera's window (9:16, or 16:9 above the caption band)
     Rect cam = fitAspect (whole(), view.getWidth() / view.getHeight());
     size_t ev = 0, ex = 0, ck = 0;
     std::function<Rect()> camTarget = [] { return whole(); };
@@ -1331,6 +1697,52 @@ int main (int argc, char** argv)
             }
             g.setColour (kGold); g.setFont (jfui::heros (34.0f, false));
             g.drawText ("subverselab.com", juce::Rectangle<int> (70, H - 190, 500, 50), juce::Justification::centredLeft);
+        }
+        else if (wideExplainer)
+        {   // 16:9 narrated: the camera glides to the part being explained; the step's number, title and line in a band below
+            g.fillAll (kGround);
+            Rect target = camTarget ? camTarget() : whole();
+            const Rect want = fitAspect (target.isEmpty() ? whole() : target, view.getWidth() / view.getHeight());
+            const float k = i == 0 ? 1.0f : 0.10f;
+            cam = Rect (cam.getX() + (want.getX() - cam.getX()) * k, cam.getY() + (want.getY() - cam.getY()) * k,
+                        cam.getWidth() + (want.getWidth() - cam.getWidth()) * k, cam.getHeight() + (want.getHeight() - cam.getHeight()) * k);
+            const float sc = view.getWidth() / cam.getWidth();
+            const auto inter = cam.getIntersection (whole()).getSmallestIntegerContainer();
+            if (! inter.isEmpty())
+            {
+                const auto snap = ed->createComponentSnapshot (inter, true, sc);
+                g.saveState();
+                g.reduceClipRegion (view.toNearestInt());
+                g.drawImageAt (snap, juce::roundToInt (view.getX() + ((float) inter.getX() - cam.getX()) * sc), juce::roundToInt (view.getY() + ((float) inter.getY() - cam.getY()) * sc));
+                g.restoreState();
+            }
+            const float bandY = view.getBottom();
+            g.setColour (kGround); g.fillRect (0.0f, bandY, (float) W, (float) H - bandY);
+            g.setColour (kGold.withAlpha (0.35f)); g.fillRect (0.0f, bandY, (float) W, 2.0f);
+            for (auto& c : film.caps)
+                if (t0 >= c.t0 && t0 < c.t1)
+                {
+                    const float a = (float) juce::jlimit (0.0, 1.0, juce::jmin ((t0 - c.t0) / 0.3, (c.t1 - t0) / 0.3));
+                    int x = 60;
+                    if (c.number > 0)
+                    {
+                        g.setColour (kGold.withAlpha (a)); g.fillEllipse (60.0f, bandY + 38.0f, 64.0f, 64.0f);
+                        g.setColour (kGround.withAlpha (a)); g.setFont (jfui::heros (34.0f, true));
+                        g.drawText (juce::String (c.number), juce::Rectangle<int> (60, (int) bandY + 38, 64, 64), juce::Justification::centred);
+                        x = 150;
+                    }
+                    g.setColour (kCream.withAlpha (a)); g.setFont (jfui::heros (44.0f, true));
+                    g.drawText (c.text, juce::Rectangle<int> (x, (int) bandY + 26, W - x - 520, 54), juce::Justification::centredLeft);
+                    g.setColour (kCream.withAlpha (a * 0.72f)); g.setFont (jfui::heros (28.0f, false));
+                    g.drawText (c.sub, juce::Rectangle<int> (x, (int) bandY + 84, W - x - 520, 40), juce::Justification::centredLeft);
+                }
+            if (lockup.isValid())
+            {
+                const float lw = 230.0f, lh = lw * (float) lockup.getHeight() / (float) lockup.getWidth();
+                g.drawImage (lockup, Rect ((float) W - 60.0f - lw, bandY + 40.0f, lw, lh));
+            }
+            g.setColour (kGold); g.setFont (jfui::heros (26.0f, false));
+            g.drawText ("subverselab.com", juce::Rectangle<int> (W - 520, (int) bandY + 100, 460, 36), juce::Justification::centredRight);
         }
         else
         {
