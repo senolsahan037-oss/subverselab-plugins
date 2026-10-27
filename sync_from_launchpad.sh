@@ -82,7 +82,7 @@ rsync -av --prune-empty-dirs --delete \
   --exclude 'build_ui/' --exclude 'out/' --exclude 'marketing/' --exclude 'notes/' \
   --include '*/' \
   --include '/CMakeLists.txt' --include 'Source/***' --include 'tests/*.cpp' --include 'Assets/***' --include 'presets/***' \
-  --include 'tools/svl.cpp' \
+  --include 'tools/svl.cpp' --include 'tools/svl_gen_checks.h' \
   --exclude '*' \
   "$SRC_ROOT/subverselab-studio/" "$DEST_ROOT/subverselab-studio/"
 

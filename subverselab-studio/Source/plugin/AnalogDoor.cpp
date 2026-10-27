@@ -1,10 +1,13 @@
 #include "AnalogDoor.h"
 #include "MidiClip.h"
+#include "GenPanel.h"
 
 namespace jfui
 {
 namespace
 {
+/** a sequencer step's own parameter ("seq.s7.note"), not a unit setting such as "seq.swing" */
+bool isStepId (const juce::String& id) { return id.startsWith ("seq.s") && id.length() > 5 && juce::CharacterFunctions::isDigit (id[5]); }
 /** the CLIP key: drag it onto a DAW track = the pattern as a clip (and arms the PATTERN / MIDI switch, RU-8 rule 3);
     a click without a drag saves the clip to Music/JING FANG/MIDI */
 struct ClipKey : PanelKey
@@ -47,6 +50,7 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
         auto& kn = makeKnob (id, "", partBox (k["c"], (float) (double) k["d"]), this);
         kn.setPrinted (true);
         ++knobCount;
+        if (name == "seq" && isStepId (id)) stepCtl[id] = &kn;
         if (name == "seq" && id.endsWith (".vel"))
         {   // the VEL row is a lane (work order 20 Oct, item 5): the same places carry PROB and RATCH knobs, one lane shown at a time
             const auto pre = id.upToLastOccurrenceOf (".", true, false);
@@ -59,36 +63,18 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
                 lk.setPrinted (true);
                 lk.setVisible (false);
                 lanes[(size_t) l].push_back (&lk);
+                stepCtl[lid] = &lk;
                 ++knobCount;
             }
-        }
-    }
-    if (name == "seq")
-    {   // the lane key sits over the row's printed name; the direction selector in the empty corner left of the step numbers
-        auto* lane = static_cast<PanelKey*> (add (new PanelKey ("VEL"), { 14, 345, 82, 22 }));
-        lane->fontPx = 10.0f;
-        lane->setTooltip ("This row: VEL (how hard each step plays), PROB (the chance a step plays) or RATCH (a step played 1 to 4 times in its length); click for the next");
-        lane->onClick = [this, lane]
-        {
-            shownLane = (shownLane + 1) % 3;
-            static const char* names[] = { "VEL", "PROB", "RATCH" };
-            lane->text = names[shownLane];
-            for (int l = 0; l < 3; ++l) for (auto* kk : lanes[(size_t) l]) kk->setVisible (l == shownLane);
-            lane->repaint();
-        };
-        laneKey = lane;
-        if (has ("seq.direction"))
-        {
-            auto* dir = add (new TypeStepper (proc, "seq.direction"), { 10, 171, 112, 22 });
-            static_cast<TypeStepper*> (dir)->setTooltip ("The order the steps play: forward, reverse, bounce (there and back) or random (the same random every time round)");
         }
     }
     for (auto& s : list ("switches"))
     {
         const auto id = s["id"].toString();
         if (! has (id)) continue;
-        add (new BatSwitch (proc, id, (int) s["positions"], (int) s["up"], (int) s["down"], s.hasProperty ("mid") ? (int) s["mid"] : -1),
-             partBox (s["c"], (float) (double) s["d"]));
+        auto* sw = add (new BatSwitch (proc, id, (int) s["positions"], (int) s["up"], (int) s["down"], s.hasProperty ("mid") ? (int) s["mid"] : -1),
+                        partBox (s["c"], (float) (double) s["d"]));
+        if (name == "seq" && isStepId (id)) stepCtl[id] = sw;
     }
     for (auto& s : list ("selectors"))
     {
@@ -189,6 +175,8 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
         }
         juce::StringArray ids;
         if (auto* a = k["clear"].getArray()) for (auto& id : *a) ids.add (id.toString());
+        if (name == "seq")   // the lanes and chord notes added after the plate's list (PROB / RATCH, GENERATE's chords)
+            for (int st = 1; st <= 16; ++st) for (auto f : { "prob", "ratchet", "c1", "c2", "c3" }) ids.add ("seq.s" + juce::String (st) + "." + f);
         key->onClick = [this, ids]
         {
             proc.armGlide();                                   // product-set values glide (interface signature)
@@ -216,6 +204,25 @@ AnalogDoor::AnalogDoor (JingFangProcessor& p, KnobMaker makeKnob, juce::Rectangl
         if (! has ("drums.on")) break;
         const auto& r = pk["rect"];
         add (new TrackPicker (proc, (int) pk["track"]), { (int) r[0], (int) r[1], (int) r[2], (int) r[3] });
+    }
+    if (name == "seq" && has ("gen.density"))
+    {   // GENERATE (GENERATE_PLAN §8.5): the step field becomes the piano roll; the step keys and LEDs give way to it, each step's
+        // knobs and switches move to the selected step's column
+        for (auto& [i, k] : keys) k->setVisible (false);
+        for (auto& [i, l] : leds) l->setVisible (false);
+        const juce::Rectangle<int> field (8, 166, 1146, 401);   // doors.json seq module 3
+        auto* gp = new SeqGenPanel (proc, makeKnob, stepNow, stepCtl, field.getPosition());
+        add (gp, field);
+        gp->selectStep (0);
+        genPanel = gp;
+    }
+    if (name == "drum" && has ("gen.drum_density"))
+    {
+        // the line between the step numbers and the step keys; the step LEDs there give way (the keys light the playing step)
+        for (auto& [i, l] : leds) l->setVisible (false);
+        auto* dg = new DrumGenBlock (proc, makeKnob);
+        add (dg, { 342, 113, 804, 24 });
+        drumGen = dg;
     }
     layoutDoor();
 }
@@ -274,6 +281,8 @@ void AnalogDoor::tick()
     for (auto& c : owned)
         if (auto* tp = dynamic_cast<TrackPicker*> (c.get()))
             if (const auto n = proc.drumTrackName (tp->track); n != tp->shown) { tp->shown = n; tp->repaint(); }
+    if (genPanel != nullptr) genPanel->tick();
+    if (drumGen != nullptr) drumGen->tick();
     const int s = stepNow ? stepNow() : -1;
     if (s == lastStep) return;
     lastStep = s;

@@ -4,9 +4,12 @@
 // Every control is a host parameter; one the engine does not have is left out (its print stays on the plate).
 #pragma once
 #include "Analog.h"
+#include <map>
 
 namespace jfui
 {
+class SeqGenPanel;
+class DrumGenBlock;
 class AnalogDoor : public juce::Component
 {
 public:
@@ -52,7 +55,12 @@ private:
     std::array<std::vector<Knob*>, 3> lanes;                // SEQ: the VEL row's lanes (VEL, PROB, RATCH), one shown at a time
     int shownLane = 0;
     PanelKey* laneKey = nullptr;
+    std::map<juce::String, juce::Component*> stepCtl;     // SEQ: every step's knobs / switches by id (the GENERATE panel shows one step's)
+    SeqGenPanel* genPanel = nullptr;
+    DrumGenBlock* drumGen = nullptr;
 public:
+    SeqGenPanel* genPanelView() const noexcept { return genPanel; }
+    DrumGenBlock* drumGenView() const noexcept { return drumGen; }
     void showLaneForTest (int l) { while (shownLane != l && laneKey != nullptr) laneKey->onClick(); }
     int laneKnobCount (int l) const { return (int) lanes[(size_t) l].size(); }
 };

@@ -322,6 +322,8 @@ static void applyKit (svl::Engine& e, const svl::Preset& p)
     }
 }
 
+#include "svl_gen_checks.h"
+
 static const char* kPresetFiles[] = { "presets/Init/Init.xml", "presets/Bass/Saw Bass.xml", "presets/Pluck/Glass Pluck.xml",
                                       "presets/Pad/Slow Pad.xml", "presets/Guitar/KS String.xml" };
 
@@ -2060,6 +2062,8 @@ static int selftest (const std::string& outDir)
         }
     }
 
+    gencheck::selftest (R);
+
     R.line ("\nselftest: %d passed, %d failed", R.pass, R.fail);
     if (R.f) std::fclose (R.f);
     return R.fail == 0 ? 0 : 1;
@@ -2082,6 +2086,7 @@ int main (int argc, char** argv)
     }
     if (a.count ("--root")) gRoot = a["--root"];
     if (a.count ("--selftest")) return selftest (a.count ("--out-dir") ? a["--out-dir"] : gRoot + "/out/selftest");
+    if (! pos.empty() && pos[0] == "gen-stats") return gencheck::stats();
     if (! pos.empty() && pos[0] == "write-init" && pos.size() > 1)
     {
         svl::Preset p; p.meta.tags = "init";

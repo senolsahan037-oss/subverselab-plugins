@@ -456,6 +456,7 @@ void JingFangProcessor::timerCallback()
             const float v = exactShared[(size_t) i].load();
             if (juce::roundToInt (raw[(size_t) i]->load()) != juce::roundToInt (v)) setHostValue (i, v);
         }
+    genFollowKnobs();
 }
 
 void JingFangProcessor::setHostValue (int i, float plain)
@@ -631,6 +632,7 @@ bool JingFangProcessor::loadPresetXml (const juce::String& xml, int index)
     if (! svl::presetFromXml (xml.toStdString(), p)) return false;
     readDrumKit (p);                                           // a preset without a kit plays the default kit
     pushPreset (p.params, p.meta, p.params, index);
+    genReadXml (xml);                                          // the seeds it was rolled with (shown); nothing is live until a roll
     return true;
 }
 
@@ -697,7 +699,8 @@ int JingFangProcessor::sectionOf (const std::string& id)
     if (starts ("fm.")) return 9;
     if (starts ("tuning.")) return 10;
     if (starts ("fx.")) return 11;
-    if (starts ("arp.") || starts ("seq.")) return 12;
+    if (starts ("gen.drum_")) return 13;                       // GENERATE's settings travel with the unit they write
+    if (starts ("arp.") || starts ("seq.") || starts ("gen.")) return 12;
     if (starts ("drums.")) return 13;
     return -1;
 }
@@ -790,7 +793,7 @@ juce::String JingFangProcessor::stateXml() const
     juce::String base;
     for (int i = 0; i < svl::kNumParams; ++i)
         base << "  <base id=\"" << svl::paramDefs()[(size_t) i].id << "\" value=\"" << svl::valueToString (i, loadedBase[i]) << "\"/>\n";
-    return xml.replace ("</svlpreset>", base + slotsXmlLine() + "  <tempo bpm=\"" + juce::String (userBpm.load(), 2) + "\"/>\n" + labStateXml (labMsg)
+    return xml.replace ("</svlpreset>", base + slotsXmlLine() + genXmlLine() + "  <tempo bpm=\"" + juce::String (userBpm.load(), 2) + "\"/>\n" + labStateXml (labMsg)
                        + (labByPreset ? "  <labtuning a=\"" + labPresetId + "\" restore=\"1\"/>\n" : juce::String()) + "</svlpreset>");
 }
 
@@ -806,7 +809,7 @@ juce::File JingFangProcessor::saveUserPreset (const juce::String& family, const 
     const auto file = folder.getChildFile (safe (name) + ".xml");
     // the preset file carries where each panel came from (svl render ignores the line)
     const juce::String labLine = labByPreset && labMsg.on ? "  <labtuning a=\"" + labPresetId + "\"/>\n" : juce::String();
-    if (! file.replaceWithText (juce::String (svl::presetToXml (p)).replace ("</svlpreset>", slotsXmlLine() + labLine + "</svlpreset>"))) return {};
+    if (! file.replaceWithText (juce::String (svl::presetToXml (p)).replace ("</svlpreset>", slotsXmlLine() + genXmlLine() + labLine + "</svlpreset>"))) return {};
     loadedMeta = p.meta;
     loadedBase = p.params;
     const auto slotRefs = slotsXmlLine();                     // the slots by name: the rescan re-sorts the list
@@ -861,6 +864,7 @@ void JingFangProcessor::applyStateXml (const juce::String& xml)
     slots.fill (index);
     readSlots (xml);
     readDrumKit (p);
+    genReadXml (xml);
     {
         const auto t = svl::detail::elements (xml.toStdString(), "tempo");
         if (! t.empty()) setUserBpm (juce::String (svl::detail::attr (t.front(), "bpm")).getFloatValue());

@@ -80,15 +80,16 @@ juce::MidiFile make (const JingFangProcessor& p, int unit)
         gen->setTransport (false, false, 0);
         if (arp) gen->keyOn (1, 60, 0, 0.8f);
         const int64_t total = (int64_t) std::llround (totalBeats * spb);
-        std::map<int, std::pair<int, double>> open;      // generated id -> key, tick
-        const float bendRange = std::max (0.01f, ps[svl::V_BEND]);   // semitones (voice.bend)
-        int bend = 8192;
+        // pass 1: the notes the arp / sequencer play (key, the row as a fraction of a semitone, ticks)
+        struct Ev { int key; float row; int vel; double on, off; };
+        std::vector<Ev> evs;
+        std::map<int, size_t> open;                            // generated id -> index in evs
         auto tickOf = [&] (int64_t s) { return std::round ((double) s / spb * kPpq); };
         auto close = [&] (int id, double tick)
         {
             auto it = open.find (id);
             if (it == open.end()) return;
-            seq.addEvent (juce::MidiMessage::noteOff (ch, it->second.first), std::max (it->second.second + 1, tick - 1));
+            evs[it->second].off = std::max (evs[it->second].on + 1, tick - 1);
             open.erase (it);
         };
         int64_t t = 0;
@@ -100,23 +101,52 @@ juce::MidiFile make (const JingFangProcessor& p, int unit)
                 const double tick = tickOf (t);
                 if (g.kind == svl::GenNote::off) { close (g.id, tick); continue; }
                 if (g.kind == svl::GenNote::slide) close (g.prevId, tick + 2);   // a slide: the two notes overlap (legato in the DAW)
-                // g.add = the arp's octaves (12 each) + the step's ROW (a grid step up or down): the octaves go into the key, the row
-                // becomes a pitch bend at JING FANG's bend range, so the clip played back into JING FANG sounds what the sequencer plays
+                // g.add = the arp's octaves (12 each) + the step's ROW (a grid step up or down): the octaves go into the key
                 const int oct = juce::roundToInt (g.add / 12.0f);
                 const float row = g.add - 12.0f * (float) oct;
                 const int key = (g.key >= 0 ? g.key : juce::roundToInt (g.pitch)) + 12 * oct;
                 if (key < 0 || key > 127) continue;
-                const int wantBend = juce::jlimit (0, 16383, 8192 + juce::roundToInt (row / bendRange * 8192.0f));
-                if (wantBend != bend) { seq.addEvent (juce::MidiMessage::pitchWheel (ch, wantBend), std::max (0.0, tick - 1)); bend = wantBend; }
-                seq.addEvent (juce::MidiMessage::noteOn (ch, key, (juce::uint8) juce::jlimit (1, 127, juce::roundToInt (g.vel * 127.0f))), tick);
-                open[g.id] = { key, tick };
+                open[g.id] = evs.size();
+                evs.push_back ({ key, row, juce::jlimit (1, 127, juce::roundToInt (g.vel * 127.0f)), tick, -1 });
             }
             const int64_t n = juce::jlimit ((int64_t) 1, total - t, (int64_t) gen->samplesToNext());
             gen->advance ((int) juce::jmin<int64_t> (n, 1 << 30));
             t += n;
         }
         while (! open.empty()) close (open.begin()->first, totalBeats * kPpq);
-        if (bend != 8192) seq.addEvent (juce::MidiMessage::pitchWheel (ch, 8192), totalBeats * kPpq - 1);   // the clip ends unbent
+        // pass 2: plain notes when nothing is raised or lowered (no pitch bend at all); with micro steps MPE, so every note keeps
+        // its own cents, chords too (GENERATE_PLAN §7a: one shared channel bend lost the lowered note of a chord by 22.6 ct)
+        bool micro = false;
+        for (auto& e : evs) micro |= std::abs (e.row) > 1.0e-4f;
+        if (! micro)
+        {
+            for (auto& e : evs)
+            {
+                seq.addEvent (juce::MidiMessage::noteOn (ch, e.key, (juce::uint8) e.vel), e.on);
+                seq.addEvent (juce::MidiMessage::noteOff (ch, e.key), e.off);
+            }
+        }
+        else
+        {
+            constexpr float kMpeRange = 48.0f;               // the MPE default for member channels, announced by RPN 0 anyway
+            auto cc = [&] (int c, int n, int v) { seq.addEvent (juce::MidiMessage::controllerEvent (c, n, v), 0); };
+            cc (1, 101, 0); cc (1, 100, 6); cc (1, 6, 15);   // MPE configuration: lower zone, members 2..16
+            for (int c = 2; c <= 16; ++c) { cc (c, 101, 0); cc (c, 100, 0); cc (c, 6, (int) kMpeRange); cc (c, 38, 0); cc (c, 101, 127); cc (c, 100, 127); }
+            std::array<double, 17> freeAt; freeAt.fill (-1.0);
+            int rr = 0;
+            for (auto& e : evs)
+            {   // the member channel that has been free longest (round robin among the free ones)
+                int chosen = -1;
+                for (int i = 0; i < 15 && chosen < 0; ++i) { const int c = 2 + (rr + i) % 15; if (freeAt[(size_t) c] <= e.on) chosen = c; }
+                if (chosen < 0) { chosen = 2; for (int c = 3; c <= 16; ++c) if (freeAt[(size_t) c] < freeAt[(size_t) chosen]) chosen = c; }
+                rr = (chosen - 2 + 1) % 15;
+                freeAt[(size_t) chosen] = e.off + 1;
+                const int bend = juce::jlimit (0, 16383, 8192 + juce::roundToInt (e.row / kMpeRange * 8192.0f));
+                seq.addEvent (juce::MidiMessage::pitchWheel (chosen, bend), e.on);
+                seq.addEvent (juce::MidiMessage::noteOn (chosen, e.key, (juce::uint8) e.vel), e.on);
+                seq.addEvent (juce::MidiMessage::noteOff (chosen, e.key), e.off);
+            }
+        }
     }
     seq.addEvent (juce::MidiMessage::endOfTrack(), totalBeats * kPpq);
     seq.updateMatchedPairs();

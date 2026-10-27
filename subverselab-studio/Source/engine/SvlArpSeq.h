@@ -74,6 +74,8 @@ public:
             st.on = p[stepParam (s, S_ON)] > 0.5f; st.note = (int) std::lround (p[stepParam (s, S_NOTE)]);
             st.row = (int) p[stepParam (s, S_ROW)]; st.vel = p[stepParam (s, S_VEL)]; st.gate = p[stepParam (s, S_GATE)];
             st.slide = p[stepParam (s, S_SLIDE)] > 0.5f; st.accent = p[stepParam (s, S_ACCENT)] > 0.5f;
+            st.numChord = 0;
+            for (int c = 0; c < 3; ++c) { const int ck = (int) std::lround (p[stepChordParam (s, c)]); if (ck > 0) st.chord[(size_t) st.numChord++] = ck; }
         }
         const double len = kStepRateBeats[seqOn ? (int) p[SEQ_RATE] : (int) p[ARP_RATE]];
         const double sw = seqOn ? p[SEQ_SWING] : p[ARP_SWING];
@@ -185,7 +187,8 @@ public:
 private:
     static constexpr int kMaxKeys = 32, kMaxList = kMaxKeys * 5 * 4, kMaxOffs = 160, kMaxQ = 96;
     struct Key { int id = -1, key = -1; float pitch = 0, vel = 1; int64_t order = 0; };
-    struct Step { bool on = true; int note = 0, row = 1; float vel = 0.8f, gate = 0.6f; bool slide = false, accent = false; float prob = 1; int ratchet = 1; };
+    struct Step { bool on = true; int note = 0, row = 1; float vel = 0.8f, gate = 0.6f; bool slide = false, accent = false; float prob = 1; int ratchet = 1;
+                 std::array<int, 3> chord {}; int numChord = 0; };   // chord: keys above the step's note (GENERATE), played with it
     // the step a grid position k plays (direction lane); random and the probability are hashes of k, so they never depend on
     // the block size or on where a render starts, and a bar plays the same way every time it comes round
     static uint64_t mix64 (uint64_t x) { x += 0x9E3779B97F4A7C15ull; x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull; x = (x ^ (x >> 27)) * 0x94D049BB133111EBull; return x ^ (x >> 31); }
@@ -405,7 +408,9 @@ private:
             if (arpOn) { if (! nextArp (base, oct)) return; }
             else if (seqFree) { base.key = 60; }
             else { if (setSize() == 0) return; base = set()[setSize() - 1]; }   // the last key pressed
-            hit (base, st.note, addRow + 12.0f * (float) oct, velS, st.slide);
+            // a step with chord notes plays them with its note, the same row and velocity (a chord never slides)
+            hit (base, st.note, addRow + 12.0f * (float) oct, velS, st.numChord > 0 ? false : st.slide);
+            for (int c = 0; c < st.numChord; ++c) hit (base, st.note + st.chord[(size_t) c], addRow + 12.0f * (float) oct, velS, false);
             return;
         }
         if (arpMode == 5)

@@ -8,6 +8,7 @@
 #include <JuceHeader.h>
 #include "SvlEngine.h"
 #include "SvlPreset.h"
+#include "SvlGen.h"
 #include "MpeState.h"
 #include "tuning/TuningLearn.h"
 #include "tuning/TuningBuiltin.h"
@@ -149,6 +150,21 @@ public:
     static juce::String labStateXml (const LabState&);
     static bool labStateFromXml (const juce::String& xml, LabState&);
 
+    // ---- GENERATE (docs/GENERATE_PLAN.md §8; message thread). Unit 0 = SEQ door, 1 = DRUM door.
+    struct GenEntry { int r = 0, n = 0; svl::gen::SeqPattern seq; svl::gen::DrumPattern drum; };
+    struct GenUnit { std::vector<GenEntry> hist; int pos = -1; bool lockR = false, lockN = false, live = false; int r = -1, n = -1, skipped = 0; };
+    /** the dice: new seeds (a locked one stays), through the repetition filter and MUTATE, written as one undoable gesture per value */
+    void genRoll (int unit, int which = 0);   // which: 0 both seeds new, 1 a new rhythm (notes kept), 2 new notes (rhythm kept)
+    /** < >: back / forward through the last rolls (the pattern as it was rolled) */
+    void genHistory (int unit, int delta);
+    void genSetLock (int unit, bool notes, bool on) { auto& u = genUnits[(size_t) juce::jlimit (0, 1, unit)]; (notes ? u.lockN : u.lockR) = on; }
+    const GenUnit& genUnit (int unit) const { return genUnits[(size_t) juce::jlimit (0, 1, unit)]; }
+    svl::gen::Role genRole() const;                               // what the SEQ door writes for the loaded sound
+    bool genMicroAllowed() const;                                 // the keyboard on MICRO and the Lab off
+    juce::String genWrites (int unit) const;                      // "MELODY · DORIAN", "BEAT · BREAKBEAT"
+    svl::gen::SeqPattern genCurrentSeq() const;                   // the steps as they are now (user edits included)
+    void genSeedRandomForTest (juce::int64 s) { genRandom.setSeed (s); }
+
     // ---- tests
     void runMessageWorkForTest() { timerCallback(); }
     const svl::ParamSet& engineParamsForTest() const noexcept { return engine.getParams(); }
@@ -233,6 +249,17 @@ private:
     void applyStateXml (const juce::String& xml);
     std::shared_ptr<int> labAlive = std::make_shared<int> (0);  // learn results check it before touching the processor
     juce::ThreadPool labPool { 1 };
+
+    std::array<GenUnit, 2> genUnits;
+    juce::Random genRandom;
+    std::array<float, 9> genKnobsSeen {};                      // gen.* values last applied: a moved knob re-writes the same seeds
+    svl::gen::Settings genSettings (int unit) const;
+    svl::gen::Scale genScale() const;                          // the Lab's degrees, or empty (the generator picks a 12-key scale)
+    std::array<svl::gen::Drum, svl::kDrumTracks> genKit() const;
+    void genWrite (int unit, const GenEntry&);
+    void genFollowKnobs();                                     // timer
+    juce::String genXmlLine() const;
+    void genReadXml (const juce::String& xml);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JingFangProcessor)
 };

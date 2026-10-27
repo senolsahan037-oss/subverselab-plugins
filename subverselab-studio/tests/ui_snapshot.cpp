@@ -13,6 +13,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "MidiClip.h"
+#include "GenPanel.h"
 #include <cstdio>
 #include <set>
 
@@ -223,6 +224,8 @@ int main (int argc, char** argv)
         covered.add ("fx.echo.time");                                                              // TypeStepper
         covered.add ("fx.mod.type"); covered.add ("fx.echo.type");                                 // FX door TypeSteppers
         covered.add ("seq.direction");                                                             // SEQ door TypeStepper
+        covered.add ("gen.scale");                                                                 // SEQ door GENERATE TypeStepper
+        for (int st = 1; st <= 16; ++st) for (int c = 1; c <= 3; ++c) covered.add ("seq.s" + juce::String (st) + ".c" + juce::String (c));   // piano roll: shift-click
         for (auto id : { "filter.mode", "drum.mode", "drum.one_shot", "voice.mode", "tuning.keyswitch", "tuning.mode" }) covered.add (id);   // segments, NORMAL / MICRO
         for (int pc = 0; pc < 12; ++pc) covered.add (juce::String ("tuning.row.") + svl::kPitchClassIds[pc]);   // keyboard click / keyswitches
         covered.add ("fm.target");                                                                                 // segments
@@ -329,15 +332,31 @@ int main (int argc, char** argv)
         const double cyc = len * svl::kStepRateBeats[(int) proc.exactValue (svl::SEQ_RATE)];
         check (sn == juce::roundToInt (seqOn * sb * 4 / cyc) && std::abs (sEnd - sb * 4 * 96) < 0.5,
                "SEQ clip of Climbing Acid: " + juce::String (sn) + " notes over " + juce::String (sb) + " bar(s) = every step that is on (" + juce::String (seqOn) + " of " + juce::String (len) + ")");
-        // a step's ROW goes into the clip as a pitch bend (one step of 53 at the bend range), the arp's octaves into the keys
+        // a step's ROW: no micro step = plain notes, no pitch bend; with one = MPE (MCM, a member channel per note, its own bend at
+        // 48 st), so a chord keeps each note's cents (GENERATE_PLAN §7a); the arp's octaves go into the keys
         {
+            auto bendsOf = [] (const juce::MidiFile& f, int& bends, int& mcm, int& firstBend, std::set<int>& chans)
+            {
+                bends = mcm = 0; firstBend = -1;
+                const auto* t = f.getTrack (0);
+                for (int i = 0; i < t->getNumEvents(); ++i)
+                {
+                    const auto& m = t->getEventPointer (i)->message;
+                    if (m.isPitchWheel()) { ++bends; if (firstBend < 0 && m.getPitchWheelValue() != 8192) firstBend = m.getPitchWheelValue(); }
+                    if (m.isController() && m.getChannel() == 1 && m.getControllerNumber() == 6 && m.getControllerValue() == 15) ++mcm;
+                    if (m.isNoteOn()) chans.insert (m.getChannel());
+                }
+            };
+            int b0, m0, f0; std::set<int> c0;
+            bendsOf (jfclip::make (proc, 0), b0, m0, f0, c0);
+            check (b0 == 0 && m0 == 0 && c0 == std::set<int> { 1 }, "no micro step: plain notes on channel 1, " + juce::String (b0) + " pitch bends");
             setP ("seq.s1.row", 2.0f);
-            const auto f = jfclip::make (proc, 0);
-            int want = 8192 + juce::roundToInt ((12.0f / proc.exactValue (svl::TUNE_EDO) * proc.exactValue (svl::ROW_UP)) / proc.exactValue (svl::V_BEND) * 8192.0f), got = -1;
-            const auto* t = f.getTrack (0);
-            for (int i = 0; i < t->getNumEvents() && got < 0; ++i) if (t->getEventPointer (i)->message.isPitchWheel()) got = t->getEventPointer (i)->message.getPitchWheelValue();
+            int b1, m1, f1; std::set<int> c1;
+            bendsOf (jfclip::make (proc, 0), b1, m1, f1, c1);
+            const int want = 8192 + juce::roundToInt ((12.0f / proc.exactValue (svl::TUNE_EDO) * proc.exactValue (svl::ROW_UP)) / 48.0f * 8192.0f);
             setP ("seq.s1.row", 1.0f);
-            check (got == want, "a step on the high row is a pitch bend in the clip (" + juce::String (got) + ", want " + juce::String (want) + ")");
+            check (m1 == 1 && f1 == want && c1.count (1) == 0 && c1.size() > 1,
+                   "a step on the high row: MPE clip (MCM " + juce::String (m1) + ", member channels " + juce::String ((int) c1.size()) + ", bend " + juce::String (f1) + ", want " + juce::String (want) + ")");
             for (size_t i = 0; i < proc.presets().size(); ++i) if (proc.presets()[i].family == "Arp - Classic" && proc.presets()[i].name == "Up Down Two Octaves") idx = (int) i;
             proc.loadPresetIndex (idx);
             { juce::AudioBuffer<float> b (2, 512); juce::MidiBuffer m; proc.processBlock (b, m); }
@@ -560,18 +579,85 @@ int main (int argc, char** argv)
         check (ed->closeKey().isVisible() && ed->seqDoorView()->getBounds().contains (ed->closeKey().getBounds().getCentre()),
                "an open door shows its CLOSE key on its bottom edge");
         snap (*ed, "front_seq.png");
-        {   // the VEL row's lanes (work order item 5): PROB and RATCH in the same places, one lane at a time
+        {   // GENERATE (GENERATE_PLAN §8): the piano roll + strip replace the knob field; the selected step's controls in its column
             auto* sd = ed->seqDoorView();
-            const int v = sd->laneKnobCount (0), pr = sd->laneKnobCount (1), ra = sd->laneKnobCount (2);
-            sd->showLaneForTest (1);
-            int shown = 0;
-            for (auto& k : ed->allKnobs()) if (k->getParentComponent() == sd && k->isVisible() && k->paramId().endsWith (".prob")) ++shown;
-            int velShown = 0;
-            for (auto& k : ed->allKnobs()) if (k->getParentComponent() == sd && k->isVisible() && k->paramId().endsWith (".vel")) ++velShown;
-            snap (*ed, "front_seq_prob.png");
-            sd->showLaneForTest (0);
-            check (v == 16 && pr == 16 && ra == 16 && shown == 16 && velShown == 0,
-                   "SEQ lanes: VEL / PROB / RATCH " + juce::String (v) + " / " + juce::String (pr) + " / " + juce::String (ra) + " knobs; PROB shows 16, VEL hidden while it does");
+            auto* gp = sd->genPanelView();
+            check (gp != nullptr && gp->isVisible() && gp->roll().isVisible(), "SEQ door: the GENERATE panel and the piano roll are there");
+            auto visibleStepKnobs = [&] (int step)
+            {
+                int mine = 0, others = 0;
+                for (auto& k : ed->allKnobs())
+                    if (k->getParentComponent() == sd && k->paramId().startsWith ("seq.s") && juce::CharacterFunctions::isDigit (k->paramId()[5]) && k->isVisible())
+                        (k->paramId().startsWith ("seq.s" + juce::String (step + 1) + ".") ? mine : others)++;
+                return std::make_pair (mine, others);
+            };
+            gp->selectStep (4); for (int i = 0; i < 3; ++i) ed->tickForTest();
+            const auto [mine, others] = visibleStepKnobs (4);
+            check (mine == 5 && others == 0, "the selected step's column: step 5's NOTE / VEL / GATE / PROB / RATCH knobs shown (" + juce::String (mine) + "), no other step's (" + juce::String (others) + ")");
+            gp->selectStep (0);
+            auto pump2 = [&] { juce::AudioBuffer<float> b (2, 512); juce::MidiBuffer m; proc.processBlock (b, m); proc.runMessageWorkForTest(); for (int i = 0; i < 3; ++i) ed->tickForTest(); };
+            auto steps = [&]
+            {
+                int on = 0, chordSteps = 0, micro = 0;
+                for (int st = 1; st <= 16; ++st)
+                {
+                    const juce::String p = "seq.s" + juce::String (st) + ".";
+                    if (proc.apvts.getRawParameterValue (p + "on")->load() < 0.5f) continue;
+                    ++on;
+                    if (proc.apvts.getRawParameterValue (p + "c1")->load() > 0.5f) ++chordSteps;
+                    if (juce::roundToInt (proc.apvts.getRawParameterValue (p + "row")->load()) != 1) ++micro;
+                }
+                return std::array<int, 3> { on, chordSteps, micro };
+            };
+            proc.genSeedRandomForTest (2026);
+            proc.loadPresetIndex (presetIndex (proc, "Lead", "Bright Saw Lead")); pump2();
+            gp->key ("ROLL")->onClick(); pump2();
+            const auto lead = steps();
+            const auto first = proc.genCurrentSeq();
+            check (lead[0] >= 3 && lead[1] == 0 && lead[2] == 0 && proc.genWrites (0).startsWith ("MELODY"),
+                   "a Lead preset writes a melody: " + juce::String (lead[0]) + " notes, " + juce::String (lead[1]) + " chord steps, " + juce::String (lead[2]) + " micro steps (NORMAL), " + proc.genWrites (0));
+            snap (*ed, "front_seq.png");
+            gp->key ("ROLL")->onClick(); pump2();
+            const auto second = proc.genCurrentSeq();
+            const float d = svl::gen::distance (first, second);
+            check (d >= svl::gen::kMinDistance, "two rolls in a row differ: distance " + juce::String (d, 2) + " (want >= " + juce::String (svl::gen::kMinDistance, 2) + ")");
+            proc.genHistory (0, -1); pump2();
+            check (proc.genCurrentSeq() == first, "< brings the roll before back exactly");
+            const int r0 = proc.genUnit (0).r, n0 = proc.genUnit (0).n;
+            gp->key ("NOTES")->onClick(); pump2();
+            check (proc.genUnit (0).r == r0 && proc.genUnit (0).n != n0, "NOTES: the RHYTHM seed stays (" + juce::String (r0) + "), the NOTES seed changes");
+            {   // DENSITY after a roll: the same pattern, more notes
+                const auto before = proc.genCurrentSeq();
+                jfui::setParamGesture (proc.apvts.getParameter ("gen.density"), 0.9f); pump2(); pump2();
+                const auto after = proc.genCurrentSeq();
+                int kept = 0, was = 0, now = 0;
+                for (int st = 0; st < 16; ++st) { was += before.s[(size_t) st].on; now += after.s[(size_t) st].on; kept += before.s[(size_t) st].on && after.s[(size_t) st].on; }
+                jfui::setParamGesture (proc.apvts.getParameter ("gen.density"), 0.5f); pump2();
+                check (now > was && kept == was, "DENSITY 0.5 -> 0.9 after a roll: " + juce::String (was) + " -> " + juce::String (now) + " notes, every earlier one kept (" + juce::String (kept) + ")");
+            }
+            proc.loadPresetIndex (presetIndex (proc, "Pad", "Warm Pad")); pump2();
+            gp->key ("ROLL")->onClick(); pump2();
+            const auto pad = steps();
+            check (pad[0] >= 2 && pad[1] == pad[0] && proc.genWrites (0).startsWith ("CHORDS"),
+                   "a Pad preset writes chords: " + juce::String (pad[0]) + " steps, " + juce::String (pad[1]) + " with chord notes, " + proc.genWrites (0));
+            snap (*ed, "front_seq_pad.png");
+            {   // the chords sound: one cycle through the engine has 3+ notes at once
+                int most = 0;
+                juce::AudioBuffer<float> b (2, 512); juce::MidiBuffer m;
+                m.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0);
+                for (int i = 0; i < 200; ++i) { proc.processBlock (b, m); m.clear(); most = juce::jmax (most, proc.live().voices); }
+                m.addEvent (juce::MidiMessage::noteOff (1, 60), 0); proc.processBlock (b, m);
+                check (most >= 3, "the written chords play: up to " + juce::String (most) + " voices at once with one key held");
+            }
+            auto* micro = proc.apvts.getParameter ("tuning.mode");
+            proc.loadPresetIndex (presetIndex (proc, "Lead", "Bright Saw Lead")); pump2();
+            jfui::setParamGesture (micro, 1.0f); jfui::setParamGesture (proc.apvts.getParameter ("gen.micro"), 1.0f); pump2();
+            int microSteps = 0;
+            for (int i = 0; i < 6; ++i) { gp->key ("ROLL")->onClick(); pump2(); microSteps += steps()[2]; }
+            check (microSteps > 0, "MICRO: raised / lowered steps written (" + juce::String (microSteps) + " in 6 rolls)");
+            snap (*ed, "front_seq_micro.png");
+            jfui::setParamGesture (micro, 0.0f); pump2();
+            proc.loadPresetIndex (presetIndex (proc, "Init", "Init")); pump2();
         }
         {   // CLEAR: a changed step goes back to its default
             auto* note = proc.apvts.getParameter ("seq.s3.note");
@@ -611,6 +697,21 @@ int main (int argc, char** argv)
             bool ok = oct != nullptr && sel != nullptr && sel->index() == 2;
             if (ok) { jfui::setParamGesture (oct, 1.0f); ok = sel->index() == 3; jfui::setParamGesture (oct, -2.0f); ok = ok && sel->index() == 0; jfui::setParamGesture (oct, 0.0f); }
             check (ok, "the drum OCT selector shows -2..+2 at its five positions");
+        }
+        if (auto* dg = ed->drumDoorView()->drumGenView())
+        {   // GENERATE on the DRUM door: ROLL writes a beat for the kit (the kick on step 1), right-click ROLL = the beat before
+            auto pumpD = [&] { juce::AudioBuffer<float> b (2, 512); juce::MidiBuffer m; proc.processBlock (b, m); proc.runMessageWorkForTest(); for (int i = 0; i < 3; ++i) ed->tickForTest(); };
+            auto hits = [&]
+            {
+                int n = 0; for (int t = 1; t <= 8; ++t) for (int st = 1; st <= 16; ++st) n += proc.apvts.getRawParameterValue ("drums.t" + juce::String (t) + ".s" + juce::String (st))->load() > 0.5f;
+                return n;
+            };
+            dg->rollKey()->onClick(); pumpD();
+            const int h1 = hits(); const bool kick = proc.apvts.getRawParameterValue ("drums.t1.s1")->load() > 0.5f;
+            const auto w1 = proc.genWrites (1);
+            dg->rollKey()->onClick(); pumpD();
+            proc.genHistory (1, -1); pumpD();
+            check (h1 >= 6 && kick && hits() == h1 && w1.startsWith ("BEAT") && w1.length() > 8, "DRUM ROLL: " + juce::String (h1) + " hits, kick on step 1, " + w1 + "; the beat before comes back (" + juce::String (hits()) + ")");
         }
         snap (*ed, "front_drum.png");
         ed->labKey().onClick(); settle();

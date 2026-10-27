@@ -30,6 +30,7 @@ inline const char* const kSeqModeNames[] = { "hold", "free" };
 inline const char* const kDrumStepNames[] = { "off", "on", "accent" };
 inline const char* const kDrumModeNames[] = { "hold", "free" };
 // arp.chord: every held key is expanded to this shape (intervals in keys, so they resolve through the tuning table)
+inline const char* const kGenScaleNames[] = { "auto", "minor", "dorian", "phrygian", "major", "mixolydian", "harmonic minor", "minor pentatonic", "major pentatonic" };
 inline const char* const kArpChordNames[] = { "off", "oct", "5th", "maj", "min", "sus2", "sus4", "maj7", "min7", "dom7", "add9", "min9" };
 inline const int kArpChordShapes[12][5] = { { 0 }, { 0, 12 }, { 0, 7 }, { 0, 4, 7 }, { 0, 3, 7 }, { 0, 2, 7 }, { 0, 5, 7 }, { 0, 4, 7, 11 },
                                             { 0, 3, 7, 10 }, { 0, 4, 7, 10 }, { 0, 4, 7, 14 }, { 0, 3, 7, 10, 14 } };
@@ -78,6 +79,11 @@ enum Param : int
     SEQ_DIR,
     SEQ_PROB_BASE, SEQ_PROB_END = SEQ_PROB_BASE + 16 - 1,
     SEQ_RATCH_BASE, SEQ_RATCH_END = SEQ_RATCH_BASE + 16 - 1,
+    // GENERATE (docs/GENERATE_PLAN.md §8): per step up to three chord notes (keys above the step's note, 0 = none), and the
+    // generator's settings (read by the plug-in's generator, not by the engine). Appended: earlier indices keep their numbers
+    SEQ_CHORD_BASE, SEQ_CHORD_END = SEQ_CHORD_BASE + 16 * 3 - 1,
+    GEN_DENSITY, GEN_COMPLEX, GEN_MUTATE, GEN_RANGE, GEN_MICRO, GEN_SCALE,
+    GEN_DRUM_DENSITY, GEN_DRUM_COMPLEX, GEN_DRUM_MUTATE,
     kNumParams
 };
 
@@ -94,6 +100,7 @@ enum StepField : int { S_ON, S_NOTE, S_ROW, S_VEL, S_GATE, S_SLIDE, S_ACCENT, kS
 constexpr int stepParam (int step, StepField f) { return SEQ_STEP_BASE + step * kStepFields + f; }
 constexpr int stepProbParam (int step) { return SEQ_PROB_BASE + step; }
 constexpr int stepRatchetParam (int step) { return SEQ_RATCH_BASE + step; }
+constexpr int stepChordParam (int step, int i) { return SEQ_CHORD_BASE + step * 3 + i; }
 constexpr int kDrumTracks = 8, kDrumSteps = 16;
 enum DrumTrackField : int { DT_LEVEL, DT_PAN, DT_TUNE, DT_DECAY, DT_MUTE, kDrumTrackFields };
 constexpr int drumTrackParam (int track, DrumTrackField f) { return DRUM_TRACK_BASE + track * kDrumTrackFields + f; }
@@ -322,6 +329,18 @@ inline const std::array<ParamDef, kNumParams>& paramDefs()
             F (stepProbParam (st), p + "prob", 0, 1, 1, "");
             F (stepRatchetParam (st), p + "ratchet", 1, 4, 1, "x");
         }
+        for (int st = 0; st < kSeqSteps; ++st)
+            for (int c = 0; c < 3; ++c)
+                F (stepChordParam (st, c), "seq.s" + std::to_string (st + 1) + ".c" + std::to_string (c + 1), 0, 24, 0, "keys");
+        F (GEN_DENSITY, "gen.density", 0, 1, 0.5f, "");
+        F (GEN_COMPLEX, "gen.complexity", 0, 1, 0.4f, "");
+        F (GEN_MUTATE, "gen.mutate", 0, 1, 1, "");
+        F (GEN_RANGE, "gen.range", 5, 24, 12, "keys");
+        F (GEN_MICRO, "gen.micro", 0, 1, 0.5f, "");
+        E (GEN_SCALE, "gen.scale", kGenScaleNames, 9, 0);
+        F (GEN_DRUM_DENSITY, "gen.drum_density", 0, 1, 0.5f, "");
+        F (GEN_DRUM_COMPLEX, "gen.drum_complexity", 0, 1, 0.4f, "");
+        F (GEN_DRUM_MUTATE, "gen.drum_mutate", 0, 1, 1, "");
         return d;
     }();
     return defs;

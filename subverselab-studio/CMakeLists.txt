@@ -11,7 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-project(SVL VERSION 1.1.0 LANGUAGES C CXX)
+project(SVL VERSION 1.2.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -67,6 +67,14 @@ if(SVL_BUILD_PLUGIN)
         VST3_CATEGORIES Instrument Synth
         AU_MAIN_TYPE kAudioUnitType_MusicDevice)
     juce_generate_juce_header(JingFang)
+    # JUCE writes Contents/Resources/moduleinfo.json after its ad-hoc signature, which breaks the seal: Live refused the local
+    # 1.1.0 copies ("a sealed resource is missing or invalid", 24 Oct). Sign again after the manifest step (local builds only;
+    # make_mac_installer.sh signs releases with the Developer ID anyway).
+    if(APPLE AND TARGET JingFang_VST3)
+        add_custom_command(TARGET JingFang_VST3 POST_BUILD
+            COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:JingFang_VST3>"
+            COMMENT "re-sign JING FANG.vst3 after moduleinfo.json")
+    endif()
 
     # Panel typefaces and the SubverseLab marks, compiled in.
     juce_add_binary_data(JingFangAssets HEADER_NAME BinaryData.h NAMESPACE BinaryData SOURCES
@@ -84,7 +92,7 @@ if(SVL_BUILD_PLUGIN)
     set_target_properties(JingFangPresets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     set(JF_SOURCES Source/plugin/PluginProcessor.cpp Source/plugin/PluginEditor.cpp Source/plugin/Ui.cpp Source/plugin/Keyboard.cpp
-        Source/plugin/Dragon.cpp Source/plugin/PatchBay.cpp Source/plugin/Scopes.cpp Source/plugin/AnalogDoor.cpp Source/plugin/Analog.cpp Source/plugin/MidiClip.cpp
+        Source/plugin/Dragon.cpp Source/plugin/PatchBay.cpp Source/plugin/Scopes.cpp Source/plugin/AnalogDoor.cpp Source/plugin/Analog.cpp Source/plugin/MidiClip.cpp Source/plugin/PluginGenerate.cpp Source/plugin/GenPanel.cpp
     Source/plugin/LabDoor.cpp Source/plugin/FxDoor.cpp)
     target_sources(JingFang PRIVATE ${JF_SOURCES})
     target_include_directories(JingFang PRIVATE Source/engine Source/plugin)
@@ -120,6 +128,8 @@ if(SVL_BUILD_PLUGIN)
     jf_tool(demo_render)
     # preset_storm: bug 1 of 20 Oct (fast preset / set / slot switching while the host plays left the channel silent)
     jf_tool(preset_storm)
+    # midi_play (GENERATE plan §7): a .mid through the processor, to measure how a dragged-out clip sounds when it comes back
+    jf_tool(midi_play)
     # rack_capture / rack_render (work order 1.x item 6 preparation): host Reason Rack Plugin as a local measurement reference
     set(JF_RACK_DEFS JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
         JUCE_APPLICATION_NAME_STRING="rack" JUCE_APPLICATION_VERSION_STRING="1.0.0")

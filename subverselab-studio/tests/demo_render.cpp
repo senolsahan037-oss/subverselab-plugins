@@ -9,11 +9,12 @@
 // loaded, a door open, PLAY running, a save landing where the open door says). Everything found goes to <out>/<film>_report.md.
 //
 //   demo_render <1|2|3> <out_dir> [--vertical]   the ads: out_dir/film<N>_video.mp4 + film<N>.wav (film<N>_9x16_* with --vertical)
-//   demo_render e<N> <out_dir>                   an explainer (9:16), timed to its narration: marketing/explainers/script.json
+//   demo_render e<N> <out_dir>                   an explainer (9:16, e1..e8), timed to its narration: marketing/explainers/script.json
 //                                                and out/explainers/voice/voice.json (tools/jf_voice.py)
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "GenPanel.h"
 #include <cstdio>
 #include <map>
 
@@ -592,6 +593,177 @@ void e6 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
     f.expect (L[4] + 0.8, "the cable stays after closing", [&ed, cables] { return ed.patchBay().cableCount() == *cables + 1 ? juce::String() : "cables " + juce::String (ed.patchBay().cableCount()); });
 }
 
+// ---------------------------------------------------------------- the 1.1 sounds (owner 24 Oct: "yeni gelen sesler jing fang için 2 tutorial videosu")
+Rect strip() { return Rect (350, 24, 878, 158).expanded (30, 40); }        // the preset strip (layout_v3.json "synth")
+
+void e7 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L;
+    auto load = [&p] (const char* fam, const char* name) { return [&p, fam, name] { p.loadPresetIndex (presetIndex (p, fam, name)); }; };
+    f.at (0, load ("Kanun", "Kanun"));
+    f.expect (0.3, "Kanun is loaded", presetIs (p, "Kanun", "Kanun"));
+    f.cam (0, [] { return whole(); });
+    static const int line[] = { 62, 63, 66, 67, 69, 67, 66, 63, 62, 63, 66, 69, 70, 69, 67, 66 };
+    int i = 0;
+    for (double t = 0.9; t < L[3] - 0.3; t += 0.42, ++i) f.note (t, 0.36, line[i % 16], 96);
+    // 2: the Maqam category; the zurna takes the same line
+    f.cam (L[2], [] { return strip(); });
+    f.at (L[2] + 0.5, load ("Zurna", "Zurna"));
+    f.expect (L[2] + 0.8, "Zurna is loaded", presetIs (p, "Zurna", "Zurna"));
+    f.cam (f.E[2] + 0.4, [] { return whole(); });
+    // 3: variations: a sliding sitar, then the kanun's repeated pick on long notes
+    f.at (L[3] + 0.1, load ("Sitar", "Sitar Meend"));
+    f.expect (L[3] + 0.4, "Sitar Meend is loaded", presetIs (p, "Sitar", "Sitar Meend"));
+    static const int slide[] = { 62, 66, 67, 69, 67, 66 };
+    const double tKanun = L[3] + 3.6;
+    for (int k = 0; k < 6; ++k) f.note (L[3] + 0.3 + k * 0.55, 0.6, slide[k], 96);         // overlapping: legato, the glide joins them
+    f.at (tKanun, load ("Kanun", "Kanun Tremolo"));
+    f.expect (tKanun + 0.3, "Kanun Tremolo is loaded", presetIs (p, "Kanun", "Kanun Tremolo"));
+    static const int held[] = { 69, 67, 62 };
+    for (int k = 0; k < 3; ++k) f.note (tKanun + 0.3 + k * 1.5, 1.35, held[k], 96);
+    // 4: a Sequence - Lab melody loads its tuning and switches the Lab on
+    f.at (L[4] + 0.3, load ("Sequence - Lab", "Guzheng Running Water"));
+    f.expect (L[4] + 0.6, "Guzheng Running Water is loaded", presetIs (p, "Sequence - Lab", "Guzheng Running Water"));
+    f.expect (L[4] + 0.6, "the melody's tuning is on: the Lab plays", [&p] { return p.labActive() ? juce::String() : "lab not active"; });
+    f.cam (L[4] + 0.3, [] { return strip(); });
+    f.cam (f.E[4], [] { return whole(); });
+    // 5: hold one key: the melody runs; let go: it stops
+    const double hold0 = L[5] + 0.3, hold1 = f.E[5] + 3.4;
+    f.note (hold0, hold1 - hold0, 60, 100);
+    f.expect (hold0 + 1.2, "holding a key runs the melody", [&p] { return p.engineForTest().noteGen().isRunning() ? juce::String() : "not running"; });
+    f.expect (hold1 + 0.6, "letting go stops it", [&p] { return ! p.engineForTest().noteGen().isRunning() ? juce::String() : "still running"; });
+}
+
+void e8 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L;
+    auto load = [&p] (const char* fam, const char* name) { return [&p, fam, name] { p.loadPresetIndex (presetIndex (p, fam, name)); }; };
+    f.at (0, load ("Bass", "Round Mono"));
+    f.expect (0.3, "Round Mono is loaded", presetIs (p, "Bass", "Round Mono"));
+    f.cam (0, [] { return whole(); });
+    static const int bass[] = { 36, 36, 43, 46, 36, 48, 46, 43 };
+    int i = 0;
+    for (double t = 0.9; t < L[3] - 0.2; t += 0.36, ++i) f.note (t, 0.3, bass[i % 8], i % 4 == 0 ? 110 : 92);
+    // 2: more bite on the same line
+    f.at (L[2] + 0.2, load ("Bass", "Dirty Mono"));
+    f.expect (L[2] + 0.5, "Dirty Mono is loaded", presetIs (p, "Bass", "Dirty Mono"));
+    f.at (L[2] + 2.4, load ("Bass", "Chip Bass"));
+    f.expect (L[2] + 2.7, "Chip Bass is loaded", presetIs (p, "Bass", "Chip Bass"));
+    // 3: a soft start, long notes
+    f.at (L[3] + 0.1, load ("Bass", "Bark Bass"));
+    f.expect (L[3] + 0.4, "Bark Bass is loaded", presetIs (p, "Bass", "Bark Bass"));
+    const double tBreath = L[3] + 3.3;
+    static const int longA[] = { 36, 43 }, longB[] = { 38, 45 };
+    for (int k = 0; k < 2; ++k) f.note (L[3] + 0.3 + k * 1.5, 1.3, longA[k], 100);
+    f.at (tBreath, load ("Bass", "Breath Bass"));
+    f.expect (tBreath + 0.3, "Breath Bass is loaded", presetIs (p, "Bass", "Breath Bass"));
+    for (int k = 0; k < 2; ++k) f.note (tBreath + 0.2 + k * 1.5, 1.3, longB[k], 100);
+    // 4: the arrows step to the next preset (what prevBtn / nextBtn do)
+    f.cam (L[4], [] { return strip(); });
+    auto before = std::make_shared<int> (-1);
+    f.at (L[4] + 0.6, [&p, before] { *before = p.currentPresetIndex(); p.stepPreset (1); });
+    f.expect (L[4] + 0.9, "the arrow loads the next preset", [&p, before] { return p.currentPresetIndex() != *before ? juce::String() : "index stayed " + juce::String (*before); });
+    f.at (L[4] + 2.2, [&p] { p.stepPreset (1); });
+    for (int k = 0; k < 6; ++k) f.note (L[4] + 0.9 + k * 0.5, 0.42, bass[k], 96);
+    f.cam (f.E[4] + 1.0, [] { return whole(); });
+    // 5: new pads, keys, plucks, strings and brass
+    struct V { const char* fam; const char* name; };
+    static const V more[] = { { "Pad", "Glass Box Pad" }, { "Keys - E-Piano", "Night EP" }, { "Pluck", "Harp Pluck" }, { "Strings", "Orchestral Strings" }, { "Brass", "Fat Brass" } };
+    const double step = (f.E[5] + 3.6 - L[5]) / 5.0;
+    for (int k = 0; k < 5; ++k)
+    {
+        const double t = L[5] + k * step;
+        f.at (t, load (more[k].fam, more[k].name));
+        f.expect (t + 0.3, juce::String (more[k].name) + " is loaded", presetIs (p, more[k].fam, more[k].name));
+        f.chord (t + 0.15, step - 0.35, { 50, 57, 62, 66 }, 88);
+    }
+}
+
+// ---------------------------------------------------------------- GENERATE (owner 27 Oct: "tanıtım videolarını çek")
+jfui::SeqGenPanel* genPanel (JingFangEditor& ed) { return ed.seqDoorView() != nullptr ? ed.seqDoorView()->genPanelView() : nullptr; }
+Rect genView (JingFangEditor& ed) { auto* g = genPanel (ed); return g != nullptr ? inEditor (ed, g).expanded (20) : whole(); }
+int stepsOnCount (JingFangProcessor& p) { int n = 0; for (int s = 1; s <= 16; ++s) n += raw (p, "seq.s" + juce::String (s) + ".on") > 0.5f; return n; }
+int chordSteps (JingFangProcessor& p) { int n = 0; for (int s = 1; s <= 16; ++s) n += raw (p, "seq.s" + juce::String (s) + ".on") > 0.5f && raw (p, "seq.s" + juce::String (s) + ".c1") > 0.5f; return n; }
+int microSteps (JingFangProcessor& p) { int n = 0; for (int s = 1; s <= 16; ++s) n += raw (p, "seq.s" + juce::String (s) + ".on") > 0.5f && juce::roundToInt (raw (p, "seq.s" + juce::String (s) + ".row")) != 1; return n; }
+
+void e9 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L;
+    p.genSeedRandomForTest (2710);                                 // the same film every render
+    f.at (0, [&p] { p.loadPresetIndex (presetIndex (p, "Lead", "Bright Saw Lead")); });
+    f.expect (0.3, "Bright Saw Lead is loaded", presetIs (p, "Lead", "Bright Saw Lead"));
+    f.cam (0, [] { return whole(); });
+    f.at (L[1] + 0.3, [&ed] { ed.seqKey().onClick(); });
+    f.expect (L[1] + 0.9, "SEQ door open", doorOpen (ed, "SEQ"));
+    f.cam (L[1] + 0.9, [&ed] { return genView (ed); });
+    // 2: ROLL, then a held key runs the melody
+    f.at (L[2] + 0.6, [&ed] { genPanel (ed)->key ("ROLL")->onClick(); });
+    f.expect (L[2] + 0.9, "ROLL wrote a melody (3+ notes, no chords)", [&p] { return stepsOnCount (p) >= 3 && chordSteps (p) == 0 ? juce::String() : "steps " + juce::String (stepsOnCount (p)) + ", chords " + juce::String (chordSteps (p)); });
+    f.note (L[2] + 1.0, f.E[2] + 3.6 - (L[2] + 1.0), 60, 100);
+    f.expect (L[2] + 2.0, "holding a key runs the sequence", [&p] { return p.engineForTest().noteGen().isRunning() ? juce::String() : "not running"; });
+    // 3: NOTES keeps the rhythm
+    auto rBefore = std::make_shared<int> (-1);
+    f.at (L[3] + 0.3, [&p, &ed, rBefore] { *rBefore = p.genUnit (0).r; genPanel (ed)->key ("NOTES")->onClick(); });
+    f.expect (L[3] + 0.6, "NOTES kept the RHYTHM seed", [&p, rBefore] { return p.genUnit (0).r == *rBefore ? juce::String() : "R " + juce::String (*rBefore) + " -> " + juce::String (p.genUnit (0).r); });
+    f.note (L[3] + 0.6, f.E[3] + 3.1 - (L[3] + 0.6), 60, 100);
+    // 4: DENSITY up: the same pattern, more notes
+    auto nBefore = std::make_shared<int> (0);
+    f.at (L[4] + 0.2, [&p, nBefore] { *nBefore = stepsOnCount (p); });
+    for (int k = 1; k <= 8; ++k) f.at (L[4] + 0.3 + k * 0.12, [&p, k] { setP (p, "gen.density", 0.5f + 0.05f * (float) k); });
+    f.expect (L[4] + 2.0, "DENSITY 0.9: more notes", [&p, nBefore] { return stepsOnCount (p) > *nBefore ? juce::String() : juce::String (*nBefore) + " -> " + juce::String (stepsOnCount (p)); });
+    f.note (L[4] + 0.4, f.E[4] + 3.1 - (L[4] + 0.4), 60, 100);
+    f.at (f.E[4] + 3.2, [&p] { setP (p, "gen.density", 0.5f); });
+    // 5: a pad: chords
+    f.at (L[5] + 0.2, [&p] { p.loadPresetIndex (presetIndex (p, "Pad", "Warm Pad")); });
+    f.expect (L[5] + 0.5, "Warm Pad is loaded", presetIs (p, "Pad", "Warm Pad"));
+    f.at (L[5] + 0.8, [&ed] { genPanel (ed)->key ("ROLL")->onClick(); });
+    f.expect (L[5] + 1.1, "ROLL wrote chords", [&p] { return chordSteps (p) >= 2 && chordSteps (p) == stepsOnCount (p) ? juce::String() : "chord steps " + juce::String (chordSteps (p)) + " of " + juce::String (stepsOnCount (p)); });
+    f.note (L[5] + 1.2, f.E[5] + 4.1 - (L[5] + 1.2), 60, 100);
+    // 6: CLIP (the drag itself leaves the window; the camera shows the key)
+    f.cam (L[6], [&ed] { return genView (ed).getUnion (inEditor (ed, ed.seqDoorView()).withHeight (60)).expanded (10); });
+}
+
+void e10 (Film& f, JingFangProcessor& p, JingFangEditor& ed)
+{
+    auto& L = f.L;
+    p.genSeedRandomForTest (1031);
+    f.at (0, [&p] { p.loadPresetIndex (presetIndex (p, "Init", "Init")); });
+    f.cam (0, [] { return whole(); });
+    f.at (L[1] + 0.3, [&ed] { ed.drumKey().onClick(); });
+    f.expect (L[1] + 0.9, "DRUM door open", doorOpen (ed, "DRUM"));
+    f.cam (L[1] + 0.9, [&ed] { return inEditor (ed, ed.drumDoorView()).expanded (10); });
+    // 2: ROLL, a held key plays the beat
+    auto hits = [&p] { int n = 0; for (int t = 1; t <= 8; ++t) for (int st = 1; st <= 16; ++st) n += raw (p, "drums.t" + juce::String (t) + ".s" + juce::String (st)) > 0.5f; return n; };
+    f.at (L[2] + 0.5, [&ed] { ed.drumDoorView()->drumGenView()->rollKey()->onClick(); });
+    f.expect (L[2] + 0.8, "ROLL wrote a beat with the kick on 1", [&p, hits] { return hits() >= 6 && raw (p, "drums.t1.s1") > 0.5f ? juce::String() : "hits " + juce::String (hits()); });
+    f.note (L[2] + 0.9, f.E[2] + 3.6 - (L[2] + 0.9), 60, 100);
+    // 3: another roll, then the arrow brings the first one back
+    auto first = std::make_shared<int> (0);
+    f.at (L[3] + 0.2, [&ed, first, hits] { *first = hits(); ed.drumDoorView()->drumGenView()->rollKey()->onClick(); });
+    f.note (L[3] + 0.3, 1.3, 60, 100);
+    f.at (L[3] + 1.8, [&p] { p.genHistory (1, -1); });
+    f.expect (L[3] + 2.0, "the arrow brought the first beat back", [first, hits] { return hits() == *first ? juce::String() : juce::String (*first) + " vs " + juce::String (hits()); });
+    f.note (L[3] + 1.9, f.E[3] + 2.6 - (L[3] + 1.9), 60, 100);
+    // 4: MICRO: a flute line with raised / lowered notes
+    f.at (L[4] + 0.1, [&p, &ed]
+    {
+        p.loadPresetIndex (presetIndex (p, "Winds", "Breathy Flute"));
+        ed.microKey().onClick();
+        setP (p, "gen.micro", 1.0f);
+        ed.seqKey().onClick();
+    });
+    f.expect (L[4] + 0.4, "MICRO is on", [&p] { return raw (p, "tuning.mode") > 0.5f ? juce::String() : juce::String ("tuning.mode off"); });
+    f.cam (L[4] + 0.6, [&ed] { return genView (ed); });
+    f.at (L[4] + 0.9, [&p, &ed]
+    {   // roll until the pattern has raised / lowered notes (a roll may have none; MICRO 1 makes most have some)
+        for (int i = 0; i < 12; ++i) { genPanel (ed)->key ("ROLL")->onClick(); if (microSteps (p) > 0) break; }
+    });
+    f.expect (L[4] + 1.2, "the roll has raised / lowered notes", [&p] { return microSteps (p) > 0 ? juce::String() : juce::String ("none"); });
+    f.note (L[4] + 1.3, f.E[4] + 4.1 - (L[4] + 1.3), 62, 100);
+    // 5: CLIP writes MPE
+    f.cam (L[5], [&ed] { return genView (ed).getUnion (inEditor (ed, ed.seqDoorView()).withHeight (60)).expanded (10); });
+}
+
 // ---------------------------------------------------------------- the site's opening film (19 Oct, the launch session for the owner:
 // "ru-8 intro sayfasından çıkarıyoruz, bu defa introya jing fang geliyor, benzer bir intro videosu çekelim"): 7.5 s, silent, no type
 // burned in. Close on the three-row keyboard while a line plays on the MICRO rows, then the camera glides back to the whole panel with
@@ -789,7 +961,7 @@ Rect fitAspect (Rect r, float aspect)                                 // grow r 
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
-    if (argc < 3) { std::fprintf (stderr, "usage: demo_render <1|2|3|e1..e6> <out_dir> [--vertical]\n"); return 2; }
+    if (argc < 3) { std::fprintf (stderr, "usage: demo_render <1|2|3|e1..e8> <out_dir> [--vertical]\n"); return 2; }
     const juce::String which (argv[1]);
     const bool isExplainer = which.startsWith ("e");
     vertical = isExplainer || (argc > 3 && juce::String (argv[3]) == "--vertical");
@@ -829,9 +1001,9 @@ int main (int argc, char** argv)
         const auto script = juce::JSON::parse (juce::File::getCurrentWorkingDirectory().getChildFile ("marketing/explainers/script.json"));
         film.stem = which; film.explainer = true; film.name = script[which.toRawUTF8()]["title"].toString();
         const int n = which.getTrailingIntValue();
-        if (film.name.isEmpty() || n < 1 || n > 6) { std::fprintf (stderr, "no %s in script.json\n", which.toRawUTF8()); return 2; }
+        if (film.name.isEmpty() || n < 1 || n > 10) { std::fprintf (stderr, "no %s in script.json\n", which.toRawUTF8()); return 2; }
         explainerLines (film, script[which.toRawUTF8()]);
-        void (*fns[]) (Film&, JingFangProcessor&, JingFangEditor&) = { e1, e2, e3, e4, e5, e6 };
+        void (*fns[]) (Film&, JingFangProcessor&, JingFangEditor&) = { e1, e2, e3, e4, e5, e6, e7, e8, e9, e10 };
         fns[n - 1] (film, proc, *ed);
     }
     else
