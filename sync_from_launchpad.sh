@@ -73,6 +73,7 @@ rsync -av --prune-empty-dirs \
   "$SRC_ROOT/subverselab-splitter-desktop/" "$DEST_ROOT/subverselab-splitter-desktop/"
 
 sync_plugin subverselab-seda       # SEDA (release build: SVL_LICENSING OFF, no licence keys)
+sync_plugin subverselab-analog-eq  # TORNA (graphic EQ, no licence keys)
 
 # JING FANG (project subverselab-studio): its factory presets (presets/<family>/*.xml) are compiled in, and its build trees are
 # build/, build_ui/, build-release/ (build_ui holds JUCE's own CMakeLists.txt under _deps, so the root CMakeLists is anchored).

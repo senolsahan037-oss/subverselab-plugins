@@ -98,6 +98,17 @@ jobs:
             standalone_exe: "SEDA.exe"
             panel_dir: "yes"
             soft_test: true
+          # TORNA 1.0.0 (project subverselab-analog-eq): graphic EQ after the Kenwood GE-1100, VST3 + standalone app, no licence keys.
+          # plugin_check is the processor/editor check; ui_snapshot <dir> writes the panel PNGs.
+          - name: Torna
+            dir: subverselab-analog-eq
+            artifact: TORNA-windows
+            vst3_name: "TORNA.vst3"
+            tools: "Torna_Standalone plugin_check ui_snapshot"
+            check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
+            standalone_exe: "TORNA.exe"
+            panel_dir: "yes"
+            soft_test: true
     steps:
       - uses: actions/checkout@v4
 
