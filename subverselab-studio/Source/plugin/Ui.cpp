@@ -78,11 +78,23 @@ const juce::var& panelLayout()
     return v;
 }
 
+static bool gFastDraw = false;
+void setFastDraw (bool fast) { gFastDraw = fast; }
+
 void drawScaledCached (juce::Graphics& g, const juce::Image& src, juce::Rectangle<float> dst)
 {
     if (! src.isValid() || dst.isEmpty()) return;
     const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
     const int w = juce::jmax (1, juce::roundToInt (dst.getWidth() * scale)), h = juce::jmax (1, juce::roundToInt (dst.getHeight() * scale));
+    // the camera (31 Oct): under it the target can be larger than the 2x render (at 4 x: 6272 x 4096, ~100 MB a copy, and a new
+    // size on every tick of the glide). Enlarging, a big target, or a glide in progress draws the render straight through the clip
+    // (the cost follows the visible pixels, not the whole target); the cache keeps serving the reduced sizes, where it pays
+    if (gFastDraw || w >= src.getWidth() || (juce::int64) w * (juce::int64) h > 4000000)
+    {
+        g.setImageResamplingQuality (w >= src.getWidth() ? juce::Graphics::lowResamplingQuality : juce::Graphics::mediumResamplingQuality);
+        g.drawImage (src, dst);
+        return;
+    }
     struct Entry { const void* src; int w, h; juce::Image img; };
     static std::vector<Entry> cache;                     // message thread only
     const void* key = src.getPixelData();
@@ -495,7 +507,6 @@ void TypeStepper::mouseUp (const juce::MouseEvent& e)
 Lockup::Lockup()
 {
     mark = tinted (juce::ImageFileFormat::loadFrom (BinaryData::mark_cream_png, (size_t) BinaryData::mark_cream_pngSize), Pal::cream);
-    word = tinted (juce::ImageFileFormat::loadFrom (BinaryData::wordmark_cream_png, (size_t) BinaryData::wordmark_cream_pngSize), Pal::cream);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
     setTooltip ("subverselab.com");
 }
@@ -504,10 +515,8 @@ void Lockup::paint (juce::Graphics& g)
 {
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
     g.setOpacity (hover ? 0.75f : 1.0f);
-    const float h = (float) getHeight();
-    g.drawImage (mark, juce::Rectangle<float> (0.0f, 0.0f, h * 1.41f, h), juce::RectanglePlacement::stretchToFit);
-    const float ww = 60.6f, wh = ww * 90.0f / 698.0f;
-    g.drawImage (word, juce::Rectangle<float> ((float) getWidth() - ww, (h - wh) * 0.5f, ww, wh), juce::RectanglePlacement::stretchToFit);
+    // icon only (owner 7 Nov 2026), at the right edge where the lockup used to end; the wordmark is no longer drawn
+    g.drawImage (mark, markRect(), juce::RectanglePlacement::stretchToFit);
 }
 
 //==============================================================================

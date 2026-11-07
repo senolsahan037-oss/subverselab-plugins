@@ -11,7 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-project(SVL VERSION 1.2.1 LANGUAGES C CXX)
+project(SVL VERSION 1.4.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -78,7 +78,7 @@ if(SVL_BUILD_PLUGIN)
 
     # Panel typefaces and the SubverseLab marks, compiled in.
     juce_add_binary_data(JingFangAssets HEADER_NAME BinaryData.h NAMESPACE BinaryData SOURCES
-        Assets/mark_cream.png Assets/wordmark_cream.png
+        Assets/mark_cream.png
         Assets/Fonts/texgyreheros-bold.otf Assets/Fonts/texgyreheros-regular.otf Assets/Fonts/DejaVuSansMono-Bold.ttf
         Assets/Panel/panel_v3_2x.png Assets/Panel/knob_green.png Assets/Panel/layout_v3.json Assets/Panel/dragon_overlay.png
         Assets/Panel/doors.json Assets/Panel/door_patch_2x.png Assets/Panel/door_seq_2x.png Assets/Panel/door_lab_2x.png Assets/Panel/door_drum_2x.png
@@ -93,13 +93,13 @@ if(SVL_BUILD_PLUGIN)
 
     set(JF_SOURCES Source/plugin/PluginProcessor.cpp Source/plugin/PluginEditor.cpp Source/plugin/Ui.cpp Source/plugin/Keyboard.cpp
         Source/plugin/Dragon.cpp Source/plugin/PatchBay.cpp Source/plugin/Scopes.cpp Source/plugin/AnalogDoor.cpp Source/plugin/Analog.cpp Source/plugin/MidiClip.cpp Source/plugin/PluginGenerate.cpp Source/plugin/GenPanel.cpp
-    Source/plugin/LabDoor.cpp Source/plugin/FxDoor.cpp)
+    Source/plugin/LabDoor.cpp Source/plugin/FxDoor.cpp Source/plugin/Camera.cpp Source/plugin/SignIn.cpp Source/Licensing/Rights.cpp)
     target_sources(JingFang PRIVATE ${JF_SOURCES})
     target_include_directories(JingFang PRIVATE Source/engine Source/plugin)
     set(JF_DEFS JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
     target_compile_definitions(JingFang PUBLIC ${JF_DEFS})
     target_link_libraries(JingFang
-        PRIVATE JingFangAssets JingFangPresets juce::juce_audio_utils
+        PRIVATE JingFangAssets JingFangPresets juce::juce_audio_utils juce::juce_cryptography   # cryptography: the signed grants (Licensing/Grant.h)
         PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
     if(APPLE)
         target_link_libraries(JingFang PRIVATE "-framework Carbon")   # HIToolbox: the keyboard layout (Keyboard.cpp)
@@ -107,7 +107,10 @@ if(SVL_BUILD_PLUGIN)
 
     # Offline checks built against the same sources (no host, no screen).
     set(JF_TOOL_DEFS ${JF_DEFS} JucePlugin_Name="JING FANG" JucePlugin_VersionString="${PROJECT_VERSION}"
-        JucePlugin_IsSynth=1 JucePlugin_WantsMidiInput=1 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0)
+        JucePlugin_IsSynth=1 JucePlugin_WantsMidiInput=1 JucePlugin_ProducesMidiOutput=0 JucePlugin_IsMidiEffect=0
+        # the licence gate's test hooks (Source/Licensing/Rights.h): the tools are always owned unless a check hands in its own
+        # Rights with the fixture's throwaway key. Never on the plug-in target: there only the production key and a signed grant unlock.
+        JF_RIGHTS_TESTS=1)
     function(jf_tool name)
         juce_add_console_app(${name} PRODUCT_NAME "${name}")
         juce_generate_juce_header(${name})
@@ -115,7 +118,7 @@ if(SVL_BUILD_PLUGIN)
         target_include_directories(${name} PRIVATE Source/engine Source/plugin)
         target_compile_definitions(${name} PRIVATE ${JF_TOOL_DEFS} JUCE_MODAL_LOOPS_PERMITTED=1)
         target_link_libraries(${name} PRIVATE JingFangAssets JingFangPresets
-            juce::juce_audio_utils juce::juce_audio_processors juce::juce_gui_basics juce::juce_recommended_config_flags)
+            juce::juce_audio_utils juce::juce_audio_processors juce::juce_gui_basics juce::juce_cryptography juce::juce_recommended_config_flags)
         if(APPLE)
             target_link_libraries(${name} PRIVATE "-framework Carbon")
         endif()

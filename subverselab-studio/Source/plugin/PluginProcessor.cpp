@@ -103,6 +103,19 @@ JingFangProcessor::JingFangProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "JINGFANG", makeLayout())
 {
+   #if JF_RIGHTS_TESTS
+    rights = rightsForNewProcessorsForTest();
+    if (rights == nullptr)
+    {   // the check tools' default: always owned, no network, no file touched (the gate checks hand in their own Rights)
+        auto c = jf::rights::Rights::defaultConfig();
+        c.network = false;
+        c.alwaysOwned = true;
+        rights = std::make_shared<jf::rights::Rights> (c);
+    }
+   #else
+    rights = jf::rights::Rights::shared();
+   #endif
+    updateRights();                                            // a host that renders before the first timer tick gets the right answer
     slots.fill (-1);
     for (auto& h : labHeld) h.store (-1.0f);
     const auto& defs = svl::paramDefs();
@@ -217,7 +230,28 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const int n = buffer.getNumSamples();
     buffer.clear();
     if (! prepared || buffer.getNumChannels() < 2) return;
-    applyHostChanges();
+    applyHostChanges();                                        // also while locked: a restored project's values stay current
+
+    // the licence gate: not owned = silence, MIDI and the panel's keys ignored. Either change cuts every note, so nothing from
+    // before a lock sounds after the sign-in.
+    {
+        const bool open = unlockedA.load (std::memory_order_relaxed);
+        if (open != gateWasOpen)
+        {
+            engine.allNotesOff (0);
+            lab.allOff();
+            for (auto& h : labHeld) h.store (-1.0f);
+            gateWasOpen = open;
+        }
+        if (! open)
+        {
+            midi.clear();
+            uiFifo.finishedRead (uiFifo.getNumReady());
+            liveLevel.store (0.0f, std::memory_order_relaxed);
+            liveVoices.store (0, std::memory_order_relaxed);
+            return;
+        }
+    }
 
     // the arpeggiator / sequencer clock: the host's grid while it plays, its own clock otherwise (no playhead = standalone)
     {
@@ -441,8 +475,19 @@ void JingFangProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 }
 
 //==============================================================================
+#if JF_RIGHTS_TESTS
+std::shared_ptr<jf::rights::Rights>& JingFangProcessor::rightsForNewProcessorsForTest() { static std::shared_ptr<jf::rights::Rights> r; return r; }
+#endif
+
+void JingFangProcessor::updateRights()
+{
+    unlockedA.store (rights != nullptr && rights->owned(), std::memory_order_relaxed);
+}
+
 void JingFangProcessor::timerCallback()
 {
+    if (++rightsTick >= 10) { rightsTick = 0; updateRights(); }                  // 3 times a second: a sign-in or a refund shows at once
+    if (++refreshTick >= 30 * 60) { refreshTick = 0; if (rights != nullptr) rights->refreshAsync(); }   // once a minute: the 3-day refresh when due
     if (sourceToHost.exchange (false))                       // the audio thread switched a unit to MIDI: tell the host
         for (int i : { (int) svl::SEQ_SOURCE, (int) svl::DRUMS_SOURCE })
             if (juce::roundToInt (raw[(size_t) i]->load()) != juce::roundToInt (exactShared[(size_t) i].load())) setHostValue (i, exactShared[(size_t) i].load());

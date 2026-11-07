@@ -16,6 +16,7 @@
 #include "GenPanel.h"
 #include <cstdio>
 #include <set>
+#include <typeinfo>
 
 namespace
 {
@@ -189,6 +190,16 @@ int main (int argc, char** argv)
         auto& l = ed->lockupLink();
         check (jfui::Lockup::url().toString (false) == "https://subverselab.com", "lockup links to https://subverselab.com");
         check (l.getRight() >= jfui::kW - 30 && l.getBottom() >= jfui::kH - 40, "lockup at the bottom right (" + l.getBounds().toString() + ")");
+        // icon only (owner 7 Nov 2026, from 1.4.0): the icon at the right edge, only the icon is clickable
+        const auto m = l.markRect();
+        check (std::abs (m.getRight() - (float) l.getWidth()) < 0.01f && std::abs (m.getWidth() - (float) l.getHeight() * 1.41f) < 0.01f
+                   && l.hitTest (juce::roundToInt (m.getCentreX()), juce::roundToInt (m.getCentreY())) && ! l.hitTest (2, l.getHeight() / 2),
+               "the mark is the icon only, " + juce::String (m.getWidth(), 1) + " x " + juce::String (m.getHeight(), 1) + " at the right edge; the empty left part does not click");
+        juce::Image crop (juce::Image::ARGB, l.getWidth() * 4, l.getHeight() * 4, true);
+        {
+            juce::Graphics g (crop); g.fillAll (jfui::Pal::ground); g.addTransform (juce::AffineTransform::scale (4.0f)); l.paintEntireComponent (g, false);
+        }
+        snapToFile (crop, "lockup_icon_4x.png");
     }
     // ---- 5. layout
     {
@@ -887,6 +898,195 @@ int main (int argc, char** argv)
         }
     }
 
+    // ---- the camera (owner 31 Oct: "kamera kontrol paneli"): the window shows a part of the panel, closer; the controls float
+    //      over the panel outside the camera; the glide is the knobs' glide; FOLLOW frames the open door, else the touched module
+    {
+        auto& cam = ed->cameraForTest();
+        auto& cp = ed->cameraPanelView();
+        auto& key = ed->cameraKey();
+        auto& panel = ed->panelView();
+        const juce::Rectangle<int> window (0, 0, jfui::kW, jfui::kH);
+        auto settle = [&] { int n = 0; while (cam.gliding() && n < 90) { ++n; ed->tickForTest(); } pump(); return n; };
+        auto shownRect = [&] (juce::Rectangle<int> r) { return r.toFloat().transformedBy (panel.getTransform()); };   // where r is drawn in the window
+        auto press = [] (juce::Component& c, juce::Point<float> at, bool up = true)
+        {
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const auto now = juce::Time::getCurrentTime();
+            const juce::ModifierKeys mods (juce::ModifierKeys::leftButtonModifier);
+            c.mouseDown (juce::MouseEvent (src, at, mods, juce::MouseInputSource::defaultPressure, 0, 0, 0, 0, &c, &c, now, at, now, 1, false));
+            if (up) c.mouseUp (juce::MouseEvent (src, at, mods.withoutMouseButtons(), juce::MouseInputSource::defaultPressure, 0, 0, 0, 0, &c, &c, now, at, now, 1, false));
+        };
+        check (! cp.isVisible() && cam.isWhole() && panel.getTransform().isIdentity(), "camera: at the start the controls are hidden, the view is the whole panel, the panel's transform is the identity");
+        key.onClick(); pump();
+        check (cp.isVisible() && key.isOn() && window.contains (cp.getBounds()) && cp.getParentComponent() == ed.get(),
+               "CAMERA shows the controls inside the window, outside the panel (" + cp.getBounds().toString() + ")");
+        snap (*ed, "front_camera.png");
+        // a click on OSC 1 on the map: the camera glides there, as close as it may (4 x), and OSC 1 fills the window
+        juce::Rectangle<int> osc1, filter;
+        for (auto& s : ed->sectionsForTest()) { if (s.first == "OSC 1") osc1 = s.second; if (s.first == "FILTER") filter = s.second; }
+        press (cp, cp.toMap (osc1.getCentre().toFloat()));
+        check (cam.gliding() && cam.mode() == jfui::Camera::Mode::free && cam.targetZoom() > 3.5f && cam.targetZoom() <= 4.0001f,
+               "a click on OSC 1 on the map: the camera starts gliding to zoom " + juce::String (cam.targetZoom(), 2) + " (OSC 1 with its air, under the 4 x ceiling)");
+        const int n1 = settle();
+        check (n1 >= 6 && n1 <= 20, "the glide settles in " + juce::String (n1) + " ticks (0.2 .. 0.67 s)");
+        check (window.toFloat().contains (shownRect (osc1)) && shownRect (osc1).getWidth() > 0.6f * (float) jfui::kW,
+               "OSC 1 is drawn inside the window at " + juce::String (shownRect (osc1).getWidth() / (float) osc1.getWidth(), 2) + " x (" + shownRect (osc1).toNearestInt().toString() + ")");
+        check (cp.getTransform().isIdentity() && window.contains (cp.getBounds()), "the controls did not move or zoom with the camera");
+        snap (*ed, "front_camera_osc1.png");
+        {   // a frame at this zoom is drawn through the clip, not by scaling the whole 2x render up: it must stay cheap
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
+            for (int i = 0; i < 5; ++i) ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            const double ms = (juce::Time::getMillisecondCounterHiRes() - t0) / 5.0;
+            check (ms < 150.0, "a frame at " + juce::String (cam.zoom(), 2) + " x paints in " + juce::String (ms, 1) + " ms (whole-panel frame measured below)");
+            jfui::setFastDraw (true);
+            const double t1 = juce::Time::getMillisecondCounterHiRes();
+            for (int i = 0; i < 5; ++i) ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            const double msFast = (juce::Time::getMillisecondCounterHiRes() - t1) / 5.0;
+            jfui::setFastDraw (false);
+            check (msFast < 150.0, "a frame while the camera glides (nothing cached) paints in " + juce::String (msFast, 1) + " ms");
+        }
+        // wheel on the map: further away around the point under the cursor, never past the panel's edge
+        {
+            const auto before = cam.targetZoom();
+            cp.mouseWheelMove (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), cp.toMap (osc1.getCentre().toFloat()), {}, 1.0f, 0, 0, 0, 0, &cp, &cp,
+                                                 juce::Time::getCurrentTime(), cp.toMap (osc1.getCentre().toFloat()), juce::Time::getCurrentTime(), 0, false),
+                               juce::MouseWheelDetails { 0.0f, -1.0f, false, false, false });
+            settle();
+            check (cam.zoom() < before - 0.3f && window.toFloat().contains (cam.view()) && cam.view().getX() >= -0.01f && cam.view().getY() >= -0.01f,
+                   "the wheel zooms out (" + juce::String (before, 2) + " -> " + juce::String (cam.zoom(), 2) + ") and the view stays on the panel");
+        }
+        // FOLLOW: the SEQ door opens, the camera frames the door; the door closes, the view goes back to the whole panel
+        cp.followKey().onClick();
+        ed->openDoorForTest (2);
+        for (int i = 0; i < 40; ++i) ed->tickForTest();
+        settle();
+        const auto doorR = ed->openDoorRect();
+        check (cam.mode() == jfui::Camera::Mode::follow && ! doorR.isEmpty() && window.toFloat().contains (shownRect (doorR)) && cam.zoom() > 1.1f,
+               "FOLLOW with the SEQ door open frames the door at " + juce::String (cam.zoom(), 2) + " x");
+        snap (*ed, "front_camera_seq.png");
+        ed->openDoorForTest (0);
+        for (int i = 0; i < 40; ++i) ed->tickForTest();
+        settle();
+        check (cam.view() == juce::Rectangle<float> (0, 0, (float) jfui::kW, (float) jfui::kH), "the door closed: FOLLOW shows the whole panel again");
+        // FOLLOW: a press on the FILTER module (what the panel's mouse watcher reports) frames FILTER
+        ed->touchAt (filter.getCentre());
+        for (int i = 0; i < 3; ++i) ed->tickForTest();
+        settle();
+        check (window.toFloat().contains (shownRect (filter)) && shownRect (filter).getWidth() > 0.6f * (float) jfui::kW, "FOLLOW: a press on FILTER frames FILTER (" + juce::String (cam.zoom(), 2) + " x)");
+        // WHOLE glides back; the panel's transform is the identity again
+        cp.wholeKey().onClick();
+        const int n2 = settle();
+        check (n2 >= 6 && n2 <= 20 && cam.isWhole() && panel.getTransform().isIdentity(), "WHOLE: back to the whole panel in " + juce::String (n2) + " ticks, identity transform");
+        // - / + step the zoom; x hides the controls but keeps the view, and CAMERA stays lit
+        cp.inKey().onClick(); cp.inKey().onClick(); settle();
+        const auto zoomed = cam.view();
+        check (std::abs (cam.zoom() - 1.5625f) < 0.01f, "+ twice: 1.25 x 1.25 = " + juce::String (cam.zoom(), 3) + " x");
+        cp.outKey().onClick(); settle();
+        check (std::abs (cam.zoom() - 1.25f) < 0.01f, "- once: " + juce::String (cam.zoom(), 3) + " x");
+        cp.inKey().onClick(); settle();
+        cp.closeKey().onClick(); pump();
+        check (! cp.isVisible() && key.isOn() && cam.view() == zoomed && ! panel.getTransform().isIdentity(), "x hides the controls, the view stays, CAMERA stays lit");
+        // the controls can be dragged by their title, never past the window's edge
+        key.onClick(); pump();
+        {
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const auto now = juce::Time::getCurrentTime();
+            const juce::Point<float> a (40.0f, 10.0f), b (40.0f + 5000.0f, 10.0f + 5000.0f);
+            const juce::ModifierKeys mods (juce::ModifierKeys::leftButtonModifier);
+            cp.mouseDown (juce::MouseEvent (src, a, mods, 1.0f, 0, 0, 0, 0, &cp, &cp, now, a, now, 1, false));
+            cp.mouseDrag (juce::MouseEvent (src, b, mods, 1.0f, 0, 0, 0, 0, &cp, &cp, now, a, now, 1, true));
+            cp.mouseUp (juce::MouseEvent (src, b, mods.withoutMouseButtons(), 1.0f, 0, 0, 0, 0, &cp, &cp, now, a, now, 1, true));
+            pump();
+            check (window.contains (cp.getBounds()) && cp.getRight() == jfui::kW && cp.getBottom() == jfui::kH, "dragged far past the corner, the controls stop at the window's edge (" + cp.getBounds().toString() + ")");
+            cp.setTopLeftPosition (jfui::kW - jfui::CameraPanel::kPanelW - 6, 14);
+        }
+        // back to the start for the pictures below
+        cp.wholeKey().onClick(); settle();
+        cp.closeKey().onClick(); pump();
+        check (! cp.isVisible() && ! key.isOn() && panel.getTransform().isIdentity(), "camera: whole and hidden again");
+        {
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
+            for (int i = 0; i < 5; ++i) ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            std::printf ("  whole-panel frame: %.1f ms\n", (juce::Time::getMillisecondCounterHiRes() - t0) / 5.0);
+        }
+
+        // ---- variations (31 Oct, second pass)
+        // the mouse finds the controls under the camera: at 3.9 x the window's centre lands on OSC 1's parts
+        press (cp, cp.toMap (osc1.getCentre().toFloat())); settle();
+        {
+            auto* level = ed->knob ("osc1.level");
+            const auto where = level->getBounds().getCentre().toFloat().transformedBy (panel.getTransform()).toInt();   // the knob's centre in the window
+            auto* c = ed->getComponentAt (where);
+            check (level != nullptr && c == level && ed->getLocalBounds().contains (where),
+                   "under the camera the mouse finds OSC 1's LEVEL knob at its drawn place " + where.toString() + " (hit: " + juce::String (c != nullptr ? typeid (*c).name() : "nothing") + ")");
+        }
+        // the window at 70 % and 160 %: the framed module still fills the window, the controls scale with the window only
+        for (float sc : { 0.7f, 1.6f })
+        {
+            ed->setSize (juce::roundToInt (jfui::kW * sc), juce::roundToInt (jfui::kH * sc)); pump();
+            const auto win = ed->getLocalBounds().toFloat();
+            const auto r = shownRect (osc1);
+            const auto cpScale = cp.getTransform().getScaleFactor();
+            check (win.contains (r) && r.getWidth() > 0.6f * win.getWidth() && std::abs (cpScale - sc) < 0.01f && window.contains (cp.getBounds()),
+                   "window at " + juce::String (juce::roundToInt (sc * 100)) + " %: OSC 1 fills " + juce::String (r.getWidth() / win.getWidth() * 100.0f, 0) + " % of the width, controls at scale " + juce::String (cpScale, 2));
+        }
+        ed->setSize (jfui::kW, jfui::kH); pump();
+        // "?" while the camera is close: the help lays its popovers out on the whole panel, so the camera goes back to the whole first
+        ed->helpKey().onClick(); settle(); pump();
+        check (ed->helpOverlay().isOpen() && cam.isWhole() && panel.getTransform().isIdentity(), "? under the camera: help opens on the whole panel (identity transform)");
+        ed->helpOverlay().close(); pump();
+        // FOLLOW defers to the release: a knob held on FILTER does not move the camera until it is let go; a glide in progress waits too
+        cp.followKey().onClick(); cp.wholeKey().onClick(); cp.followKey().onClick(); settle();
+        {
+            auto* k = ed->knob ("filter.cutoff");
+            check (k != nullptr, "filter.cutoff knob exists");
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const auto now = juce::Time::getCurrentTime();
+            const auto at = k->getLocalBounds().getCentre().toFloat();
+            const juce::ModifierKeys mods (juce::ModifierKeys::leftButtonModifier);
+            juce::MouseEvent down (src, at, mods, 1.0f, 0, 0, 0, 0, k, k, now, at, now, 1, false), up (src, at, mods.withoutMouseButtons(), 1.0f, 0, 0, 0, 0, k, k, now, at, now, 1, false);
+            const auto before = cam.view();
+            ed->touchWatcherForTest().mouseDown (down);
+            for (int i = 0; i < 10; ++i) ed->tickForTest();
+            const bool heldStill = ed->touchHeldForTest() && cam.view() == before;
+            ed->touchWatcherForTest().mouseUp (up);
+            for (int i = 0; i < 3; ++i) ed->tickForTest();
+            const bool movesAfter = cam.gliding() || cam.view() != before;
+            settle();
+            check (heldStill && movesAfter && window.toFloat().contains (shownRect (filter)) && shownRect (filter).getWidth() > 0.6f * (float) jfui::kW,
+                   "FOLLOW: a held knob on FILTER keeps the camera still; on the release it frames FILTER (" + juce::String (cam.zoom(), 2) + " x)");
+            // a glide already running stops under a held knob and goes on after the release
+            cp.wholeKey().onClick(); ed->tickForTest(); ed->tickForTest();
+            const auto mid = cam.view();
+            ed->touchWatcherForTest().mouseDown (down);
+            for (int i = 0; i < 10; ++i) ed->tickForTest();
+            const bool froze = cam.view() == mid && cam.gliding();
+            ed->touchWatcherForTest().mouseUp (up);
+            settle();
+            check (froze && cam.isWhole(), "a glide in progress freezes under a held knob and finishes after the release");
+        }
+        // the window closes and opens again (a DAW does this): the view, the mode and the controls come back as they were
+        {
+            cp.followKey().onClick();                            // FOLLOW off -> free
+            if (! cp.isVisible()) key.onClick();                 // the controls showing (x hid them above)
+            press (cp, cp.toMap (osc1.getCentre().toFloat())); settle();
+            cp.setTopLeftPosition (300, 400);
+            const auto view = cam.view(); const auto mode = cam.mode(); const auto pos = cp.getPosition();
+            ed = nullptr;
+            ed.reset (static_cast<JingFangEditor*> (proc.createEditor()));
+            ed->setSize (jfui::kW, jfui::kH); ed->setVisible (true); pump();
+            auto& cam2 = ed->cameraForTest(); auto& cp2 = ed->cameraPanelView();
+            const bool sameView = std::abs (cam2.view().getX() - view.getX()) < 0.01f && std::abs (cam2.view().getY() - view.getY()) < 0.01f && std::abs (cam2.view().getWidth() - view.getWidth()) < 0.01f;
+            check (sameView && cam2.mode() == mode && cp2.isVisible() && cp2.getPosition() == pos && ! ed->panelView().getTransform().isIdentity(),
+                   "a new editor window keeps the camera: view " + cam2.view().toString() + " (was " + view.toString() + ", same " + juce::String ((int) sameView) + "), mode " + juce::String ((int) cam2.mode()) + " (was " + juce::String ((int) mode)
+                   + "), controls " + (cp2.isVisible() ? "shown" : "hidden") + " at " + cp2.getPosition().toString() + ", transform identity " + juce::String ((int) ed->panelView().getTransform().isIdentity()));
+            cp2.wholeKey().onClick();
+            while (cam2.gliding()) ed->tickForTest();
+            cp2.closeKey().onClick(); cp2.setTopLeftPosition (jfui::kW - jfui::CameraPanel::kPanelW - 6, 14); pump();
+            check (! cp2.isVisible() && cam2.isWhole() && ed->panelView().getTransform().isIdentity(), "camera: whole and hidden again (new window)");
+        }
+    }
+
     // ---- the layout, for the Blender scene (tools/blender/)
     {
         const auto f = gOut.getChildFile ("layout.json");
@@ -937,6 +1137,80 @@ int main (int argc, char** argv)
         check (proc.sectionSlot (0) == 4 && proc.sectionSlot (1) == 8 && proc.sectionSlot (4) == 16 && ed->slotCell (JingFangProcessor::kNumSections - 1) != nullptr,
                "the slots show 005 / 009 / 017 and every slot cell exists");
         snap (*ed, "front_mix_200.png", 2.0f);
+    }
+
+    // ---- the licence gate (1.4.0, owner 7 Nov 2026: only buyers play it). A computer without an owned grant: the sign-in screen
+    //      over the whole window, the panel underneath kept; an owned grant: the panel as before.
+    {
+        using Phase = jf::rights::Rights::SignIn::Phase;
+        const auto fx = juce::JSON::parse (juce::File::getCurrentWorkingDirectory().getChildFile ("tests/fixtures/grant_fixture_jingfang.json").loadFileAsString());
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("jf_gate_ui");
+        dir.deleteRecursively();
+        jf::rights::Rights::Config c;
+        c.publicKey = fx.getProperty ("publicKeyJuce", {}).toString(); c.folder = dir; c.machine = fx.getProperty ("machine", {}).toString(); c.network = false;
+        const juce::int64 t0 = (juce::int64) fx.getProperty ("now", 0);
+        c.clock = [t0] { return t0; };
+        juce::StringArray opened;
+        c.openUrl = [&opened] (const juce::String& u) { opened.add (u); };
+        auto rights = std::make_shared<jf::rights::Rights> (c);
+        JingFangProcessor::rightsForNewProcessorsForTest() = rights;
+        {
+            JingFangProcessor lp;
+            lp.setRateAndBufferSizeDetails (44100, 512); lp.prepareToPlay (44100, 512);
+            lp.loadPresetIndex (presetIndex (lp, "Lead", "VA Lead"));
+            std::unique_ptr<JingFangEditor> le (static_cast<JingFangEditor*> (lp.createEditor()));
+            le->setSize (jfui::kW, jfui::kH); le->setVisible (true);
+            for (int i = 0; i < 12; ++i) { lp.runMessageWorkForTest(); le->tickForTest(); }
+            auto& sv = le->signInView();
+            int above = 0;                                          // children over the screen that are not always-on-top (the tooltip window is)
+            for (int i = le->getIndexOfChildComponent (&sv) + 1; i < le->getNumChildComponents(); ++i)
+                if (! le->getChildComponent (i)->isAlwaysOnTop()) ++above;
+            check (le->signInShown() && sv.getBounds() == juce::Rectangle<int> (0, 0, jfui::kW, jfui::kH) && above == 0,
+                   "locked: the sign-in screen covers the whole window, above every child but the tooltip window (" + juce::String (above) + " above it)");
+            check (le->getComponentAt (jfui::kW / 2, jfui::kH / 2) != nullptr && (le->getComponentAt (jfui::kW / 2, jfui::kH / 2) == &sv || sv.isParentOf (le->getComponentAt (jfui::kW / 2, jfui::kH / 2)))
+                       && le->getComponentAt (60, 400) == &sv,
+                   "locked: a click anywhere lands on the sign-in screen, never on the panel underneath");
+            check (sv.signInKey().isVisible() && sv.signInKey().text == "SIGN IN WITH SUBVERSELAB" && sv.buyLink().isVisible() && ! sv.againLink().isVisible() && sv.shownCode().isEmpty(),
+                   "idle: SIGN IN WITH SUBVERSELAB and the buy link; no code, no OPEN THE PAGE AGAIN");
+            sv.buyLink().onClick();
+            check (opened.size() == 1 && opened[0] == "https://subverselab.com/plugins/jingfang", "the buy link opens " + opened.joinIntoString (", "));
+            check (! le->keyPressed (juce::KeyPress ('a')) && ! lp.keyLit (1, 60), "locked: the computer keys are left to the host / app (no note)");
+            snap (*le, "signin_idle.png");
+            const auto lk = sv.lockupLink().getBounds();
+            check (lk.getRight() >= jfui::kW - 30 && lk.getBottom() >= jfui::kH - 40 && sv.lockupLink().markRect().getWidth() < 30.0f,
+                   "the sign-in screen: the SubverseLab icon at the bottom right (" + lk.toString() + "), the name top left");
+            jf::rights::Rights::SignIn w; w.phase = Phase::waiting; w.userCode = "ABCD-2345"; w.verifyUrl = "https://subverselab.com/activate?code=ABCD-2345";
+            rights->setSignInForTest (w);
+            for (int i = 0; i < 4; ++i) le->tickForTest();
+            check (sv.shownCode() == "ABCD-2345" && sv.signInKey().text == "CANCEL" && sv.againLink().isVisible() && sv.codeBounds().getBottom() < sv.signInKey().getY()
+                       && sv.cardBounds().contains (sv.signInKey().getBounds()) && sv.cardBounds().contains (sv.buyLink().getBounds()),
+                   "waiting: the code ABCD-2345, CANCEL, OPEN THE PAGE AGAIN, everything inside the card, nothing overlapping");
+            snap (*le, "signin_code.png");
+            jf::rights::Rights::SignIn f; f.phase = Phase::failed; f.message = "NO CONNECTION TO SUBVERSELAB.COM. TRY AGAIN LATER.";
+            rights->setSignInForTest (f);
+            for (int i = 0; i < 4; ++i) le->tickForTest();
+            check (sv.shownMessage() == f.message && sv.signInKey().text == "SIGN IN WITH SUBVERSELAB" && ! sv.againLink().isVisible(), "failed: the reason, and SIGN IN again");
+            snap (*le, "signin_failed.png");
+            // the window at 70 %: the screen scales with the window like the panel
+            le->setSize (juce::roundToInt (jfui::kW * 0.7), juce::roundToInt (jfui::kH * 0.7));
+            const auto onScreen = sv.getBoundsInParent().toFloat();   // already through the screen's transform
+            check (std::abs (onScreen.getWidth() - (float) le->getWidth()) <= 1.0f && std::abs (onScreen.getHeight() - (float) le->getHeight()) <= 1.0f,
+                   "window at 70 %: the sign-in screen fills it (" + onScreen.toString() + ")");
+            snap (*le, "signin_70.png");
+            le->setSize (jfui::kW, jfui::kH);
+            // signed in: the owned grant arrives (as the device flow's poll hands it over); the panel comes back by itself
+            rights->setSignInForTest ({});
+            check (rights->adopt (juce::JSON::toString (fx.getProperty ("ownedActive", {}), true)), "the owned grant is taken");
+            for (int i = 0; i < 12; ++i) { lp.runMessageWorkForTest(); le->tickForTest(); }
+            check (! le->signInShown() && lp.unlocked() && lp.currentName() == "VA Lead", "owned: the sign-in screen goes, the panel is back with the preset it had (" + lp.currentName() + ")");
+            snap (*le, "signin_after_owned.png");
+            rights->forgetOwned();                                  // a refund
+            for (int i = 0; i < 12; ++i) { lp.runMessageWorkForTest(); le->tickForTest(); }
+            check (le->signInShown() && ! lp.unlocked(), "refund: the sign-in screen comes back");
+            le = nullptr;
+        }
+        JingFangProcessor::rightsForNewProcessorsForTest() = nullptr;
+        dir.deleteRecursively();
     }
     std::printf ("\nui_snapshot: %d passed, %d failed\n", gPass, gFail);
     ed = nullptr;

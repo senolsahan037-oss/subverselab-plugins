@@ -9,6 +9,8 @@
 #include "AnalogDoor.h"
 #include "LabDoor.h"
 #include "FxDoor.h"
+#include "Camera.h"
+#include "SignIn.h"
 
 class JingFangEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -52,6 +54,18 @@ public:
     juce::String readoutText() const { return bpmFace.shownText(); }
     std::vector<std::pair<juce::String, juce::Rectangle<int>>> sectionsForTest() const;
     juce::String layoutJson() const;   // every section, knob, display and the keyboard, for the Blender scene
+    // the camera (owner 31 Oct): the view of the panel for a recording or a lesson; its controls float over the panel
+    jfui::Camera& cameraForTest() noexcept { return camera; }
+    jfui::CameraPanel& cameraPanelView() noexcept { return *camPanel; }
+    jfui::PanelKey& cameraKey() noexcept { return camBtn; }
+    void showCameraPanel (bool show);
+    void touchAt (juce::Point<int> panelPoint);               // what FOLLOW frames after a press there, at once (the watcher defers it to the release)
+    juce::MouseListener& touchWatcherForTest() noexcept { return touchWatcher; }
+    bool touchHeldForTest() const noexcept { return touchHeld; }
+    juce::Rectangle<int> openDoorRect() const;                 // the open door's full area, empty when none is open
+    // the licence gate (owner 7 Nov 2026): the sign-in screen over everything while this computer does not own JING FANG
+    jfui::SignInScreen& signInView() noexcept { return *signInScreen; }
+    bool signInShown() const noexcept { return signInScreen != nullptr && signInScreen->isVisible(); }
 
 private:
     struct Section { juce::String title; juce::Rectangle<int> r; };
@@ -145,6 +159,25 @@ private:
     int probeTick = 0, probeGaps = 0, probeStalls = 0;
     double probeLastTick = 0, probeGapSum = 0, probeGapMax = 0;
     jfui::Help help;
+    // the camera: the panel's transform is the window scale times the camera (resized / applyCamera); FOLLOW frames the open
+    // door, else the module last touched (the watcher hears every press on the panel)
+    jfui::Camera camera;
+    std::unique_ptr<jfui::CameraPanel> camPanel;
+    std::unique_ptr<jfui::SignInScreen> signInScreen;
+    void followGate();                                         // shows / hides the sign-in screen as the processor's gate says
+    jfui::PanelKey camBtn { "CAMERA" };
+    juce::Rectangle<int> lastTouched, pendingTouch;
+    bool touchHeld = false;                                    // a control is held on the panel: the camera waits (a knob's drag must not move under the hand)
+    struct TouchWatcher : juce::MouseListener
+    {
+        explicit TouchWatcher (JingFangEditor& e) : ed (e) {}
+        void mouseDown (const juce::MouseEvent& e) override { ed.noteTouch (e, true); }
+        void mouseUp (const juce::MouseEvent& e) override { ed.noteTouch (e, false); }
+        JingFangEditor& ed;
+    } touchWatcher { *this };
+    void noteTouch (const juce::MouseEvent&, bool down);
+    void applyCamera();
+    std::vector<jfui::CameraPanel::Place> cameraPlaces() const;
     juce::String lastFace, lastTuning;
     std::unique_ptr<juce::AlertWindow> saveWindow;
     juce::TooltipWindow tooltips { this, 600 };

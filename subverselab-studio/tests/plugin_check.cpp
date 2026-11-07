@@ -21,6 +21,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "MidiClip.h"
+#include "../Licensing/GrantKey.h"
 #include <cstdio>
 
 namespace
@@ -1028,6 +1029,126 @@ int main (int argc, char** argv)
             worst = std::max (worst, run (28));
         }
         check (worst < 1.0e-5f, "a preset with echo / reverb after one without: no old tail with no key held (peak " + juce::String (juce::Decibels::gainToDecibels (worst, -240.0f), 1) + " dBFS)");
+    }
+
+
+    // ---- the licence gate (1.4.0, owner 7 Nov 2026: "sadece satın alanlar kullansın"; no trial, no free mode).
+    // Grants: the production key compiled in, the throwaway key of tests/fixtures/grant_fixture_jingfang.json for the rest.
+    {
+        using namespace jf::rights;
+        const auto fx = juce::JSON::parse (root.getChildFile ("tests/fixtures/grant_fixture_jingfang.json").loadFileAsString());
+        const auto testKey = fx.getProperty ("publicKeyJuce", {}).toString();
+        const auto machine = fx.getProperty ("machine", {}).toString();
+        const juce::int64 t0 = (juce::int64) fx.getProperty ("now", 0);
+        auto wire = [&] (const char* k) { return juce::JSON::toString (fx.getProperty (k, {}), true); };
+
+        // production key: the same key as AHENK (one server signs both); a server-signed grant verifies, a test-key grant does not
+        const auto ahenkKey = root.getChildFile ("../subverselab-fazilsay/Source/Licensing/GrantKey.h").loadFileAsString();
+        const juce::String prodKey (grantPublicKey());
+        check (! kGrantKeyIsDev && prodKey.startsWith ("10001,") && prodKey.length() > 500 && prodKey != testKey,
+               "the compiled-in key is the production key (" + juce::String (prodKey.length()) + " chars), not the test key");
+        if (ahenkKey.isNotEmpty())
+            check (ahenkKey.contains (prodKey), "the compiled-in key is AHENK's production key (one server key signs both)");
+        const auto prodSample = juce::JSON::parse (root.getChildFile ("tests/fixtures/grant_prod_sample_ahenk.json").loadFileAsString());
+        check (verifySignature (prodSample.getProperty ("payload", {}).toString(), prodSample.getProperty ("sig", {}).toString(), prodKey),
+               "the production key verifies a grant the production server key signed (grant_prod_sample_ahenk.json)");
+        {
+            auto bad = prodSample.getProperty ("payload", {}).toString().replace ("\"ends\":2", "\"ends\":3");
+            check (! verifySignature (bad, prodSample.getProperty ("sig", {}).toString(), prodKey), "the production key refuses the same grant with one digit changed");
+        }
+        check (! parseGrantText (wire ("ownedActive"), prodKey).valid, "a grant signed with the test key is refused by the production key");
+        check (parseGrantText (wire ("ownedActive"), testKey).valid && ! parseGrantText (wire ("tampered"), testKey).valid,
+               "test key: the owned grant verifies, the tampered copy (one letter of the uid) is refused");
+
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("jf_gate_check");
+        dir.deleteRecursively();
+        juce::int64 clock = t0;
+        auto makeRights = [&]
+        {
+            Rights::Config c;
+            c.publicKey = testKey; c.folder = dir; c.machine = machine; c.network = false;
+            c.clock = [&clock] { return clock; };
+            return std::make_shared<Rights> (c);
+        };
+        auto r = makeRights();
+        check (! r->owned(), "nothing on disk: locked");
+        int refused = 0;
+        for (auto k : { "ownedOtherMachine", "ownedAhenk", "trialJingfang", "tampered" }) refused += r->adopt (wire (k)) ? 0 : 1;
+        check (refused == 4 && ! r->owned() && ! dir.getChildFile ("owned.json").exists(),
+               "refused: another computer's grant, AHENK's grant, a trial grant, a tampered grant (" + juce::String (refused) + " / 4); nothing written");
+        check (r->adopt (wire ("ownedExpired")) && ! r->owned(), "an owned grant past its 45 days: locked");
+        check (r->adopt (wire ("ownedActive")) && r->owned() && dir.getChildFile ("owned.json").existsAsFile(), "the owned grant: owned, written to owned.json");
+        check (makeRights()->owned(), "a new start reads owned.json: owned (offline)");
+        const auto g = parseGrantText (wire ("ownedActive"), testKey);
+        clock = g.issued + 44 * Rights::kDay;  const bool day44 = makeRights()->owned();
+        clock = g.ends;                         const bool day45 = makeRights()->owned();
+        clock = g.starts - 2 * Rights::kDay;    const bool before = makeRights()->owned();
+        check (day44 && ! day45 && ! before, "offline grace: owned on day 44, locked on day 45, locked with the clock set back before the grant");
+        clock = g.issued + 2 * Rights::kDay;    const bool due2 = makeRights()->refreshDue();
+        clock = g.issued + 4 * Rights::kDay;
+        auto rr = makeRights();
+        check (! due2 && rr->refreshDue(), "refresh: not due after 2 days, due after 4 (every 3 days)");
+        rr->applyRefreshReply (503, "Service Unavailable");
+        rr->applyRefreshReply (0, {});
+        rr->applyRefreshReply (200, "{\"ok\":false,\"error\":\"rate\"}");
+        check (rr->owned(), "refresh: a 503, no network or another error keep the grant (owned)");
+        auto renewed = new juce::DynamicObject(); renewed->setProperty ("ok", true); renewed->setProperty ("grant", fx.getProperty ("ownedActive", {}));
+        rr->applyRefreshReply (200, juce::JSON::toString (juce::var (renewed), true));
+        check (rr->owned(), "refresh: ok + a new grant: owned");
+        rr->applyRefreshReply (200, "{\"ok\":false,\"error\":\"not owned\"}");
+        check (! rr->owned() && ! dir.getChildFile ("owned.json").exists() && ! makeRights()->owned(),
+               "refresh after a refund (\"not owned\"): locked, owned.json removed, locked on the next start");
+
+        // the processor: locked = silence and the state kept; owned = sound; a refund mid-note = silence
+        clock = t0;
+        auto locked = makeRights();
+        JingFangProcessor::rightsForNewProcessorsForTest() = locked;
+        {
+            JingFangProcessor a;
+            check (! a.unlocked(), "processor with no owned grant: locked");
+            a.loadPresetXml (root.getChildFile ("presets/Pad/Warm Pad.xml").loadFileAsString());
+            auto* cut = a.apvts.getParameter ("filter.cutoff");
+            cut->setValueNotifyingHost (cut->convertTo0to1 (1234.0f));
+            a.setRateAndBufferSizeDetails (sr, 512); a.prepareToPlay (sr, 512);
+            juce::AudioBuffer<float> b (2, 512);
+            auto run = [&] (int blocks, juce::MidiBuffer m = {}) { float pk = 0; for (int n = 0; n < blocks; ++n) { a.processBlock (b, m); m.clear(); pk = std::max (pk, b.getMagnitude (0, 512)); } return pk; };
+            juce::MidiBuffer on; on.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0);
+            const float lockedPeak = run (100, on);
+            a.uiNoteOn (64, 1, 1.0f);
+            const float lockedPanel = run (40);
+            check (lockedPeak == 0.0f && lockedPanel == 0.0f, "locked: a MIDI note and a panel note play silence (peak " + juce::String (lockedPeak) + ", " + juce::String (lockedPanel) + ")");
+            a.uiAllNotesOff();
+            juce::MemoryBlock st; a.getStateInformation (st);
+            JingFangProcessor c;                                   // also locked
+            c.setStateInformation (st.getData(), (int) st.getSize());
+            juce::MemoryBlock st2; c.getStateInformation (st2);
+            int diffs = 0;
+            for (int i = 0; i < svl::kNumParams; ++i) if (a.exactValue (i) != c.exactValue (i)) ++diffs;
+            check (diffs == 0 && std::abs (c.exactValue (svl::FLT_CUTOFF) - 1234.0f) < 0.5f && c.currentName() == "Warm Pad" && st == st2,
+                   "locked: a project's state loads and saves back unchanged (" + juce::String (diffs) + " values differ, cutoff "
+                       + juce::String (c.exactValue (svl::FLT_CUTOFF), 1) + " Hz, " + juce::String ((int) st.getSize()) + " B in = out)");
+
+            ++clock;                                               // sign in: the owned grant arrives
+            locked->adopt (wire ("ownedActive"));
+            a.runMessageWorkForTest(); for (int i = 0; i < 10; ++i) a.runMessageWorkForTest();
+            const float stale = run (20);
+            // the engine's idle floor after it starts running again is ~1e-21 (-409 dBFS measured), not a note: under -120 dBFS
+            check (a.unlocked() && stale < 1.0e-6f, "signed in: unlocked, and no note from the locked time sounds (peak "
+                   + juce::String (juce::Decibels::gainToDecibels (stale, -500.0f), 1) + " dBFS)");
+            const float ownedPeak = run (100, on);
+            check (ownedPeak > 0.01f, "owned: a MIDI note sounds (peak " + juce::String (juce::Decibels::gainToDecibels (ownedPeak), 1) + " dBFS)");
+            locked->applyRefreshReply (200, "{\"ok\":false,\"error\":\"not owned\"}");
+            for (int i = 0; i < 11; ++i) a.runMessageWorkForTest();
+            run (1);
+            const float after = run (40);
+            check (! a.unlocked() && after == 0.0f, "refund while a note holds: locked within 1/3 s, silence (peak " + juce::String (after) + ")");
+        }
+        JingFangProcessor::rightsForNewProcessorsForTest() = nullptr;
+        {
+            JingFangProcessor d;
+            check (d.unlocked(), "the check tools' default processor is owned (no file, no network)");
+        }
+        dir.deleteRecursively();
     }
 
     std::printf ("\nplugin_check: %d passed, %d failed\n", gPass, gFail);

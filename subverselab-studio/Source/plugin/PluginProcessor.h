@@ -12,6 +12,7 @@
 #include "MpeState.h"
 #include "tuning/TuningLearn.h"
 #include "tuning/TuningBuiltin.h"
+#include "../Licensing/Rights.h"
 
 class JingFangProcessor : public juce::AudioProcessor, private juce::Timer
 {
@@ -97,6 +98,10 @@ public:
     struct Live { float level = 0, pitch = 60, ampStage = 0; int voices = 0, seqStep = -1; };
     float fxReductionDb() const noexcept { return liveGr.load (std::memory_order_relaxed); }   // COMP's gain reduction, for the FX door
     Live live() const noexcept { return { liveLevel.load(), livePitch.load(), (float) liveStage.load(), liveVoices.load(), liveSeqStep.load() }; }
+    /** the camera as the last editor window left it (message thread; a DAW closes and reopens the window at will): the view in
+        panel units (w = 0: whole), its mode, whether the controls showed and where they sat. Not part of the state or a preset. */
+    struct CameraMemory { float x = 0, y = 0, w = 0; int mode = 0; bool shown = false; int px = -1, py = -1; };
+    CameraMemory cameraMemory;
     /** the last kScopeLen output samples (mono), oldest first */
     static constexpr int kScopeLen = 2048;
     void copyScope (float* dest) const noexcept;
@@ -164,6 +169,19 @@ public:
     juce::String genWrites (int unit) const;                      // "MELODY · DORIAN", "BEAT · BREAKBEAT"
     svl::gen::SeqPattern genCurrentSeq() const;                   // the steps as they are now (user edits included)
     void genSeedRandomForTest (juce::int64 s) { genRandom.setSeed (s); }
+
+    // ---- the licence gate (owner 7 Nov 2026: only buyers use it; no trial, no free mode). Not owned: the panel shows the
+    // sign-in and processBlock outputs silence (MIDI ignored); the state, presets and every setting stay as they are.
+    // Rights lives on the message thread (one per process); the audio thread only reads `unlocked`.
+    bool unlocked() const noexcept { return unlockedA.load (std::memory_order_relaxed); }
+    jf::rights::Rights& rightsNow() noexcept { return *rights; }
+   #if JF_RIGHTS_TESTS
+    /** the offline check tools only: the Rights new processors take (null = always owned, so the sound checks run), and a
+        swap on a live processor; both re-read the state at once */
+    static std::shared_ptr<jf::rights::Rights>& rightsForNewProcessorsForTest();
+    void setRightsForTest (std::shared_ptr<jf::rights::Rights> r) { rights = std::move (r); updateRights(); }
+   #endif
+    void updateRights();                                        // message thread: Rights -> `unlocked` (the timer, every 1/3 s)
 
     // ---- tests
     void runMessageWorkForTest() { timerCallback(); }
@@ -249,6 +267,11 @@ private:
     void applyStateXml (const juce::String& xml);
     std::shared_ptr<int> labAlive = std::make_shared<int> (0);  // learn results check it before touching the processor
     juce::ThreadPool labPool { 1 };
+
+    std::shared_ptr<jf::rights::Rights> rights;
+    std::atomic<bool> unlockedA { false };
+    bool gateWasOpen = false;                                  // audio thread: the last block played (a change of either way cuts every note)
+    int rightsTick = 0, refreshTick = 0;                       // timer
 
     std::array<GenUnit, 2> genUnits;
     juce::Random genRandom;

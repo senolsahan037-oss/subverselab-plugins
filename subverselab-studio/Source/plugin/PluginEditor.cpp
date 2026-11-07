@@ -13,6 +13,32 @@ JingFangEditor::JingFangEditor (JingFangProcessor& p) : juce::AudioProcessorEdit
     help.setBounds (0, 0, kW, kH);
     help.onClosed = [this] { if (proc.isStandalone()) grabKeyboardFocus(); };
 
+    // the camera's controls: over the panel, outside the camera (added after the panel, so above it), hidden until CAMERA
+    camPanel = std::make_unique<CameraPanel> (camera, [this] { return cameraPlaces(); },
+                                              [this] () -> std::pair<juce::String, juce::Rectangle<int>>
+                                              {
+                                                  const auto r = openDoorRect();
+                                                  if (r.isEmpty()) return { {}, {} };
+                                                  return { bay.isOpenOrOpening() ? "PATCH" : seqDoor && seqDoor->isOpenOrOpening() ? "SEQ" : drumDoor && drumDoor->isOpenOrOpening() ? "DRUM"
+                                                           : labDoor && labDoor->isOpenOrOpening() ? "LAB" : "FX RACK", r };
+                                              });
+    camPanel->onClose = [this] { showCameraPanel (false); };
+    camPanel->setTopLeftPosition (kW - CameraPanel::kPanelW - 6, 14);
+    addChildComponent (*camPanel);
+    panel.addMouseListener (&touchWatcher, true);
+    {   // as the last window left it (a DAW opens a new editor every time the window opens)
+        const auto& m = proc.cameraMemory;
+        if (m.w > 0.0f) camera.moveTo (Camera::Rect (m.x, m.y, m.w, m.w * (float) kH / (float) kW));
+        camera.setMode ((Camera::Mode) juce::jlimit (0, 2, m.mode));
+        if (m.px >= 0) camPanel->setTopLeftPosition (juce::jlimit (0, kW - CameraPanel::kPanelW, m.px), juce::jlimit (0, kH - CameraPanel::kPanelH, m.py));
+        if (m.shown) showCameraPanel (true);
+    }
+
+    // the licence gate: above the panel and the camera's controls, outside the camera (scaled with the window only)
+    signInScreen = std::make_unique<SignInScreen> (proc);
+    addChildComponent (*signInScreen);
+    followGate();
+
     // in a DAW every key belongs to the DAW: JING FANG takes no computer keys and asks for no focus (RU-8 rule 4)
     setWantsKeyboardFocus (proc.isStandalone());
     setResizable (true, true);
@@ -35,7 +61,74 @@ JingFangEditor::JingFangEditor (JingFangProcessor& p) : juce::AudioProcessorEdit
 JingFangEditor::~JingFangEditor()
 {
     stopTimer();
+    panel.removeMouseListener (&touchWatcher);
+    {
+        auto& m = proc.cameraMemory;
+        const auto v = camera.target();
+        m.x = v.getX(); m.y = v.getY(); m.w = camera.mode() == Camera::Mode::whole ? 0.0f : v.getWidth();
+        m.mode = (int) camera.mode(); m.shown = camPanel->isVisible(); m.px = camPanel->getX(); m.py = camPanel->getY();
+    }
     keyboard.releaseAllComputerKeys();
+}
+
+//==============================================================================
+// the camera
+void JingFangEditor::applyCamera()
+{
+    const float s = (float) getWidth() / (float) kW;
+    panel.setTransform (camera.transform (s));
+}
+
+void JingFangEditor::showCameraPanel (bool show)
+{
+    if (camPanel->isVisible() == show) return;
+    camPanel->setVisible (show);
+    if (show) camPanel->toFront (false);
+    camBtn.repaint();
+}
+
+juce::Rectangle<int> JingFangEditor::openDoorRect() const
+{
+    if (bay.isOpenOrOpening()) return R (bay.getX(), bay.getY(), PatchBay::kFullW, PatchBay::kFullH);
+    if ((seqDoor && seqDoor->isOpenOrOpening()) || (drumDoor && drumDoor->isOpenOrOpening()) || (labDoor && labDoor->isOpenOrOpening()) || (fxDoor && fxDoor->isOpenOrOpening()))
+        return doorArea;
+    return {};
+}
+
+std::vector<jfui::CameraPanel::Place> JingFangEditor::cameraPlaces() const
+{
+    // the modules, the deck (PLAY and the keyboard as one), the preset synthesizer across the top
+    std::vector<CameraPanel::Place> v;
+    R deck;
+    for (auto& s : sections)
+    {
+        if (s.title == "PLAY") { deck = s.r.getUnion (keyboard.getBounds()); continue; }
+        v.push_back ({ s.title, s.r });
+    }
+    if (! deck.isEmpty()) v.push_back ({ "KEYBOARD", deck });
+    const auto& L = panelLayout();
+    if (auto* a = L["synth"].getArray(); a != nullptr && a->size() == 4)
+        v.push_back ({ "PRESETS", R (juce::roundToInt ((double) (*a)[0]), juce::roundToInt ((double) (*a)[1]), juce::roundToInt ((double) (*a)[2]), juce::roundToInt ((double) (*a)[3])) });
+    return v;
+}
+
+void JingFangEditor::noteTouch (const juce::MouseEvent& e, bool down)
+{
+    // FOLLOW: the module under the last press (a door, when open, is framed instead; the help overlay is not a touch). The camera
+    // moves on the release, not the press: a knob dragged while the panel glides under the hand would jump
+    if (! down) { touchHeld = false; lastTouched = pendingTouch; return; }
+    if (help.isOpen() || e.eventComponent == nullptr || e.eventComponent == &help) return;
+    const auto p = e.getEventRelativeTo (&panel).getPosition();
+    pendingTouch = {};
+    for (auto& pl : cameraPlaces()) if (pl.r.contains (p)) { pendingTouch = pl.r; break; }
+    touchHeld = true;
+}
+
+void JingFangEditor::touchAt (juce::Point<int> p)
+{
+    R hit;
+    for (auto& pl : cameraPlaces()) if (pl.r.contains (p)) { hit = pl.r; break; }
+    lastTouched = pendingTouch = hit;
 }
 
 jfui::Knob& JingFangEditor::addKnob (const juce::String& id, const juce::String& label, R cell, juce::Component* parent)
@@ -95,7 +188,24 @@ void JingFangEditor::build()
     closeBtn.onClick = [this] { openDoor (0); };
     panel.addAndMakeVisible (helpBtn); helpBtn.setBounds (btn ("help")); helpBtn.fontPx = 14.0f; helpBtn.setTooltip ("Help");
     helpBtn.isOn = [this] { return help.isOpen(); };
-    helpBtn.onClick = [this] { if (help.isOpen()) help.close(); else { help.setCovered (anyDoorOpen() ? doorArea : R()); help.open(); } helpBtn.repaint(); };
+    helpBtn.onClick = [this]
+    {
+        if (help.isOpen()) help.close();
+        else
+        {
+            if (! camera.isWhole()) camera.whole();            // the popovers are laid out on the whole panel: under the camera one could lie outside the window
+            help.setCovered (anyDoorOpen() ? doorArea : R()); help.open();
+        }
+        helpBtn.repaint();
+    };
+    // CAMERA: on the device's title band, right of the title (the header strip has no room left); lit while the controls show
+    // or the view is not the whole panel
+    panel.addAndMakeVisible (camBtn);
+    camBtn.setBounds (1172, 201, 78, 26);
+    camBtn.fontPx = 9.5f;
+    camBtn.setTooltip ("Camera: move the view closer to a module for a recording or a lesson (Cmd / Ctrl + K)");
+    camBtn.isOn = [this] { return camPanel != nullptr && (camPanel->isVisible() || ! camera.isWhole()); };
+    camBtn.onClick = [this] { showCameraPanel (! camPanel->isVisible()); };
 
     // ---- modules, knobs (photoreal, labels printed on the device), selectors, screens
     for (auto& s : list ("sections")) sections.push_back ({ s["title"].toString(), rectOf (s["rect"]) });
@@ -246,7 +356,12 @@ void JingFangEditor::build()
                    "machine: eight tracks, each playing a drum sound you pick, with 16 steps (click: on, again: accent; right-click: off); hold a "
                    "key to play the beat, or PLAY to run it on its own; ROLL writes a new beat for the kit. CLEAR "
                    "on either door wipes its steps. Arps, sequences "
-                   "and beats are part of a preset: SAVE keeps yours, and the SEQ and DRUMS slots take them from any preset.", patchBtn.getBounds(), { drumBtn.getRight() + 16, drumBtn.getBounds().getCentreY() } } });
+                   "and beats are part of a preset: SAVE keeps yours, and the SEQ and DRUMS slots take them from any preset.", patchBtn.getBounds(), { drumBtn.getRight() + 16, drumBtn.getBounds().getCentreY() } },
+        { "Camera", "The view of the panel, for a recording, a stream or a lesson: the window shows a part of the device, closer. "
+                    "WHOLE shows all of it; FOLLOW moves to the open page, else to the module you touch. On the map, click a module "
+                    "to go there, drag the gold frame to move, use the wheel to zoom; - and + step the zoom. Drag the title of the "
+                    "controls to put them anywhere, x hides them (the view stays). Only the view moves: every control keeps working "
+                    "where it is, and the sound does not change.", camBtn.getBounds(), { camBtn.getX() - 22, camBtn.getBounds().getCentreY() } } });
 }
 
 void JingFangEditor::openDoor (int which)
@@ -319,7 +434,9 @@ void JingFangEditor::resized()
 {
     const float s = (float) getWidth() / (float) kW;
     panel.setBounds (0, 0, kW, kH);
-    panel.setTransform (juce::AffineTransform::scale (s));
+    applyCamera();                                             // the window scale times the camera
+    if (camPanel != nullptr) camPanel->setTransform (juce::AffineTransform::scale (s));   // the controls scale with the window, not with the camera
+    if (signInScreen != nullptr) { signInScreen->setBounds (0, 0, kW, kH); signInScreen->setTransform (juce::AffineTransform::scale (s)); }
 }
 
 void JingFangEditor::paint (juce::Graphics& g) { g.fillAll (Pal::ground); }
@@ -587,13 +704,34 @@ void JingFangEditor::savePreset()
 }
 
 //==============================================================================
+void JingFangEditor::followGate()
+{
+    proc.updateRights();                                       // a sign-in that just finished opens the panel at once
+    const bool locked = ! proc.unlocked();
+    if (signInScreen->isVisible() != locked)
+    {
+        if (locked)
+        {
+            if (help.isOpen()) help.close();
+            keyboard.releaseAllComputerKeys();
+            proc.uiAllNotesOff();
+        }
+        signInScreen->setVisible (locked);
+        if (locked) signInScreen->toFront (false);
+    }
+    if (locked) signInScreen->tick();
+}
+
 bool JingFangEditor::keyPressed (const juce::KeyPress& k)
 {
+    if (signInShown()) return false;                           // locked: the computer keys play nothing, the host / app keeps them
     if (help.isOpen() && k == juce::KeyPress::escapeKey) { help.close(); helpBtn.repaint(); return true; }
     if (k == juce::KeyPress::escapeKey && labDoor && labDoor->learnOpen()) return true;    // LEARN open: Esc does not leave the page
     if (k == juce::KeyPress::escapeKey && anyDoorOpen()) { openDoor (0); return true; }   // Esc: back to the panel
     if (k == juce::KeyPress::escapeKey) { stopEverything(); return true; }                 // Esc on the panel: stop all that plays
     if (k.getKeyCode() == juce::KeyPress::tabKey) return true;   // Tab would move the focus off the editor (to Options)
+    if (k.getModifiers().isCommandDown() && juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) k.getKeyCode()) == 'K')
+    { showCameraPanel (! camPanel->isVisible()); return true; }  // Cmd / Ctrl + K: the camera controls
     return keyboard.keyPressed (k);
 }
 
@@ -614,7 +752,7 @@ bool JingFangEditor::anyDoorOpen() const
         || (labDoor && labDoor->isOpenOrOpening()) || (fxDoor && fxDoor->isOpenOrOpening());
 }
 
-bool JingFangEditor::keyStateChanged (bool down) { return keyboard.keyStateChanged (down); }
+bool JingFangEditor::keyStateChanged (bool down) { return signInShown() ? false : keyboard.keyStateChanged (down); }
 
 void JingFangEditor::timerCallback()
 {
@@ -668,6 +806,8 @@ void JingFangEditor::timerCallback()
           << ", \"seq_door\": " << (int) (seqDoor && seqDoor->isOpenOrOpening()) << ", \"drum_door\": " << (int) (drumDoor && drumDoor->isOpenOrOpening()) << "}";
         dir.getChildFile ("state.json").replaceWithText (j);
     }
+    followGate();
+    if (signInShown()) return;                                 // locked: the panel underneath waits (nothing to draw or follow)
     // the computer keys play the keyboard: the editor keeps the keyboard focus (owner 18 Oct: the keys went dead after picking
     // a preset, and "in some situations completely"). Panel parts never want the focus; whenever it sits on one of them, on
     // the Standalone's own window or its Options button, or nowhere, it comes back here. A popup menu or a dialog (their own
@@ -711,6 +851,15 @@ void JingFangEditor::timerCallback()
         }
         else if (closeBtn.isVisible()) closeBtn.setVisible (false);
     }
+    // the camera: FOLLOW frames the open door, else the module last touched; the glide moves the panel's transform
+    if (camera.mode() == Camera::Mode::follow)
+    {
+        const auto door = openDoorRect();
+        camera.follow ((door.isEmpty() ? lastTouched : door).toFloat());
+    }
+    if (! touchHeld && camera.tick()) { applyCamera(); camBtn.repaint(); }   // a held control holds the camera too
+    setFastDraw (camera.gliding() && ! touchHeld);
+    if (camPanel->isVisible()) camPanel->tick();
     for (auto& k : knobs) k->tick();
     for (auto* sc : scopes) sc->tick();
     keyboard.tick();

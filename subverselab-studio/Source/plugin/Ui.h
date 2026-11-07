@@ -50,6 +50,8 @@ const juce::Image& knobImage();
 /** draws a large image (the device render, the dragon, the door plates) through a copy scaled once to the target's pixel size:
     scaling a 2x render at high quality on every repaint cost ~30 % CPU (18 Oct); caching whole components left ghosts of doors */
 void drawScaledCached (juce::Graphics&, const juce::Image&, juce::Rectangle<float> destination);
+/** while the camera glides every size is new for one frame: the big renders are drawn straight, nothing is cached */
+void setFastDraw (bool fast);
 /** the v3 machined key face: graphite, a hairline highlight, a green LED when on */
 void keyFace (juce::Graphics&, juce::Rectangle<float>, bool on, bool hover, bool down, bool led);
 inline const juce::Colour kKeyText = juce::Colour (0xffECE0C8), kKeyTextDim = juce::Colour (0xffA09482), kLed = juce::Colour (0xff27C25E);   // devil green (owner 17 Oct: "daha koyu şeytani bir yeşil")
@@ -130,7 +132,8 @@ private:
 };
 
 //==============================================================================
-/** The SubverseLab lockup, in ink; a link to https://subverselab.com. */
+/** The SubverseLab icon (owner 7 Nov 2026: icon only, no wordmark, from 1.4.0), in ink at the right edge of its bounds;
+    a link to https://subverselab.com. Only the icon itself is clickable. */
 class Lockup : public juce::Component, public juce::SettableTooltipClient
 {
 public:
@@ -140,8 +143,14 @@ public:
     void mouseEnter (const juce::MouseEvent&) override { hover = true; repaint(); }
     void mouseExit (const juce::MouseEvent&) override { hover = false; repaint(); }
     void mouseUp (const juce::MouseEvent& e) override { if (e.mouseWasClicked() && contains (e.getPosition())) url().launchInDefaultBrowser(); }
+    bool hitTest (int x, int y) override { return markRect().contains ((float) x, (float) y); }
+    juce::Rectangle<float> markRect() const
+    {
+        const float h = (float) getHeight(), w = juce::jmin ((float) getWidth(), h * 1.41f);
+        return { (float) getWidth() - w, 0.0f, w, h };
+    }
 private:
-    juce::Image mark, word;
+    juce::Image mark;
     bool hover = false;
 };
 
