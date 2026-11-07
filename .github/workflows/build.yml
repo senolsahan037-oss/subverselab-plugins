@@ -109,6 +109,17 @@ jobs:
             standalone_exe: "TORNA.exe"
             panel_dir: "yes"
             soft_test: true
+          # ADALET 1.0.0 (project subverselab-dyneq, CMake target / artefacts "Dyneq"): dynamic EQ, VST3 + standalone app, no licence keys.
+          # plugin_check reads tools/demo_material/*.wav, which is not synced (WAVs stay on the Mac), so the test is soft; the Mac run is the gate.
+          - name: Dyneq
+            dir: subverselab-dyneq
+            artifact: ADALET-windows
+            vst3_name: "ADALET.vst3"
+            tools: "Dyneq_Standalone plugin_check ui_snapshot"
+            check: "./build/plugin_check_artefacts/Release/plugin_check.exe"
+            standalone_exe: "ADALET.exe"
+            panel_dir: "yes"
+            soft_test: true
     steps:
       - uses: actions/checkout@v4
 
