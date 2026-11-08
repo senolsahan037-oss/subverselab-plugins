@@ -6,8 +6,10 @@
 #include "../Source/PluginProcessor.h"
 #include "../Source/ParamText.h"
 #include "../Source/PluginEditor.h"
-#include <mach/mach.h>
-#include <malloc/malloc.h>
+#if JUCE_MAC
+ #include <mach/mach.h>
+ #include <malloc/malloc.h>
+#endif
 #include "SvlUndoTests.h"
 #include "SvlControlProof.h"
 #include <cmath>
@@ -1281,7 +1283,13 @@ int main (int argc, char** argv)
             auto src = juce::Desktop::getInstance().getMainMouseSource();
             return juce::MouseEvent (src, pos, m, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, juce::Time::getCurrentTime(), downPos, juce::Time::getCurrentTime(), clicks, dragged);
         };
-        auto residentMB = [] { malloc_statistics_t st {}; malloc_zone_statistics (nullptr, &st); return (double) st.size_in_use / 1048576.0; };   // bytes the program holds on the heap right now (freed memory the allocator keeps is not counted)
+        auto residentMB = [] {
+#if JUCE_MAC
+            malloc_statistics_t st {}; malloc_zone_statistics (nullptr, &st); return (double) st.size_in_use / 1048576.0;
+#else
+            return 0.0;   // Windows CI: no heap statistics here, so 11a's memory part reads 0 growth; the Mac run is the gate
+#endif
+        };   // bytes the program holds on the heap right now (freed memory the allocator keeps is not counted)
         auto findCtl = [] (DyneqEditor& ed, const juce::String& action, const juce::String& param = {}) -> juce::Component*
         {
             juce::Component* found = nullptr;
