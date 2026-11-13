@@ -6,8 +6,10 @@
 # tools/*.py, tools/*.cpp, tools/*.h (verbatim engine headers the test tools include), README.md. Build artefacts, demos, docs, media
 # and logs are excluded.
 #
-# Usage: ./sync_from_launchpad.sh [path-to-Launchpad-01_AI_Tools]
+# Usage: ./sync_from_launchpad.sh [path-to-Launchpad-01_AI_Tools]   (DRY=-n for a dry run)
+# Video scripts, logs and test reference audio stay on the Mac (excluded below).
 set -euo pipefail
+DRY="${DRY:-}"
 
 SRC_ROOT="${1:-/Users/senolsahan/Desktop/SubverseLab-Launchpad/01_AI_Tools}"
 DEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,6 +26,12 @@ EXCLUDES=(
   --exclude '*.log'
   --exclude '__pycache__/'
   --exclude '.DS_Store'
+  --exclude 'logs/'
+  --exclude 'tests/ref/'
+  --exclude 'tests/ui_video.cpp'
+  --exclude 'tools/video*'
+  --exclude 'tools/make_video.py'
+  --exclude 'tools/make_site_demo.py'
 )
 
 INCLUDES_FILTER=(
@@ -42,7 +50,7 @@ INCLUDES_FILTER=(
 sync_plugin() {
   local name="$1"
   echo "Syncing $name..."
-  rsync -av --prune-empty-dirs \
+  rsync -av --prune-empty-dirs $DRY \
     "${EXCLUDES[@]}" \
     "${INCLUDES_FILTER[@]}" \
     "$SRC_ROOT/$name/" "$DEST_ROOT/$name/"
@@ -63,7 +71,7 @@ sync_plugin subverselab-kiyma
 # htdemucs.onnx (over GitHub's file limit): the elek-windows job downloads it from ELEK_MODEL_URL. Not _deps/ either: the job
 # downloads ONNX Runtime for Windows itself.
 echo "Syncing subverselab-splitter-desktop (ELEK)..."
-rsync -av --prune-empty-dirs \
+rsync -av --prune-empty-dirs $DRY \
   "${EXCLUDES[@]}" \
   --exclude '*.onnx' --exclude '_deps/' --exclude 'work/' --exclude 'listen_*/' \
   --include '*/' \
@@ -79,7 +87,7 @@ sync_plugin subverselab-dyneq      # ADALET 1.0.0 (dynamic EQ, SVL_LICENSING OFF
 # JING FANG (project subverselab-studio): its factory presets (presets/<family>/*.xml) are compiled in, and its build trees are
 # build/, build_ui/, build-release/ (build_ui holds JUCE's own CMakeLists.txt under _deps, so the root CMakeLists is anchored).
 echo "Syncing subverselab-studio (JING FANG)..."
-rsync -av --prune-empty-dirs --delete \
+rsync -av --prune-empty-dirs --delete $DRY \
   "${EXCLUDES[@]}" \
   --exclude 'build_ui/' --exclude 'out/' --exclude 'marketing/' --exclude 'notes/' \
   --include '*/' \
@@ -89,7 +97,7 @@ rsync -av --prune-empty-dirs --delete \
   "$SRC_ROOT/subverselab-studio/" "$DEST_ROOT/subverselab-studio/"
 
 echo "Syncing subverselab-plugin-common..."
-rsync -av --prune-empty-dirs \
+rsync -av --prune-empty-dirs $DRY \
   "${EXCLUDES[@]}" \
   --include '*/' \
   --include 'Licensing/***' \

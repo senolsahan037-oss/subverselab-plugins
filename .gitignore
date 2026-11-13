@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 Icon?
 *.pyc
+
+# Shared JUCE 9.0.1 used by local builds (FETCHCONTENT_SOURCE_DIR_JUCE), never in this repo
+subverselab-sahne/
