@@ -1,0 +1,63 @@
+name: BOE-B
+
+# BOE-B alone (free dedication plug-in, project folder subverselab-boeb), so a BOE-B release does not rebuild every other plug-in.
+# Run by hand (gh workflow run boeb.yml) or by a push that touches subverselab-boeb/.
+# The plug-in is behind -DBOEB_PLUGIN=ON (the default build is the JUCE-free engine tool boebraw, not built here).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'subverselab-boeb/**'
+      - '.github/workflows/boeb.yml'
+
+jobs:
+  windows:
+    name: windows-vst3 (Boeb)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: subverselab-boeb
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: subverselab-boeb/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-subverselab-boeb
+
+      - name: Configure (Release, x64)
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBOEB_PLUGIN=ON
+
+      - name: Build VST3 + ui_snapshot
+        run: cmake --build build --config Release --target Boeb_VST3 ui_snapshot --parallel
+
+      # Interface signature checks (glide, double-click defaults) on the real processor: a hard gate (exit code = failures).
+      - name: Interface checks
+        run: ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --check --out "$GITHUB_WORKSPACE/unused.png"
+
+      - name: Zip VST3 bundle
+        run: |
+          cd build/Boeb_artefacts/Release/VST3
+          7z a -r "$GITHUB_WORKSPACE/BOE-B-windows-vst3.zip" "BOE-B.vst3"
+
+      # The panel as Windows draws it, so the lettering can be checked without a Windows machine.
+      - name: Panel snapshots
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/BOE-B-windows-panel"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out "$GITHUB_WORKSPACE/BOE-B-windows-panel/front.png"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe --out "$GITHUB_WORKSPACE/BOE-B-windows-panel/help.png" --help
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: BOE-B-windows-panel
+          path: BOE-B-windows-panel/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BOE-B-windows-vst3
+          path: BOE-B-windows-vst3.zip

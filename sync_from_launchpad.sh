@@ -32,6 +32,7 @@ EXCLUDES=(
   --exclude 'tools/video*'
   --exclude 'tools/make_video.py'
   --exclude 'tools/make_site_demo.py'
+  --exclude '_bak_*/'               # dated source backups (e.g. BOE-B _bak_icon_2026-11-14/Source) stay on the Mac
 )
 
 INCLUDES_FILTER=(
@@ -66,6 +67,13 @@ sync_plugin subverselab-mihenk
 sync_plugin subverselab-taban
 sync_plugin subverselab-kor        # ALEV (working name KOR)
 sync_plugin subverselab-kiyma
+# BOE-B (free dedication plug-in; CI: .github/workflows/boeb.yml, -DBOEB_PLUGIN=ON). Assets/Portrait/ (the downloaded source photo
+# and its working copies) is not used by the build and stays on the Mac: only Assets/Images/portrait_ink.png is compiled in.
+echo "Syncing subverselab-boeb (BOE-B)..."
+rsync -av --prune-empty-dirs $DRY \
+  "${EXCLUDES[@]}" --exclude 'Assets/Portrait/' \
+  "${INCLUDES_FILTER[@]}" \
+  "$SRC_ROOT/subverselab-boeb/" "$DEST_ROOT/subverselab-boeb/"
 
 # ELEK (project subverselab-splitter-desktop): also its Resources/ (fonts, brand mark, app icon), but NOT the 302 MB model
 # htdemucs.onnx (over GitHub's file limit): the elek-windows job downloads it from ELEK_MODEL_URL. Not _deps/ either: the job
