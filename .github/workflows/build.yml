@@ -293,9 +293,23 @@ jobs:
         run: |
           ./build/elek_host_test_artefacts/Release/elek_host_test.exe "$(pwd)/build/SubverseSplitter_artefacts/Release/VST3/ELEK.vst3" 1500 || { echo "---- ELEK.log"; cat "$APPDATA/SubverseLab/ELEK.log" 2>/dev/null || find "$USERPROFILE" -name ELEK.log -path '*SubverseLab*' -exec cat {} \; 2>/dev/null; exit 1; }
 
+      # The snapshot tool needs the models and the DLL beside it, as ELEK.exe has them (otherwise Drum Split reads "not installed").
+      - name: Models beside the snapshot tool
+        run: cp build/SubverseSplitter_artefacts/Release/Standalone/{onnxruntime.dll,htdemucs.onnx,htdemucs_6s.onnx,drumsep.onnx} build/test_ui_snapshot_artefacts/Release/
+
       - name: Panel snapshot (empty state)
         continue-on-error: true
         run: ./build/test_ui_snapshot_artefacts/Release/test_ui_snapshot.exe --empty "$GITHUB_WORKSPACE/Elek-windows-panel.png"
+
+      # ELEK 2.0.0: Drum Split through the window (drop, Drum Split tile, Run) on the host test's 20 s file: Drums + Kick + Snare +
+      # Cymbals written, no other stems, elek.json "drums_only", playback audible. The release is not published unless it passes.
+      - name: Drum Split from the main panel
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/elek-drumsplit"
+          u="$(find "$(cygpath -u "$TEMP")" "$(cygpath -u "$LOCALAPPDATA")/Temp" -name elek_host_test.wav 2>/dev/null | head -1)"
+          test -n "$u" || { echo "host test file not found"; exit 1; }
+          f="$(cygpath -w "$u")"; echo "input: $f"
+          ./build/test_ui_snapshot_artefacts/Release/test_ui_snapshot.exe --panel-drumsplit "$f" "$GITHUB_WORKSPACE/elek-drumsplit" || { echo "---- ELEK.log"; cat "$APPDATA/SubverseLab/ELEK.log" 2>/dev/null | tail -60; exit 1; }
 
       - name: Zip VST3 + app
         run: |
@@ -312,3 +326,9 @@ jobs:
         with:
           name: Elek-windows-panel
           path: Elek-windows-panel.png
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: Elek-windows-drumsplit
+          path: elek-drumsplit/*.png
