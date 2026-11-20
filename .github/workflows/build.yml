@@ -266,9 +266,12 @@ jobs:
       - name: ONNX Runtime 1.18.0 (win x64) and the three models
         run: |
           mkdir -p _deps/onnxruntime Resources
-          curl -fL -o ort.zip "https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-win-x64-1.18.0.zip"
-          7z x -y ort.zip -o_deps > /dev/null
-          cp -r _deps/onnxruntime-win-x64-1.18.0/* _deps/onnxruntime/
+          # The GitHub release v1.18.0 is gone (404 since Nov 2026): the same build from Microsoft's NuGet package.
+          curl -fL -o ort.nupkg "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/1.18.0"
+          7z x -y ort.nupkg -o_deps/ortpkg > /dev/null
+          mkdir -p _deps/onnxruntime/include _deps/onnxruntime/lib
+          cp _deps/ortpkg/build/native/include/* _deps/onnxruntime/include/
+          cp _deps/ortpkg/runtimes/win-x64/native/* _deps/onnxruntime/lib/
           curl -fL -o Resources/htdemucs.onnx "${{ vars.ELEK_MODEL_URL }}"
           curl -fL -o Resources/htdemucs_6s.onnx "${{ vars.ELEK_MODEL6_URL }}"
           curl -fL -o Resources/drumsep.onnx "${{ vars.ELEK_DRUM_URL }}"
