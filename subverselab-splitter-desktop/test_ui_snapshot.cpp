@@ -16,8 +16,10 @@
 
 #include <thread>
 #include <cstdio>
-#include <mach/mach.h>
-#include <sys/resource.h>
+#if JUCE_MAC
+ #include <mach/mach.h>
+ #include <sys/resource.h>
+#endif
 
 int main (int argc, char** argv)
 {
@@ -31,6 +33,7 @@ int main (int argc, char** argv)
 
     // TEST ONLY: ELEK_MEM_TRACE=<csv> samples this process every 50 ms (epoch ms, resident MB, phys_footprint MB, getrusage max MB)
     // so peaks shorter than an external 0.5 s sampler can see are on record. Off unless the variable is set.
+   #if JUCE_MAC     // macOS only (mach task_info); the Windows CI build has no memory trace
     if (const char* trace = std::getenv ("ELEK_MEM_TRACE"); trace != nullptr && *trace != 0)
     {
         std::thread ([path = std::string (trace)]
@@ -52,6 +55,7 @@ int main (int argc, char** argv)
             }
         }).detach();
     }
+   #endif
 
     // TEST ONLY (ELEK 2.0.0 engine, no window): "--engine <stems|stems6|drumsonly|drumparts> <audio file> <result.txt> [startSec endSec] [runFolder]"
     // runs one operation of the ModelRunner on its thread, waits, and writes success / error / folder / file list to result.txt.
