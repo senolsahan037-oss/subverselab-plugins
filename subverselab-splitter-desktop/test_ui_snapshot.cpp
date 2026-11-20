@@ -725,7 +725,7 @@ int main (int argc, char** argv)
             std::cout << "  part " << p.key << ": " << (p.enabled ? "audio" : "none") << ", channel " << p.stemIndex << "\n";
 
         const int drumsCh = 1;   // the Drums row in the 4- and 6-stem layouts (Vocals, Drums, ...)
-        constexpr int blocks = 172, bs = 512, skip = 4;      // 2 s; the first blocks carry the transports' gain ramp
+        static constexpr int blocks = 172, bs = 512, skip = 4;      // 2 s; the first blocks carry the transports' gain ramp
         auto render = [&processor] (std::vector<float>& left)
         {
             left.clear();
