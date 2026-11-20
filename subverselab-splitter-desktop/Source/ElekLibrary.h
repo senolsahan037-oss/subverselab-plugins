@@ -53,7 +53,7 @@ namespace ElekLibrary
         return t.isEmpty() ? juce::String ("Track") : t;
     }
 
-    inline juce::String bpmTag (const AudioAnalysis& a) { return a.valid ? juce::String (juce::roundToInt (a.bpm)) + "BPM" : juce::String(); }
+    inline juce::String bpmTag (const AudioAnalysis& a) { return a.valid && a.bpm > 0.0 ? juce::String (juce::roundToInt (a.bpm)) + "BPM" : juce::String(); }
     inline juce::String keyTag (const AudioAnalysis& a) { return a.valid ? a.key + (a.scale == "min" ? "min" : "maj") : juce::String(); }
 
     /** A key goes into a file name only when the reading is decisive. Below 0.5 it is a coin toss that a DJ would trust because it
@@ -65,7 +65,7 @@ namespace ElekLibrary
     inline juce::String stemFileName (const juce::String& title, const juce::String& stem, const AudioAnalysis& a)
     {
         juce::StringArray parts { title, stem };
-        if (a.valid) parts.add (bpmTag (a));
+        if (bpmTag (a).isNotEmpty()) parts.add (bpmTag (a));
         if (keyIsSure (a)) parts.add (keyTag (a));
         parts.add ("ELEK");
         return parts.joinIntoString ("_") + ".wav";
@@ -75,7 +75,7 @@ namespace ElekLibrary
     inline juce::File newRunFolder (const juce::String& title, const AudioAnalysis& a)
     {
         juce::StringArray parts { title };
-        if (a.valid) parts.add (bpmTag (a));
+        if (bpmTag (a).isNotEmpty()) parts.add (bpmTag (a));
         if (keyIsSure (a)) parts.add (keyTag (a));
         parts.add (juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M"));
         auto folder = outputRoot().getNonexistentChildFile (parts.joinIntoString ("_"), {}, false);
@@ -87,10 +87,12 @@ namespace ElekLibrary
     struct Entry
     {
         juce::File folder;
-        juce::String title, source, operation;       // operation: "vocal_removal" or "stem_separation" (the web tool's slugs)
+        juce::String title, source, operation;       // "vocal_removal", "stem_separation", "stem_separation_6", "drums_only" or "drum_parts"
         juce::Time created;
         AudioAnalysis analysis;
         juce::StringPairArray files;                  // "vocals" -> file name in the folder, ...
+        double regionStart = -1.0, regionEnd = -1.0;  // seconds in the source file when only a region was separated; -1: the whole file
+        bool hasRegion() const { return regionStart >= 0.0 && regionEnd > regionStart; }
 
         juce::File file (const juce::String& stem) const
         {
@@ -101,13 +103,21 @@ namespace ElekLibrary
         bool usable() const
         {
             if (operation == "vocal_removal") return file ("vocals").existsAsFile() && file ("instrumental").existsAsFile();
+            // ELEK 2.0.0: "drums_only" = the Drums stem and its parts (the window shows it as one lane + the parts group);
+            // "drum_parts" (parts of a plain drums file, engine only) has no view yet and is not listed.
+            if (operation == "drums_only") return file ("drums").existsAsFile();
+            if (operation == "drum_parts") return false;
             for (auto s : { "vocals", "drums", "bass", "other" })
                 if (! file (s).existsAsFile()) return false;
+            if (operation == "stem_separation_6")      // ELEK 2.0.0: guitar and piano as well
+                for (auto s : { "guitar", "piano" })
+                    if (! file (s).existsAsFile()) return false;
             return true;
         }
     };
 
-    inline void writeManifest (const Entry& e)
+    /** false when elek.json could not be written (disk full, folder gone): the run is then not listed and must be reported. */
+    inline bool writeManifest (const Entry& e)
     {
         auto obj = std::make_unique<juce::DynamicObject>();
         obj->setProperty ("app", "ELEK");
@@ -115,6 +125,7 @@ namespace ElekLibrary
         obj->setProperty ("source", e.source);
         obj->setProperty ("operation", e.operation);
         obj->setProperty ("created", e.created.toISO8601 (true));
+        if (e.hasRegion()) { obj->setProperty ("regionStart", e.regionStart); obj->setProperty ("regionEnd", e.regionEnd); }
         auto an = std::make_unique<juce::DynamicObject>();
         an->setProperty ("valid", e.analysis.valid);
         an->setProperty ("bpm", e.analysis.bpm);
@@ -127,7 +138,7 @@ namespace ElekLibrary
         for (auto& k : e.files.getAllKeys())
             files->setProperty (k, e.files[k]);
         obj->setProperty ("files", juce::var (files.release()));
-        e.folder.getChildFile ("elek.json").replaceWithText (juce::JSON::toString (juce::var (obj.release())));
+        return e.folder.getChildFile ("elek.json").replaceWithText (juce::JSON::toString (juce::var (obj.release())));
     }
 
     inline bool readManifest (const juce::File& folder, Entry& e)
@@ -139,6 +150,8 @@ namespace ElekLibrary
         e.source = v["source"].toString();
         e.operation = v["operation"].toString();
         e.created = juce::Time::fromISO8601 (v["created"].toString());
+        e.regionStart = v.hasProperty ("regionStart") ? (double) v["regionStart"] : -1.0;
+        e.regionEnd   = v.hasProperty ("regionEnd")   ? (double) v["regionEnd"]   : -1.0;
         const auto an = v["analysis"];
         e.analysis.valid = (bool) an["valid"];
         e.analysis.bpm = (double) an["bpm"];

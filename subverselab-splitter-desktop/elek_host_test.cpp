@@ -82,7 +82,8 @@ int main (int argc, char** argv)
         io.clear(); inst->processBlock (io, midi);
         if (root.isDirectory())
             for (auto& d : root.findChildFiles (juce::File::findDirectories, false))
-                if (! before.contains (d) && d.findChildFiles (juce::File::findFiles, false, "*.wav").size() >= 4)
+                if (! before.contains (d) && d.getChildFile ("elek.json").existsAsFile()     // 2.0.0 writes the WAVs as it goes: elek.json comes last
+                    && d.findChildFiles (juce::File::findFiles, false, "*.wav").size() >= 4)
                     run = d;
         if (run.exists()) { juce::MessageManager::getInstance()->runDispatchLoopUntil (3000); break; }
     }

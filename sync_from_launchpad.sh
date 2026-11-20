@@ -75,18 +75,21 @@ rsync -av --prune-empty-dirs $DRY \
   "${INCLUDES_FILTER[@]}" \
   "$SRC_ROOT/subverselab-boeb/" "$DEST_ROOT/subverselab-boeb/"
 
-# ELEK (project subverselab-splitter-desktop): also its Resources/ (fonts, brand mark, app icon), but NOT the 302 MB model
-# htdemucs.onnx (over GitHub's file limit): the elek-windows job downloads it from ELEK_MODEL_URL. Not _deps/ either: the job
-# downloads ONNX Runtime for Windows itself.
-echo "Syncing subverselab-splitter-desktop (ELEK)..."
-rsync -av --prune-empty-dirs $DRY \
+# ELEK: from 2.0.0 (20 Nov 2026) the sources live in Launchpad's elek2/ (same bundle id and plug-in code); they still land in this
+# repo's subverselab-splitter-desktop/ so the CI paths stay. Also its Resources/ (fonts, brand mark, app icon), but NOT the models
+# htdemucs.onnx, htdemucs_6s.onnx and drumsep.onnx (over GitHub's file limit): the elek-windows job downloads them
+# (ELEK_MODEL_URL, ELEK_MODEL6_URL, ELEK_DRUM_URL). Not _deps/ either: the job downloads ONNX Runtime for Windows itself.
+# --delete: files the 1.x project had and 2.0.0 no longer has go (excluded paths are never deleted).
+echo "Syncing elek2 -> subverselab-splitter-desktop (ELEK)..."
+rsync -av --prune-empty-dirs --delete $DRY \
   "${EXCLUDES[@]}" \
-  --exclude '*.onnx' --exclude '_deps/' --exclude 'work/' --exclude 'listen_*/' \
+  --exclude '*.onnx' --exclude '_deps/' --exclude 'work/' --exclude 'listen_*/' --exclude 'build_ui/' --exclude 'marketing/' \
+  --exclude 'scripts/' --exclude 'tools/' --exclude 'Source/_before_*/' \
   --include '*/' \
   --include 'CMakeLists.txt' --include 'Source/***' --include 'Resources/***' \
   --include '*.cpp' --include 'README.md' \
   --exclude '*' \
-  "$SRC_ROOT/subverselab-splitter-desktop/" "$DEST_ROOT/subverselab-splitter-desktop/"
+  "$SRC_ROOT/elek2/" "$DEST_ROOT/subverselab-splitter-desktop/"
 
 sync_plugin subverselab-seda       # SEDA (release build: SVL_LICENSING OFF, no licence keys)
 sync_plugin subverselab-analog-eq  # TORNA (graphic EQ, no licence keys)

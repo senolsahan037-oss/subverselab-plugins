@@ -1,12 +1,18 @@
 cmake_minimum_required(VERSION 3.22)
 
+# Release builds run natively on Apple Silicon and Intel Macs, as MIHENK and KIYMA. ONNX Runtime in _deps is the
+# universal2 build of the same 1.18.0 (commit 45737400) since 2026-10-22; until then ELEK was arm64 only.
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
+endif()
+
 # Oldest macOS the release supports (Big Sur), as MIHENK and KIYMA. Left empty, CMake used the build Mac's own macOS:
 # ELEK 1.0.0 and 1.0.1 shipped with minos 27.0 and did not load on macOS 11-26 (found 2026-10-22).
 if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "" FORCE)
 endif()
 
-project(SubverseSplitter VERSION 1.0.2 LANGUAGES C CXX)
+project(SubverseSplitter VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,7 +40,7 @@ juce_add_plugin(SubverseSplitter
     PLUGIN_MANUFACTURER_CODE Svlb
     PLUGIN_CODE Elek
     BUNDLE_ID com.subverselab.elek
-    VERSION "1.0.2"
+    VERSION "2.0.0"
     FORMATS Standalone VST3 AU
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -127,10 +133,14 @@ if(WIN32)
     add_custom_command(TARGET SubverseSplitter_Standalone POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "${ONNXRUNTIME_DLL}" "$<TARGET_FILE_DIR:SubverseSplitter_Standalone>"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_Standalone>"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs_6s.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_Standalone>"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/drumsep.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_Standalone>"
     )
     add_custom_command(TARGET SubverseSplitter_VST3 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "${ONNXRUNTIME_DLL}" "$<TARGET_FILE_DIR:SubverseSplitter_VST3>"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_VST3>"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs_6s.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_VST3>"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/Resources/drumsep.onnx" "$<TARGET_FILE_DIR:SubverseSplitter_VST3>"
     )
 endif()
 
@@ -159,6 +169,18 @@ foreach(format Standalone VST3 AU)
                 "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs.onnx"
                 "$<TARGET_BUNDLE_CONTENT_DIR:SubverseSplitter_${format}>/Resources/htdemucs.onnx"
             COMMENT "Copying htdemucs.onnx into the ${format} bundle"
+        )
+        add_custom_command(TARGET SubverseSplitter_${format} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/Resources/htdemucs_6s.onnx"
+                "$<TARGET_BUNDLE_CONTENT_DIR:SubverseSplitter_${format}>/Resources/htdemucs_6s.onnx"
+            COMMENT "Copying htdemucs_6s.onnx (ELEK 2.0.0, six stems) into the ${format} bundle"
+        )
+        add_custom_command(TARGET SubverseSplitter_${format} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/Resources/drumsep.onnx"
+                "$<TARGET_BUNDLE_CONTENT_DIR:SubverseSplitter_${format}>/Resources/drumsep.onnx"
+            COMMENT "Copying drumsep.onnx (ELEK 2.0.0, drum parts; = work/drumsep_light.onnx) into the ${format} bundle"
         )
     endif()
 endforeach()

@@ -1,3 +1,4 @@
+#include <limits>
 #include "Analysis.h"
 
 #include <algorithm>
@@ -23,9 +24,11 @@ namespace
     // C major, B minor and B minor on the bass, harmony and vocal stems of one
     // track; with the long window, B minor on all three — which is what
     // librosa's constant-Q chroma says about the same audio.
-    constexpr int   kOnsetOrder = 12;              // 4096 samples
+    // 1024 samples, hop 256: 172 onset frames a second. (Was 4096 / 2048 = 21.5 frames a second: a beat period could only be a
+    // whole number of 46 ms frames, so tempo came out as one of ~17 values, 98 read 99.4 and 120 read 117.4.)
+    constexpr int   kOnsetOrder = 10;
     constexpr int   kOnsetSize  = 1 << kOnsetOrder;
-    constexpr int   kOnsetHop   = kOnsetSize / 2;
+    constexpr int   kOnsetHop   = kOnsetSize / 4;
 
     constexpr int   kPitchOrder = 14;              // 16384 samples
     constexpr int   kPitchSize  = 1 << kPitchOrder;
@@ -39,11 +42,19 @@ namespace
     const char* kNoteNames[12] = { "C", "C#", "D", "D#", "E", "F",
                                    "F#", "G", "G#", "A", "A#", "B" };
 
-    // Krumhansl-Schmuckler probe-tone ratings, identical to the web tool's.
-    const double kMajorProfile[12] = { 6.35, 2.23, 3.48, 2.33, 4.38, 4.09,
-                                       2.52, 5.19, 2.39, 3.66, 2.29, 2.88 };
-    const double kMinorProfile[12] = { 6.33, 2.68, 3.52, 5.38, 2.60, 3.53,
-                                       2.54, 4.75, 3.98, 2.69, 3.34, 3.17 };
+    // KEY PROFILES (20 Nov 2026, owner: "kullanıcının bilgisayarında ton yanlış çalışmamalı"): the Albrecht-Shanahan corpus profile
+    // plus 1.44 x the EDMA profile (Faraldo et al., electronic dance music), summed. Measured with the harmonic-only chroma below on
+    // 199 pack mixes + 24 labelled major/minor loops (01_AI_Tools/elek2/work/keytest): 70 % / 100 % exact, confident readings 85 %
+    // (was Krumhansl-Schmuckler on the full chroma: 61 % / 67 %, confident 80 %).
+    const double kMajorProfile[12] = { 0.238 + 1.44 * 0.16519551, 0.006 + 1.44 * 0.04749026, 0.111 + 1.44 * 0.08293076,
+                                       0.006 + 1.44 * 0.06687112, 0.137 + 1.44 * 0.09994645, 0.094 + 1.44 * 0.09274123,
+                                       0.016 + 1.44 * 0.05294487, 0.214 + 1.44 * 0.13159476, 0.009 + 1.44 * 0.05218986,
+                                       0.080 + 1.44 * 0.07443653, 0.008 + 1.44 * 0.06940723, 0.081 + 1.44 * 0.0642515 };
+    const double kMinorProfile[12] = { 0.220 + 1.44 * 0.17235348, 0.006 + 1.44 * 0.04,       0.104 + 1.44 * 0.0761009,
+                                       0.123 + 1.44 * 0.12112053, 0.019 + 1.44 * 0.05751457, 0.103 + 1.44 * 0.08571564,
+                                       0.012 + 1.44 * 0.0539885,  0.214 + 1.44 * 0.13529572, 0.062 + 1.44 * 0.07455507,
+                                       0.022 + 1.44 * 0.05090036, 0.061 + 1.44 * 0.06784019, 0.052 + 1.44 * 0.06223468 };
+    constexpr int kHpssSpan = 17;     // median length (frames along time, bins along frequency) of the harmonic/percussive split
 
     juce::String camelotFor (const juce::String& key, const juce::String& scale)
     {
@@ -154,14 +165,30 @@ AudioAnalysis AudioAnalysis::analyse (const juce::AudioBuffer<float>& audio, dou
             const int minLag = juce::jmax (1, (int) std::floor (framesPerSecond * 60.0 / kMaxBpm));
             const int maxLag = juce::jmin (frameCount / 2, (int) std::ceil (framesPerSecond * 60.0 / kMinBpm));
 
-            double bestScore = -1.0;
-            int bestLag = 0;
-            for (int lag = minLag; lag <= maxLag; ++lag)
+            // The score of every lag from one below the range to one above it, so the best one has both neighbours.
+            auto scoreAt = [&] (int lag)
             {
+                if (lag < 1 || lag >= frameCount) return 0.0;
                 double sum = 0.0;
                 for (int i = 0; i + lag < frameCount; ++i)
                     sum += onsetEnvelope[(size_t) i] * onsetEnvelope[(size_t) (i + lag)];
-                sum /= (double) (frameCount - lag);   // longer lags have fewer terms
+                return sum / (double) (frameCount - lag);   // longer lags have fewer terms
+            };
+            double bestScore = -std::numeric_limits<double>::infinity();     // (was -1.0: an unnormalised score can stay under it, and "0 BPM" came out as a valid reading)
+            int bestLag = 0;
+            // A lag is a beat when its multiples line up too: two beats and the bar. A dotted or shuffled figure repeats at 3/4 of
+            // a beat and scored highest on its own (a 98 BPM break read 130.7); its multiples (1.5 and 3 beats) do not line up.
+            // The weight prefers tempi around 120 BPM, one octave wide: of 72 and 144 it picks the one nearer the middle.
+            auto support = [&] (int lag)
+            {
+                const double bpm = 60.0 * framesPerSecond / (double) lag;
+                const double octaves = std::log2 (bpm / 120.0);
+                const double weight = std::exp (-0.5 * octaves * octaves);
+                return (scoreAt (lag) + 0.5 * scoreAt (2 * lag) + 0.25 * scoreAt (4 * lag)) * weight;
+            };
+            for (int lag = minLag; lag <= maxLag; ++lag)
+            {
+                const double sum = support (lag);
                 if (sum > bestScore)
                 {
                     bestScore = sum;
@@ -171,7 +198,15 @@ AudioAnalysis AudioAnalysis::analyse (const juce::AudioBuffer<float>& audio, dou
 
             if (bestLag > 0)
             {
-                double raw = 60.0 * framesPerSecond / bestLag;
+                // The hop is 2048 samples (21.5 frames a second), so whole lags can only say 99.4, 107.7, 117.4, 129.2, 143.6 ...
+                // BPM (a 98 BPM loop read 99, a 120 BPM track 117). A parabola through the best lag and its neighbours places
+                // the peak between frames.
+                double lagExact = (double) bestLag;
+                const double a = scoreAt (bestLag - 1), b = scoreAt (bestLag), c = scoreAt (bestLag + 1);
+                const double curve = a - 2.0 * b + c;
+                if (curve < 0.0)
+                    lagExact += juce::jlimit (-0.5, 0.5, 0.5 * (a - c) / curve);
+                double raw = 60.0 * framesPerSecond / lagExact;
 
                 // Fold into the band most material sits in, and keep the other
                 // reading rather than hiding it. A tracker reporting 75 for a
@@ -216,6 +251,12 @@ AudioAnalysis AudioAnalysis::analyse (const juce::AudioBuffer<float>& audio, dou
         std::vector<float> frame ((size_t) kPitchSize * 2, 0.0f);
         std::vector<double> frameChroma (12, 0.0);
 
+        // HARMONIC ONLY (20 Nov 2026): drums smear every pitch class; a median along time keeps what holds a pitch, a median along
+        // frequency keeps what is broadband, and each bin is weighted by H^2 / (H^2 + P^2) before the semitone bands are summed.
+        int topBin = 0;
+        for (const auto& band : bands) topBin = std::max (topBin, band.lastBin);
+        const int nb = std::min (kPitchSize / 2, topBin + kHpssSpan);
+        std::vector<float> mag ((size_t) std::max (0, frameCount) * (size_t) nb, 0.0f);
         for (int f = 0; f < frameCount; ++f)
         {
             std::fill (frame.begin(), frame.end(), 0.0f);
@@ -224,13 +265,28 @@ AudioAnalysis AudioAnalysis::analyse (const juce::AudioBuffer<float>& audio, dou
                        frame.begin());
             window.multiplyWithWindowingTable (frame.data(), (size_t) kPitchSize);
             fft.performFrequencyOnlyForwardTransform (frame.data());
+            std::copy (frame.begin(), frame.begin() + nb, mag.begin() + (size_t) f * (size_t) nb);
+        }
+        auto at = [&] (int f, int b) { return mag[(size_t) f * (size_t) nb + (size_t) b]; };
+        auto reflect = [] (int i, int n) { if (n <= 1) return 0; while (i < 0 || i >= n) i = i < 0 ? -i - 1 : 2 * n - i - 1; return i; };
+        std::vector<float> win ((size_t) kHpssSpan);
+        auto median = [&win]() { std::nth_element (win.begin(), win.begin() + kHpssSpan / 2, win.end()); return win[(size_t) kHpssSpan / 2]; };
 
+        for (int f = 0; f < frameCount; ++f)
+        {
             std::fill (frameChroma.begin(), frameChroma.end(), 0.0);
             for (const auto& band : bands)
             {
                 double energy = 0.0;
                 for (int bin = band.firstBin; bin <= band.lastBin; ++bin)
-                    energy += frame[(size_t) bin];
+                {
+                    for (int k = 0; k < kHpssSpan; ++k) win[(size_t) k] = at (reflect (f + k - kHpssSpan / 2, frameCount), bin);
+                    const double h = median();
+                    for (int k = 0; k < kHpssSpan; ++k) win[(size_t) k] = at (f, reflect (bin + k - kHpssSpan / 2, nb));
+                    const double p = median();
+                    const double mask = (h * h) / (h * h + p * p + 1e-12);
+                    energy += at (f, bin) * mask;
+                }
                 frameChroma[(size_t) band.pitchClass] += energy;
             }
 

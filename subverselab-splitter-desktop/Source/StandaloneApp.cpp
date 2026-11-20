@@ -56,7 +56,17 @@ public:
         channels.add (outputOnly);
         holder = std::make_unique<juce::StandalonePluginHolder> (settings.getUserSettings(), false, juce::String(), nullptr, channels, false);
         if (auto* p = dynamic_cast<SubverseSplitterAudioProcessor*> (holder->processor.get()))
+        {
             p->showAudioSettings = [this] { holder->showAudioSettingsDialog(); };
+            p->describeAudioDevice = [this]
+            {
+                auto* d = holder->deviceManager.getCurrentAudioDevice();
+                if (d == nullptr) return juce::String ("no audio device open");
+                return d->getTypeName() + " / " + d->getName() + ", " + juce::String (d->getCurrentSampleRate(), 0) + " Hz, buffer "
+                       + juce::String (d->getCurrentBufferSizeSamples()) + ", active outputs " + d->getActiveOutputChannels().toString (2)
+                       + " of " + juce::String (d->getOutputChannelNames().size());
+            };
+        }
         window = std::make_unique<MainWindow> (*holder);
         openFromCommandLine (commandLine);
     }
