@@ -163,17 +163,20 @@ private:
         ed->setBounds (valueRect().toNearestInt().expanded (2, 2));
         addAndMakeVisible (*ed);
         ed->grabKeyboardFocus();
-        auto commit = [this]
+        // The SafePointer is made here, outside the lambdas: MSVC rejects `this` in an init-capture of a lambda nested in a
+        // lambda (Windows CI run 45004976841, C2440); clang accepted it. Same behaviour on both.
+        const juce::Component::SafePointer<RoundControl> self (this);
+        auto commit = [this, self]
         {
             if (ed == nullptr) return;
             const auto t = ed->getText();
             const float v = param.convertFrom0to1 (param.getValueForText (t));
             attach->setValueAsCompleteGesture (v);
-            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RoundControl> (this)] { if (sp != nullptr) sp->ed.reset(); });
+            juce::MessageManager::callAsync ([self] { if (self != nullptr) self->ed.reset(); });
         };
         ed->onReturnKey = commit;
         ed->onFocusLost = commit;
-        ed->onEscapeKey = [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<RoundControl> (this)] { if (sp != nullptr) sp->ed.reset(); }); };
+        ed->onEscapeKey = [self] { juce::MessageManager::callAsync ([self] { if (self != nullptr) self->ed.reset(); }); };
     }
 public:
     /** Called by the editor at 30 Hz: glide the drawing to values the product sets (UI signature). */
