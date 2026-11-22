@@ -1,0 +1,62 @@
+name: HIGH STEREO
+
+# HIGH STEREO alone (free stereo tool, project folder subverselab-highstereo), so its release does not rebuild every other plug-in.
+# Run by hand (gh workflow run highstereo.yml) or by a push that touches subverselab-highstereo/.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'subverselab-highstereo/**'
+      - '.github/workflows/highstereo.yml'
+
+jobs:
+  windows:
+    name: windows-vst3 (HighStereo)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: subverselab-highstereo
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE FetchContent
+        uses: actions/cache@v4
+        with:
+          path: subverselab-highstereo/build/_deps
+          key: ${{ runner.os }}-juce-9.0.1-subverselab-highstereo
+
+      - name: Configure (Release, x64)
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + checks
+        run: cmake --build build --config Release --target HighStereo_VST3 test_highstereo_engine ui_snapshot --parallel
+
+      # Engine self-test on Windows: a hard gate (exit code = failures). The preset check reads logs/ (not synced); it runs on the Mac.
+      - name: Engine self-test
+        run: ./build/Release/test_highstereo_engine.exe || ./build/test_highstereo_engine.exe
+
+      - name: Zip VST3 bundle
+        run: |
+          cd "build/HighStereo_artefacts/Release/VST3"
+          7z a -r "$GITHUB_WORKSPACE/HIGH-STEREO-windows-vst3.zip" "HIGH STEREO.vst3"
+
+      # The panel as Windows draws it (embedded fonts), fed with 6 s of a wide test signal (raw interleaved float32: the tool reads no WAV).
+      - name: Panel snapshot
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/HIGH-STEREO-windows-panel"
+          python -c "import struct,math,random;r=random.Random(1);open('snap.f32','wb').write(b''.join(struct.pack('<ff',0.25*math.sin(2*math.pi*220*i/48000)+0.1*r.uniform(-1,1),0.25*math.sin(2*math.pi*220*i/48000+0.6)+0.1*r.uniform(-1,1)) for i in range(48000*6)))"
+          ./build/ui_snapshot_artefacts/Release/ui_snapshot.exe snap.f32 48000 "$GITHUB_WORKSPACE/HIGH-STEREO-windows-panel/front.png" 6
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: HIGH-STEREO-windows-panel
+          path: HIGH-STEREO-windows-panel/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HIGH-STEREO-windows-vst3
+          path: HIGH-STEREO-windows-vst3.zip

@@ -67,6 +67,7 @@ sync_plugin subverselab-mihenk
 sync_plugin subverselab-taban
 sync_plugin subverselab-kor        # ALEV (working name KOR)
 sync_plugin subverselab-kiyma
+sync_plugin subverselab-highstereo   # HIGH STEREO (free stereo tool; CI: .github/workflows/highstereo.yml)
 # BOE-B (free dedication plug-in; CI: .github/workflows/boeb.yml, -DBOEB_PLUGIN=ON). Assets/Portrait/ (the downloaded source photo
 # and its working copies) is not used by the build and stays on the Mac: only Assets/Images/portrait_ink.png is compiled in.
 echo "Syncing subverselab-boeb (BOE-B)..."
