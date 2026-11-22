@@ -202,6 +202,16 @@ int main()
             check (std::abs (get ("band5") - 67.0f) < 0.6f, "magnet: 70 % snaps to the gold limit (67)", get ("band5"));
             drag (f, { gx (67), yc }, { gx (76), yc });
             check (get ("band5") == 76.0f, "outside 4 % no magnet (76)", get ("band5"));
+            // FIX on (owner 22 Nov 2026): a band set past its limit is shown held at the limit, the grip glides there and is
+            // grabbed where it is drawn.
+            set ("band5", 150.0f); set ("fix", 1.0f);
+            for (int t = 0; t < 30; ++t) hs->tickForSnapshot();
+            hs->widthField().setHoverRowForSnapshot (row); hs->setHoverForSnapshot (&f);
+            check (hs->currentSummary().contains ("FIX holds it at 67 %"), "FIX on: the summary says the band is held at its limit", 0);
+            hs->widthField().setHoverRowForSnapshot (-1); hs->setHoverForSnapshot (nullptr);
+            drag (f, { gx (67), yc }, { gx (90), yc });
+            check (get ("band5") == 90.0f, "FIX on: the held grip is grabbed where it is drawn (67 -> 90 %)", get ("band5"));
+            set ("fix", 0.0f); set ("band5", 76.0f);
             const float before = get ("band5");
             drag (f, { gx (30), yc }, { gx (160), yc });   // not on a grip
             check (get ("band5") == before, "dragging empty field space moves nothing", get ("band5"));

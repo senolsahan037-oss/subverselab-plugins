@@ -25,6 +25,7 @@ public:
             attach[(size_t) k]->sendInitialUpdate();
             shown[(size_t) k] = setting[(size_t) k];
         }
+        fixOn = proc.apvts.getRawParameterValue ("fix");
         win.resize (kN); for (int i = 0; i < kN; ++i) win[(size_t) i] = 0.5f - 0.5f * std::cos (juce::MathConstants<float>::twoPi * (float) i / (float) (kN - 1));
         bufL.resize (kN); bufR.resize (kN); fm.resize (2 * kN); fs.resize (2 * kN);
         const double lo = std::log (40.0), hi = std::log (16000.0);
@@ -43,8 +44,10 @@ public:
         if (! v.learned.load()) return s + " - play some music: the limit is learned from it.";
         if (v.noSide.load()) return s + " - this band has almost no side to widen. Use SPREAD or go back to the mix.";
         const float lim = v.limit.load() * 100.0f;
-        s += "  limit " + juce::String (juce::roundToInt (lim)) + " %  peak " + juce::String (juce::roundToInt (v.peakFill.load() * 100.0f)) + " %";
-        if (lim < setting[(size_t) k] - 1.0f) return s + " - too wide at its loudest: narrow it to the gold mark.";
+        s += "  limit " + juce::String (juce::roundToInt (lim)) + " %  peak " + juce::String (juce::roundToInt ((fixActive() ? std::min (v.peakFill.load(), 1.0f) : v.peakFill.load()) * 100.0f)) + " %";
+        if (lim < setting[(size_t) k] - 1.0f)
+            return fixActive() ? s + " - FIX holds it at " + juce::String (juce::roundToInt (lim)) + " %."
+                               : s + " - too wide at its loudest: narrow it to the gold mark.";
         if (lim >= 199.0f) return s + " - room to widen all the way.";
         return s + " - room to widen up to the gold mark; past it, more width has to come from the mix.";
     }
@@ -84,8 +87,9 @@ public:
         for (int k = 0; k < kBands; ++k)
         {
             if (dragBand == k) { shown[(size_t) k] = setting[(size_t) k]; continue; }
-            const float d = setting[(size_t) k] - shown[(size_t) k];
-            shown[(size_t) k] = std::abs (d) <= std::max (std::abs (d) * 0.3f, 1.0f) ? setting[(size_t) k] : shown[(size_t) k] + d * 0.3f;
+            const float target = effective (k);
+            const float d = target - shown[(size_t) k];
+            shown[(size_t) k] = std::abs (d) <= std::max (std::abs (d) * 0.3f, 1.0f) ? target : shown[(size_t) k] + d * 0.3f;
         }
         repaint();
     }
@@ -129,7 +133,9 @@ public:
                 g.setColour (cream); g.fillEllipse (gx - 7, yc - 7, 14, 14);
                 g.setColour (gcol); g.drawEllipse (gx - 7, yc - 7, 14, 14, (dragBand == k || hoverRow == row) ? 3.0f : 2.0f);
             }
-            const float pk = learned ? v.peakFill.load() : 0.0f;
+            // With FIX on the band is held at its limit (owner 22 Nov 2026: "fix açıkken açık değeri göstermeli"): the number is the
+            // peak fill after FIX, at most 100 %, and the grips glide to the held width (effective()).
+            const float pk = learned ? (fixActive() ? std::min (v.peakFill.load(), 1.0f) : v.peakFill.load()) : 0.0f;
             const auto num = learned ? juce::String (juce::roundToInt (std::min (pk, 2.0f) * 100.0f)) : juce::String ("--");
             g.setFont (mono (12.5f));
             const float bw = juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), num) + 8.0f;
@@ -153,8 +159,10 @@ public:
         dragBand = -1; downOnGrip = false;
         if (row < 0) return;
         const int k = 7 - row;
-        const float sh = L.half * setting[(size_t) k] / 200.0f;
-        if (std::abs (std::abs (e.position.x - L.fc) - sh) <= 10.0f)
+        // Grab the grip where it is drawn (FIX may hold it in, a glide may be under way) or where its setting is.
+        const float shDrawn = L.half * juce::jlimit (0.0f, 1.0f, shown[(size_t) k] / 200.0f), shSet = L.half * setting[(size_t) k] / 200.0f;
+        const float dx = std::abs (e.position.x - L.fc);
+        if (std::abs (dx - shDrawn) <= 10.0f || std::abs (dx - shSet) <= 10.0f)
         { dragBand = k; downOnGrip = true; attach[(size_t) k]->beginGesture(); }
     }
     void mouseDrag (const juce::MouseEvent& e) override
@@ -165,6 +173,7 @@ public:
         const auto& bv = proc.bandView (dragBand);
         if (bv.learned.load() && bv.limit.load() < 1.999f && std::abs (v - bv.limit.load() * 100.0f) <= 4.0f) v = bv.limit.load() * 100.0f;   // magnet
         attach[(size_t) dragBand]->setValueAsPartOfGesture (std::round (v));
+        shown[(size_t) dragBand] = setting[(size_t) dragBand];   // the held grip follows the pointer at once, not on the next tick
     }
     void mouseUp (const juce::MouseEvent& e) override
     {
@@ -232,6 +241,15 @@ private:
     juce::dsp::FFT fft;
     std::array<juce::RangedAudioParameter*, kBands> params {};
     std::array<std::unique_ptr<juce::ParameterAttachment>, kBands> attach;
+    bool fixActive() const { return fixOn != nullptr && fixOn->load() > 0.5f; }
+    /** The width a band really has: its setting, or with FIX on the learned limit when the setting is past it. */
+    float effective (int k) const
+    {
+        const auto& v = proc.bandView (k);
+        const float lim = v.limit.load() * 100.0f;
+        return fixActive() && v.learned.load() && lim < setting[(size_t) k] ? lim : setting[(size_t) k];
+    }
+    std::atomic<float>* fixOn = nullptr;
     std::array<float, kBands> setting {}, shown {};
     std::vector<float> win, bufL, bufR, fm, fs;
     std::array<double, kFine + 1> edges {};
