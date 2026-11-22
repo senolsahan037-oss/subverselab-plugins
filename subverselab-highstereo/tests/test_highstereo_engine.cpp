@@ -433,7 +433,8 @@ static void testRate (double fs)
             P p; p.width = i < n / 2 ? 0.0 : 2.0; p.enabled = ! (i > n * 3 / 4 && i < n * 7 / 8);
             const float* ip[2] = { in2.l.data() + i, in2.r.data() + i };
             float* op[2] = { out.l.data() + i, out.r.data() + i };
-            e.process (ip, op, 2, 256, withGuard (p));
+            // The last block is shorter when n is not a multiple of 256 (44.1 kHz): reading past it crashed on Windows.
+            e.process (ip, op, 2, (int) std::min ((size_t) 256, n - i), withGuard (p));
         }
         // A click is broadband: high-pass the output at 5 kHz (LR4); a 200-230 Hz signal has nothing there.
         svl::hs::Biquad h1, h2; h1.setHighPass (fs, 5000, svl::hs::kButterQ); h2 = h1;
@@ -633,7 +634,7 @@ int main()
         {
             const float* ip[1] = { in.l.data() + i };
             float* op[1] = { out.data() + i };
-            e.process (ip, op, 1, 512, withGuard (p));
+            e.process (ip, op, 1, (int) std::min ((size_t) 512, in.size() - i), withGuard (p));
         }
         double err = 0; for (size_t i = 0; i < in.size(); ++i) err = std::max (err, std::abs ((double) out[i] - in.l[i]));
         check (err < 1e-6, "mono track with SPREAD 100%: max deviation", err);
